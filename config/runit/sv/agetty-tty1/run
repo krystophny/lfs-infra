@@ -1,0 +1,5 @@
+#!/bin/sh
+# runit service: agetty on tty1 with auto-login for user ert
+# X starts automatically via .bash_profile
+
+exec agetty -a ert -J tty1 linux

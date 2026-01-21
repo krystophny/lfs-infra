@@ -41,6 +41,8 @@ use_git = false
 checksum_url = "https://ftp.gnu.org/gnu/gcc/gcc-${version}/sha512.sum"
 stage = 1
 depends = ["gmp", "mpfr", "mpc"]
+# IMPORTANT: Enable Fortran language
+languages = "c,c++,fortran"
 
 [packages.linux-headers]
 version = "6.18.6"
@@ -408,3 +410,979 @@ url = "https://libisl.sourceforge.io/isl-${version}.tar.xz"
 git_url = "https://repo.or.cz/isl.git"
 use_git = false
 stage = 1
+
+# =============================================================================
+# STAGE 4 ADDITIONS: Build Tools
+# =============================================================================
+
+[packages.cmake]
+version = "4.2.2"
+description = "Cross-platform build system generator"
+url = "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}.tar.gz"
+git_url = "https://github.com/Kitware/CMake.git"
+use_git = false
+stage = 4
+
+# =============================================================================
+# STAGE 6: Init System (runit for fast boot)
+# =============================================================================
+
+[packages.runit]
+version = "2.1.2"
+description = "UNIX init scheme with service supervision"
+url = "http://smarden.org/runit/runit-${version}.tar.gz"
+git_url = "https://github.com/void-linux/runit.git"
+use_git = false
+stage = 6
+
+# =============================================================================
+# STAGE 7: Networking
+# =============================================================================
+
+[packages.libnl]
+version = "3.11.0"
+description = "Netlink protocol library suite"
+url = "https://github.com/thom311/libnl/releases/download/libnl3_11_0/libnl-${version}.tar.gz"
+git_url = "https://github.com/thom311/libnl.git"
+use_git = false
+stage = 7
+
+[packages.iwd]
+version = "2.22"
+description = "Intel wireless daemon"
+url = "https://www.kernel.org/pub/linux/network/wireless/iwd-${version}.tar.xz"
+git_url = "https://git.kernel.org/pub/scm/network/wireless/iwd.git"
+use_git = false
+stage = 7
+
+[packages.wpa_supplicant]
+version = "2.11"
+description = "WPA/WPA2/WPA3 supplicant"
+url = "https://w1.fi/releases/wpa_supplicant-${version}.tar.gz"
+git_url = "https://w1.fi/cgit/hostap/"
+use_git = false
+stage = 7
+
+[packages.wireless-tools]
+version = "29"
+description = "Wireless LAN tools"
+url = "https://hewlettpackard.github.io/wireless-tools/wireless_tools.${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 7
+
+[packages.dhcpcd]
+version = "10.2.0"
+description = "DHCP client daemon"
+url = "https://github.com/NetworkConfiguration/dhcpcd/releases/download/v${version}/dhcpcd-${version}.tar.xz"
+git_url = "https://github.com/NetworkConfiguration/dhcpcd.git"
+use_git = false
+stage = 7
+
+[packages.curl]
+version = "8.12.0"
+description = "URL transfer library and tool"
+url = "https://curl.se/download/curl-${version}.tar.xz"
+git_url = "https://github.com/curl/curl.git"
+use_git = false
+stage = 7
+
+[packages.wget]
+version = "1.25"
+description = "Network downloader"
+url = "https://ftp.gnu.org/gnu/wget/wget-${version}.tar.gz"
+git_url = "https://git.savannah.gnu.org/git/wget.git"
+use_git = false
+stage = 7
+
+# =============================================================================
+# STAGE 8: X11/Xorg
+# =============================================================================
+
+[packages.xorg-server]
+version = "21.1.20"
+description = "X.Org X11 server"
+url = "https://www.x.org/releases/individual/xserver/xorg-server-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/xserver.git"
+use_git = false
+stage = 8
+
+[packages.libX11]
+version = "1.8.10"
+description = "X11 client library"
+url = "https://www.x.org/releases/individual/lib/libX11-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libx11.git"
+use_git = false
+stage = 8
+
+[packages.libXft]
+version = "2.3.8"
+description = "X FreeType library"
+url = "https://www.x.org/releases/individual/lib/libXft-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxft.git"
+use_git = false
+stage = 8
+
+[packages.libXrender]
+version = "0.9.12"
+description = "X Render extension library"
+url = "https://www.x.org/releases/individual/lib/libXrender-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxrender.git"
+use_git = false
+stage = 8
+
+[packages.libXrandr]
+version = "1.5.4"
+description = "X RandR extension library"
+url = "https://www.x.org/releases/individual/lib/libXrandr-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxrandr.git"
+use_git = false
+stage = 8
+
+[packages.libXinerama]
+version = "1.1.5"
+description = "X Xinerama extension library"
+url = "https://www.x.org/releases/individual/lib/libXinerama-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxinerama.git"
+use_git = false
+stage = 8
+
+[packages.libXcursor]
+version = "1.2.3"
+description = "X cursor management library"
+url = "https://www.x.org/releases/individual/lib/libXcursor-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcursor.git"
+use_git = false
+stage = 8
+
+[packages.libXi]
+version = "1.8.2"
+description = "X Input extension library"
+url = "https://www.x.org/releases/individual/lib/libXi-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxi.git"
+use_git = false
+stage = 8
+
+[packages.libXext]
+version = "1.3.6"
+description = "X extension library"
+url = "https://www.x.org/releases/individual/lib/libXext-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxext.git"
+use_git = false
+stage = 8
+
+[packages.libXcomposite]
+version = "0.4.6"
+description = "X Composite extension library"
+url = "https://www.x.org/releases/individual/lib/libXcomposite-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcomposite.git"
+use_git = false
+stage = 8
+
+[packages.libXdamage]
+version = "1.1.6"
+description = "X Damage extension library"
+url = "https://www.x.org/releases/individual/lib/libXdamage-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxdamage.git"
+use_git = false
+stage = 8
+
+[packages.libXfixes]
+version = "6.0.1"
+description = "X Fixes extension library"
+url = "https://www.x.org/releases/individual/lib/libXfixes-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxfixes.git"
+use_git = false
+stage = 8
+
+[packages.xorgproto]
+version = "2024.1"
+description = "X.Org protocol headers"
+url = "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/proto/xorgproto.git"
+use_git = false
+stage = 8
+
+[packages.xcb-proto]
+version = "1.17.0"
+description = "XCB protocol descriptions"
+url = "https://xorg.freedesktop.org/archive/individual/proto/xcb-proto-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/proto/xcbproto.git"
+use_git = false
+stage = 8
+
+[packages.libxcb]
+version = "1.17.0"
+description = "X C Binding library"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libxcb-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcb.git"
+use_git = false
+stage = 8
+
+[packages.pixman]
+version = "0.44.2"
+description = "Pixel manipulation library"
+url = "https://www.cairographics.org/releases/pixman-${version}.tar.gz"
+git_url = "https://gitlab.freedesktop.org/pixman/pixman.git"
+use_git = false
+stage = 8
+
+[packages.freetype]
+version = "2.13.3"
+description = "Font rendering library"
+url = "https://downloads.sourceforge.net/freetype/freetype-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/freetype/freetype.git"
+use_git = false
+stage = 8
+
+[packages.fontconfig]
+version = "2.16.0"
+description = "Font configuration library"
+url = "https://www.freedesktop.org/software/fontconfig/release/fontconfig-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/fontconfig/fontconfig.git"
+use_git = false
+stage = 8
+
+[packages.libpng]
+version = "1.6.45"
+description = "PNG image library"
+url = "https://downloads.sourceforge.net/libpng/libpng-${version}.tar.xz"
+git_url = "https://github.com/pnggroup/libpng.git"
+use_git = false
+stage = 8
+
+[packages.libjpeg-turbo]
+version = "3.1.0"
+description = "JPEG image library with SIMD acceleration"
+url = "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${version}/libjpeg-turbo-${version}.tar.gz"
+git_url = "https://github.com/libjpeg-turbo/libjpeg-turbo.git"
+use_git = false
+stage = 8
+
+[packages.mesa]
+version = "25.0.2"
+description = "OpenGL implementation"
+url = "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/mesa/mesa.git"
+use_git = false
+stage = 8
+
+[packages.libdrm]
+version = "2.4.124"
+description = "Direct Rendering Manager library"
+url = "https://dri.freedesktop.org/libdrm/libdrm-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/mesa/drm.git"
+use_git = false
+stage = 8
+
+[packages.libinput]
+version = "1.27.1"
+description = "Input device handling library"
+url = "https://gitlab.freedesktop.org/libinput/libinput/-/archive/${version}/libinput-${version}.tar.gz"
+git_url = "https://gitlab.freedesktop.org/libinput/libinput.git"
+use_git = false
+stage = 8
+
+[packages.libevdev]
+version = "1.13.3"
+description = "Event device library"
+url = "https://www.freedesktop.org/software/libevdev/libevdev-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/libevdev/libevdev.git"
+use_git = false
+stage = 8
+
+[packages.mtdev]
+version = "1.1.7"
+description = "Multitouch protocol translation library"
+url = "https://bitmath.org/code/mtdev/mtdev-${version}.tar.bz2"
+git_url = "https://bitmath.org/git/mtdev.git"
+use_git = false
+stage = 8
+
+[packages.xf86-input-libinput]
+version = "1.5.0"
+description = "Xorg libinput input driver"
+url = "https://www.x.org/releases/individual/driver/xf86-input-libinput-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-input-libinput.git"
+use_git = false
+stage = 8
+
+[packages.xf86-video-fbdev]
+version = "0.5.0"
+description = "Xorg framebuffer video driver"
+url = "https://www.x.org/releases/individual/driver/xf86-video-fbdev-${version}.tar.bz2"
+git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-video-fbdev.git"
+use_git = false
+stage = 8
+
+[packages.xf86-video-vesa]
+version = "2.6.0"
+description = "Xorg VESA video driver"
+url = "https://www.x.org/releases/individual/driver/xf86-video-vesa-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-video-vesa.git"
+use_git = false
+stage = 8
+
+# =============================================================================
+# STAGE 9: GTK and Desktop Libraries
+# =============================================================================
+
+[packages.glib]
+version = "2.84.1"
+description = "GLib core library"
+url = "https://download.gnome.org/sources/glib/2.84/glib-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/glib.git"
+use_git = false
+stage = 9
+
+[packages.atk]
+version = "2.38.0"
+description = "Accessibility toolkit"
+url = "https://download.gnome.org/sources/atk/2.38/atk-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/atk.git"
+use_git = false
+stage = 9
+
+[packages.pango]
+version = "1.56.1"
+description = "Text layout and rendering library"
+url = "https://download.gnome.org/sources/pango/1.56/pango-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/pango.git"
+use_git = false
+stage = 9
+
+[packages.cairo]
+version = "1.18.4"
+description = "2D graphics library"
+url = "https://cairographics.org/releases/cairo-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/cairo/cairo.git"
+use_git = false
+stage = 9
+
+[packages.gdk-pixbuf]
+version = "2.42.12"
+description = "Image loading library"
+url = "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/gdk-pixbuf.git"
+use_git = false
+stage = 9
+
+[packages.harfbuzz]
+version = "10.2.0"
+description = "Text shaping library"
+url = "https://github.com/harfbuzz/harfbuzz/releases/download/${version}/harfbuzz-${version}.tar.xz"
+git_url = "https://github.com/harfbuzz/harfbuzz.git"
+use_git = false
+stage = 9
+
+[packages.fribidi]
+version = "1.0.16"
+description = "Unicode bidirectional algorithm library"
+url = "https://github.com/fribidi/fribidi/releases/download/v${version}/fribidi-${version}.tar.xz"
+git_url = "https://github.com/fribidi/fribidi.git"
+use_git = false
+stage = 9
+
+[packages.gtk3]
+version = "3.24.47"
+description = "GTK+ 3 toolkit"
+url = "https://download.gnome.org/sources/gtk+/3.24/gtk+-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/gtk.git"
+use_git = false
+stage = 9
+
+[packages.dbus]
+version = "1.16.2"
+description = "Message bus system"
+url = "https://dbus.freedesktop.org/releases/dbus/dbus-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/dbus/dbus.git"
+use_git = false
+stage = 9
+
+[packages.polkit]
+version = "125"
+description = "Authorization framework"
+url = "https://github.com/polkit-org/polkit/archive/${version}/polkit-${version}.tar.gz"
+git_url = "https://github.com/polkit-org/polkit.git"
+use_git = false
+stage = 9
+
+[packages.libxfce4util]
+version = "4.20.0"
+description = "Xfce utility library"
+url = "https://archive.xfce.org/src/xfce/libxfce4util/4.20/libxfce4util-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/libxfce4util.git"
+use_git = false
+stage = 9
+
+[packages.xfconf]
+version = "4.20.0"
+description = "Xfce configuration system"
+url = "https://archive.xfce.org/src/xfce/xfconf/4.20/xfconf-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfconf.git"
+use_git = false
+stage = 9
+
+[packages.libxfce4ui]
+version = "4.20.0"
+description = "Xfce UI library"
+url = "https://archive.xfce.org/src/xfce/libxfce4ui/4.20/libxfce4ui-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/libxfce4ui.git"
+use_git = false
+stage = 9
+
+# =============================================================================
+# STAGE 10: XFCE Desktop
+# =============================================================================
+
+[packages.exo]
+version = "4.20.0"
+description = "Xfce extension library"
+url = "https://archive.xfce.org/src/xfce/exo/4.20/exo-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/exo.git"
+use_git = false
+stage = 10
+
+[packages.garcon]
+version = "4.20.0"
+description = "Xfce menu library"
+url = "https://archive.xfce.org/src/xfce/garcon/4.20/garcon-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/garcon.git"
+use_git = false
+stage = 10
+
+[packages.xfce4-panel]
+version = "4.20.0"
+description = "Xfce panel"
+url = "https://archive.xfce.org/src/xfce/xfce4-panel/4.20/xfce4-panel-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfce4-panel.git"
+use_git = false
+stage = 10
+
+[packages.thunar]
+version = "4.20.0"
+description = "Xfce file manager"
+url = "https://archive.xfce.org/src/xfce/thunar/4.20/thunar-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/thunar.git"
+use_git = false
+stage = 10
+
+[packages.xfce4-settings]
+version = "4.20.0"
+description = "Xfce settings manager"
+url = "https://archive.xfce.org/src/xfce/xfce4-settings/4.20/xfce4-settings-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfce4-settings.git"
+use_git = false
+stage = 10
+
+[packages.xfce4-session]
+version = "4.20.0"
+description = "Xfce session manager"
+url = "https://archive.xfce.org/src/xfce/xfce4-session/4.20/xfce4-session-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfce4-session.git"
+use_git = false
+stage = 10
+
+[packages.xfwm4]
+version = "4.20.0"
+description = "Xfce window manager"
+url = "https://archive.xfce.org/src/xfce/xfwm4/4.20/xfwm4-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfwm4.git"
+use_git = false
+stage = 10
+
+[packages.xfdesktop]
+version = "4.20.0"
+description = "Xfce desktop manager"
+url = "https://archive.xfce.org/src/xfce/xfdesktop/4.20/xfdesktop-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfdesktop.git"
+use_git = false
+stage = 10
+
+[packages.xfce4-appfinder]
+version = "4.20.0"
+description = "Xfce application finder"
+url = "https://archive.xfce.org/src/xfce/xfce4-appfinder/4.20/xfce4-appfinder-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfce4-appfinder.git"
+use_git = false
+stage = 10
+
+[packages.xfce4-terminal]
+version = "1.1.3"
+description = "Xfce terminal emulator"
+url = "https://archive.xfce.org/src/apps/xfce4-terminal/1.1/xfce4-terminal-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/apps/xfce4-terminal.git"
+use_git = false
+stage = 10
+
+# =============================================================================
+# STAGE 11: Applications
+# =============================================================================
+
+[packages.vim]
+version = "9.1.2089"
+description = "Vi IMproved text editor"
+url = "https://github.com/vim/vim/archive/v${version}/vim-${version}.tar.gz"
+git_url = "https://github.com/vim/vim.git"
+use_git = false
+stage = 11
+
+[packages.firefox]
+version = "140.0.1"
+description = "Mozilla Firefox web browser"
+url = "https://archive.mozilla.org/pub/firefox/releases/${version}/source/firefox-${version}.source.tar.xz"
+git_url = ""
+use_git = false
+stage = 11
+# Note: Firefox is complex to build, consider using prebuilt binary
+
+[packages.alsa-lib]
+version = "1.2.14"
+description = "ALSA sound library"
+url = "https://www.alsa-project.org/files/pub/lib/alsa-lib-${version}.tar.bz2"
+git_url = "https://github.com/alsa-project/alsa-lib.git"
+use_git = false
+stage = 11
+
+[packages.alsa-utils]
+version = "1.2.14"
+description = "ALSA sound utilities"
+url = "https://www.alsa-project.org/files/pub/utils/alsa-utils-${version}.tar.bz2"
+git_url = "https://github.com/alsa-project/alsa-utils.git"
+use_git = false
+stage = 11
+
+[packages.pulseaudio]
+version = "17.0"
+description = "Sound server"
+url = "https://www.freedesktop.org/software/pulseaudio/releases/pulseaudio-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/pulseaudio/pulseaudio.git"
+use_git = false
+stage = 11
+
+# =============================================================================
+# STAGE 12: GPU Drivers
+# =============================================================================
+
+[packages.nvidia-driver]
+version = "580.126.09"
+description = "NVIDIA proprietary driver"
+url = "https://download.nvidia.com/XFree86/Linux-x86_64/${version}/NVIDIA-Linux-x86_64-${version}.run"
+git_url = ""
+use_git = false
+stage = 12
+# Note: For real hardware only, use virtio-gpu in VM
+
+[packages.nvidia-driver-latest]
+version = "590.48.01"
+description = "NVIDIA proprietary driver (new feature branch)"
+url = "https://download.nvidia.com/XFree86/Linux-x86_64/${version}/NVIDIA-Linux-x86_64-${version}.run"
+git_url = ""
+use_git = false
+stage = 12
+# Note: Newer features but may be less stable
+
+# =============================================================================
+# VM Support (QEMU/KVM)
+# =============================================================================
+
+[packages.virtio-gpu]
+version = "0.1"
+description = "VirtIO GPU driver (built into kernel)"
+url = ""
+git_url = ""
+use_git = false
+stage = 12
+# Note: Enable CONFIG_DRM_VIRTIO_GPU in kernel config
+
+[packages.spice-vdagent]
+version = "0.22.1"
+description = "Spice agent for VM integration"
+url = "https://www.spice-space.org/download/releases/spice-vdagent-${version}.tar.bz2"
+git_url = "https://gitlab.freedesktop.org/spice/linux/vd_agent.git"
+use_git = false
+stage = 12
+
+[packages.qemu-guest-agent]
+version = "9.2.0"
+description = "QEMU guest agent"
+url = "https://download.qemu.org/qemu-${version}.tar.xz"
+git_url = "https://gitlab.com/qemu-project/qemu.git"
+use_git = false
+stage = 12
+
+# =============================================================================
+# STAGE 13: Gaming (Steam, Proton, Wine)
+# =============================================================================
+
+[packages.wine]
+version = "10.0"
+description = "Windows compatibility layer"
+url = "https://dl.winehq.org/wine/source/10.0/wine-${version}.tar.xz"
+git_url = "https://gitlab.winehq.org/wine/wine.git"
+use_git = false
+stage = 13
+# Note: Build both 64-bit and 32-bit (multilib)
+
+[packages.dxvk]
+version = "2.6"
+description = "Vulkan-based D3D9/D3D10/D3D11 translation"
+url = "https://github.com/doitsujin/dxvk/releases/download/v${version}/dxvk-${version}.tar.gz"
+git_url = "https://github.com/doitsujin/dxvk.git"
+use_git = false
+stage = 13
+
+[packages.vkd3d-proton]
+version = "2.15"
+description = "Vulkan-based D3D12 translation"
+url = "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v${version}/vkd3d-proton-${version}.tar.zst"
+git_url = "https://github.com/HansKristian-Work/vkd3d-proton.git"
+use_git = false
+stage = 13
+
+[packages.proton-ge]
+version = "GE-Proton10-2"
+description = "Proton-GE custom Proton build"
+url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${version}/${version}.tar.gz"
+git_url = "https://github.com/GloriousEggroll/proton-ge-custom.git"
+use_git = false
+stage = 13
+# Install to: ~/.steam/root/compatibilitytools.d/
+
+[packages.steam]
+version = "1.0.0.81"
+description = "Steam gaming platform"
+url = "https://repo.steampowered.com/steam/archive/precise/steam_${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 13
+# Note: Steam is distributed as a binary, requires 32-bit libs
+
+[packages.gamemode]
+version = "1.8.2"
+description = "Optimize Linux performance for gaming"
+url = "https://github.com/FeralInteractive/gamemode/releases/download/${version}/gamemode-${version}.tar.xz"
+git_url = "https://github.com/FeralInteractive/gamemode.git"
+use_git = false
+stage = 13
+
+[packages.mangohud]
+version = "0.8.0"
+description = "Vulkan/OpenGL overlay for monitoring"
+url = "https://github.com/flightlessmango/MangoHud/releases/download/v${version}/MangoHud-${version}.tar.xz"
+git_url = "https://github.com/flightlessmango/MangoHud.git"
+use_git = false
+stage = 13
+
+[packages.gamescope]
+version = "3.18.0"
+description = "SteamOS session compositing window manager"
+url = "https://github.com/ValveSoftware/gamescope/releases/download/${version}/gamescope-${version}.tar.gz"
+git_url = "https://github.com/ValveSoftware/gamescope.git"
+use_git = false
+stage = 13
+
+[packages.vulkan-loader]
+version = "1.4.310"
+description = "Vulkan ICD loader"
+url = "https://github.com/KhronosGroup/Vulkan-Loader/archive/v${version}/Vulkan-Loader-${version}.tar.gz"
+git_url = "https://github.com/KhronosGroup/Vulkan-Loader.git"
+use_git = false
+stage = 13
+
+[packages.vulkan-headers]
+version = "1.4.310"
+description = "Vulkan header files"
+url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/v${version}/Vulkan-Headers-${version}.tar.gz"
+git_url = "https://github.com/KhronosGroup/Vulkan-Headers.git"
+use_git = false
+stage = 13
+
+[packages.spirv-headers]
+version = "1.4.310"
+description = "SPIR-V headers"
+url = "https://github.com/KhronosGroup/SPIRV-Headers/archive/vulkan-sdk-${version}/SPIRV-Headers-${version}.tar.gz"
+git_url = "https://github.com/KhronosGroup/SPIRV-Headers.git"
+use_git = false
+stage = 13
+
+[packages.spirv-tools]
+version = "1.4.310"
+description = "SPIR-V tools"
+url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/vulkan-sdk-${version}/SPIRV-Tools-${version}.tar.gz"
+git_url = "https://github.com/KhronosGroup/SPIRV-Tools.git"
+use_git = false
+stage = 13
+
+[packages.glslang]
+version = "15.2.0"
+description = "Khronos GLSL/HLSL to SPIR-V compiler"
+url = "https://github.com/KhronosGroup/glslang/archive/${version}/glslang-${version}.tar.gz"
+git_url = "https://github.com/KhronosGroup/glslang.git"
+use_git = false
+stage = 13
+
+# =============================================================================
+# 32-bit Libraries (required for Steam/Wine)
+# =============================================================================
+
+[packages.lib32-glibc]
+version = "2.42"
+description = "GNU C Library (32-bit)"
+url = "https://ftp.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
+git_url = ""
+use_git = false
+stage = 13
+# Note: Build with --host=i686-pc-linux-gnu
+
+[packages.lib32-mesa]
+version = "25.0.2"
+description = "OpenGL implementation (32-bit)"
+url = "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
+git_url = ""
+use_git = false
+stage = 13
+
+[packages.lib32-vulkan-loader]
+version = "1.4.310"
+description = "Vulkan ICD loader (32-bit)"
+url = "https://github.com/KhronosGroup/Vulkan-Loader/archive/v${version}/Vulkan-Loader-${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 13
+
+# =============================================================================
+# STAGE 14: Development Tools
+# =============================================================================
+
+[packages.git]
+version = "2.48.1"
+description = "Distributed version control system"
+url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz"
+git_url = "https://github.com/git/git.git"
+use_git = false
+stage = 14
+
+[packages.llvm]
+version = "20.1.0"
+description = "LLVM compiler infrastructure"
+url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/llvm-project-${version}.src.tar.xz"
+git_url = "https://github.com/llvm/llvm-project.git"
+use_git = false
+stage = 14
+# Includes: clang, clang++, flang-new, lld, lldb
+
+[packages.flang]
+version = "20.1.0"
+description = "LLVM Fortran compiler"
+url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/llvm-project-${version}.src.tar.xz"
+git_url = "https://github.com/llvm/llvm-project.git"
+use_git = false
+stage = 14
+# Note: Built as part of LLVM project with -DLLVM_ENABLE_PROJECTS="flang"
+
+[packages.vscode]
+version = "1.98.0"
+description = "Visual Studio Code editor"
+url = "https://update.code.visualstudio.com/${version}/linux-x64/stable"
+git_url = ""
+use_git = false
+stage = 14
+# Note: Binary distribution, extract to /opt/vscode
+
+[packages.vscode-source]
+version = "1.98.0"
+description = "Visual Studio Code (source build)"
+url = "https://github.com/microsoft/vscode/archive/refs/tags/${version}.tar.gz"
+git_url = "https://github.com/microsoft/vscode.git"
+use_git = false
+stage = 14
+# Note: Requires Node.js, Yarn, Electron
+
+[packages.nodejs]
+version = "22.13.1"
+description = "JavaScript runtime"
+url = "https://nodejs.org/dist/v${version}/node-v${version}.tar.xz"
+git_url = "https://github.com/nodejs/node.git"
+use_git = false
+stage = 14
+
+# =============================================================================
+# STAGE 15: HPC Compilers
+# =============================================================================
+
+[packages.nvhpc]
+version = "25.1"
+description = "NVIDIA HPC SDK (nvfortran, nvc, nvc++)"
+url = "https://developer.download.nvidia.com/hpc-sdk/${version}/nvhpc_2025_251_Linux_x86_64_cuda_12.6.tar.gz"
+git_url = ""
+use_git = false
+stage = 15
+# Note: Binary distribution, install to /opt/nvidia/hpc_sdk
+# Includes: nvfortran, nvc, nvc++, CUDA, cuBLAS, cuFFT, nvcc
+
+[packages.intel-oneapi-hpc]
+version = "2025.1.0"
+description = "Intel oneAPI HPC Toolkit (ifort, ifx, icc, icx)"
+url = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b5a6d35a-da06-4bb6-9f83-c2d58c96ed61/intel-oneapi-hpc-toolkit-${version}_offline.sh"
+git_url = ""
+use_git = false
+stage = 15
+# Note: Binary installer, run with --silent --eula accept
+# Includes: ifx (new Fortran), ifort (classic), icx, icc, MKL, MPI
+
+[packages.intel-oneapi-base]
+version = "2025.1.0"
+description = "Intel oneAPI Base Toolkit"
+url = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/e6ff8e9c-ee28-47fb-abd7-5c524c983e1c/intel-oneapi-base-toolkit-${version}_offline.sh"
+git_url = ""
+use_git = false
+stage = 15
+# Note: Required for MKL, TBB, DPC++
+
+# =============================================================================
+# STAGE 16: Streaming (Moonlight/Sunshine)
+# =============================================================================
+
+[packages.sunshine]
+version = "0.24.0"
+description = "Self-hosted game streaming host"
+url = "https://github.com/LizardByte/Sunshine/releases/download/v${version}/sunshine-linux-x86_64-${version}.tar.gz"
+git_url = "https://github.com/LizardByte/Sunshine.git"
+use_git = false
+stage = 16
+# Host: Run on your PC to stream games
+
+[packages.moonlight]
+version = "6.1.0"
+description = "Open source game streaming client"
+url = "https://github.com/moonlight-stream/moonlight-qt/releases/download/v${version}/Moonlight-${version}.tar.gz"
+git_url = "https://github.com/moonlight-stream/moonlight-qt.git"
+use_git = false
+stage = 16
+# Client: Run on TV/another device to receive stream
+
+[packages.moonlight-embedded]
+version = "2.7.1"
+description = "Moonlight for embedded/ARM devices"
+url = "https://github.com/moonlight-stream/moonlight-embedded/releases/download/v${version}/moonlight-embedded-${version}.tar.gz"
+git_url = "https://github.com/moonlight-stream/moonlight-embedded.git"
+use_git = false
+stage = 16
+# For Raspberry Pi, etc.
+
+# Dependencies for Sunshine
+[packages.libva]
+version = "2.22.0"
+description = "VA-API video acceleration"
+url = "https://github.com/intel/libva/releases/download/${version}/libva-${version}.tar.bz2"
+git_url = "https://github.com/intel/libva.git"
+use_git = false
+stage = 16
+
+[packages.ffmpeg]
+version = "7.1"
+description = "Complete multimedia framework"
+url = "https://ffmpeg.org/releases/ffmpeg-${version}.tar.xz"
+git_url = "https://git.ffmpeg.org/ffmpeg.git"
+use_git = false
+stage = 16
+# Build with: --enable-nvenc --enable-cuda --enable-vaapi
+
+[packages.x264]
+version = "stable"
+description = "H.264 video encoder"
+url = "https://code.videolan.org/videolan/x264/-/archive/stable/x264-stable.tar.bz2"
+git_url = "https://code.videolan.org/videolan/x264.git"
+use_git = false
+stage = 16
+
+[packages.x265]
+version = "4.1"
+description = "H.265/HEVC video encoder"
+url = "https://bitbucket.org/multicoreware/x265_git/downloads/x265_${version}.tar.gz"
+git_url = "https://bitbucket.org/multicoreware/x265_git.git"
+use_git = false
+stage = 16
+
+[packages.opus]
+version = "1.5.3"
+description = "Audio codec for streaming"
+url = "https://downloads.xiph.org/releases/opus/opus-${version}.tar.gz"
+git_url = "https://gitlab.xiph.org/xiph/opus.git"
+use_git = false
+stage = 16
+
+[packages.libavif]
+version = "1.2.1"
+description = "AVIF image format library"
+url = "https://github.com/AOMediaCodec/libavif/archive/v${version}/libavif-${version}.tar.gz"
+git_url = "https://github.com/AOMediaCodec/libavif.git"
+use_git = false
+stage = 16
+
+# =============================================================================
+# STAGE 17: Document Processing (LaTeX, Pandoc)
+# =============================================================================
+
+[packages.texlive]
+version = "2025"
+description = "TeX Live LaTeX distribution"
+url = "https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz"
+git_url = ""
+use_git = false
+stage = 17
+# Note: Run install-tl script, or use texlive ISO for offline install
+# Full install is ~7GB, use schemes for smaller installs
+
+[packages.texlive-iso]
+version = "2025"
+description = "TeX Live ISO image (full offline)"
+url = "https://mirror.ctan.org/systems/texlive/Images/texlive${version}.iso"
+git_url = ""
+use_git = false
+stage = 17
+# Alternative: Full ISO for offline installation
+
+[packages.pandoc]
+version = "3.7"
+description = "Universal document converter"
+url = "https://github.com/jgm/pandoc/releases/download/${version}/pandoc-${version}-linux-amd64.tar.gz"
+git_url = "https://github.com/jgm/pandoc.git"
+use_git = false
+stage = 17
+# Note: Binary distribution; source requires Haskell toolchain
+
+[packages.pandoc-source]
+version = "3.7"
+description = "Pandoc (source build)"
+url = "https://github.com/jgm/pandoc/archive/refs/tags/${version}.tar.gz"
+git_url = "https://github.com/jgm/pandoc.git"
+use_git = false
+stage = 17
+# Requires: ghc, cabal-install
+
+[packages.ghc]
+version = "9.10.1"
+description = "Glasgow Haskell Compiler"
+url = "https://downloads.haskell.org/~ghc/${version}/ghc-${version}-x86_64-unknown-linux.tar.xz"
+git_url = ""
+use_git = false
+stage = 17
+# Required for building Pandoc from source
+
+[packages.poppler]
+version = "25.01.0"
+description = "PDF rendering library"
+url = "https://poppler.freedesktop.org/poppler-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/poppler/poppler.git"
+use_git = false
+stage = 17
+
+[packages.ghostscript]
+version = "10.05.0"
+description = "PostScript/PDF interpreter"
+url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10050/ghostscript-${version}.tar.xz"
+git_url = ""
+use_git = false
+stage = 17

@@ -1,0 +1,7 @@
+#!/bin/sh
+# runit stage 2: service supervision
+# This is where runit stays running and supervises services
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+exec env - PATH=$PATH runsvdir -P /etc/runit/runsvdir/current 'log: ...........'

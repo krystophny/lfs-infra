@@ -1,0 +1,7 @@
+#!/bin/sh
+# runit service: Auto-login X session for user ert
+# Starts X11 with XFCE directly on tty1 - no display manager
+
+sv check dbus >/dev/null || exit 1
+
+exec chpst -u ert:ert startx /usr/bin/startxfce4 -- vt1 -keeptty

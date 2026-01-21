@@ -1,0 +1,58 @@
+#!/bin/sh
+# runit stage 1: system initialization (runs once at boot)
+# Optimized for fast boot
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+# Mount essential filesystems
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs shm /dev/shm
+
+# Mount root read-write
+mount -o remount,rw /
+
+# Set hostname
+cat /etc/hostname > /proc/sys/kernel/hostname 2>/dev/null
+
+# Load kernel modules (minimal set for fast boot)
+modprobe -a loop 2>/dev/null
+
+# Set system clock from hardware clock
+hwclock -s 2>/dev/null
+
+# Seed random number generator
+cat /var/lib/random-seed > /dev/urandom 2>/dev/null
+
+# Create runtime directories
+mkdir -p /run/lock /run/user
+chmod 1777 /run/lock
+
+# Start udevd for device management (minimal)
+udevd --daemon 2>/dev/null
+udevadm trigger --action=add --type=subsystems
+udevadm trigger --action=add --type=devices
+udevadm settle
+
+# Network interfaces up
+ip link set lo up
+
+# Configure static LAN if eth0 exists
+if ip link show eth0 >/dev/null 2>&1; then
+    ip link set eth0 up
+    # Static IP - edit /etc/network.conf for your setup
+    . /etc/network.conf 2>/dev/null
+    if [ -n "$ETH0_IP" ]; then
+        ip addr add $ETH0_IP/$ETH0_MASK dev eth0
+        ip route add default via $ETH0_GATEWAY
+    fi
+fi
+
+# Start syslog (optional, comment out for even faster boot)
+# socklog unix /dev/log &
+
+touch /etc/runit/stopit
+chmod 0 /etc/runit/stopit

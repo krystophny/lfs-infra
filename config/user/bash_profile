@@ -1,0 +1,6 @@
+# ~/.bash_profile for user ert
+# Auto-start X on tty1
+
+if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    exec startxfce4
+fi
