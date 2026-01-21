@@ -1,0 +1,410 @@
+# LFS Infrastructure - Package Definitions
+# All packages use bleeding edge versions
+# Set use_git = true to build from git HEAD instead of release tarball
+
+[settings]
+lfs_version = "12.4+"
+target_arch = "x86_64"
+
+# =============================================================================
+# STAGE 0: Host Tools (needed to bootstrap)
+# =============================================================================
+
+[packages.pkgutils]
+version = "5.40.9"
+description = "CRUX package management utilities"
+git_url = "https://github.com/zeppe-lin/pkgutils.git"
+use_git = false
+url = "https://github.com/zeppe-lin/pkgutils/archive/refs/tags/${version}.tar.gz"
+checksum_url = ""
+bootstrap = true
+
+# =============================================================================
+# STAGE 1: Cross Toolchain
+# =============================================================================
+
+[packages.binutils]
+version = "2.45.1"
+description = "GNU binary utilities"
+url = "https://ftp.gnu.org/gnu/binutils/binutils-${version}.tar.xz"
+git_url = "git://sourceware.org/git/binutils-gdb.git"
+use_git = false
+checksum_url = "https://ftp.gnu.org/gnu/binutils/binutils-${version}.tar.xz.sig"
+stage = 1
+
+[packages.gcc]
+version = "15.2.0"
+description = "GNU Compiler Collection"
+url = "https://ftp.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
+git_url = "git://gcc.gnu.org/git/gcc.git"
+use_git = false
+checksum_url = "https://ftp.gnu.org/gnu/gcc/gcc-${version}/sha512.sum"
+stage = 1
+depends = ["gmp", "mpfr", "mpc"]
+
+[packages.linux-headers]
+version = "6.18.6"
+description = "Linux kernel headers"
+url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.tar.xz"
+git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+use_git = false
+checksum_url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc"
+stage = 1
+
+[packages.glibc]
+version = "2.42"
+description = "GNU C Library"
+url = "https://ftp.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
+git_url = "git://sourceware.org/git/glibc.git"
+use_git = false
+checksum_url = "https://ftp.gnu.org/gnu/glibc/glibc-${version}.tar.xz.sig"
+stage = 1
+
+# =============================================================================
+# STAGE 2: Temporary Tools
+# =============================================================================
+
+[packages.m4]
+version = "1.4.19"
+description = "GNU macro processor"
+url = "https://ftp.gnu.org/gnu/m4/m4-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/m4.git"
+use_git = false
+stage = 2
+
+[packages.ncurses]
+version = "6.5"
+description = "Terminal handling library"
+url = "https://ftp.gnu.org/gnu/ncurses/ncurses-${version}.tar.gz"
+git_url = "https://github.com/mirror/ncurses.git"
+use_git = false
+stage = 2
+
+[packages.bash]
+version = "5.3"
+description = "GNU Bourne-Again Shell"
+url = "https://ftp.gnu.org/gnu/bash/bash-${version}.tar.gz"
+git_url = "https://git.savannah.gnu.org/git/bash.git"
+use_git = false
+stage = 2
+
+[packages.coreutils]
+version = "9.9"
+description = "GNU core utilities"
+url = "https://ftp.gnu.org/gnu/coreutils/coreutils-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/coreutils.git"
+use_git = false
+stage = 2
+
+[packages.diffutils]
+version = "3.11"
+description = "GNU diff utilities"
+url = "https://ftp.gnu.org/gnu/diffutils/diffutils-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/diffutils.git"
+use_git = false
+stage = 2
+
+[packages.file]
+version = "5.46"
+description = "File type identification"
+url = "https://astron.com/pub/file/file-${version}.tar.gz"
+git_url = "https://github.com/file/file.git"
+use_git = false
+stage = 2
+
+[packages.findutils]
+version = "4.10.0"
+description = "GNU find utilities"
+url = "https://ftp.gnu.org/gnu/findutils/findutils-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/findutils.git"
+use_git = false
+stage = 2
+
+[packages.gawk]
+version = "5.4.0"
+description = "GNU AWK"
+url = "https://ftp.gnu.org/gnu/gawk/gawk-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/gawk.git"
+use_git = false
+stage = 2
+
+[packages.grep]
+version = "3.12"
+description = "GNU grep"
+url = "https://ftp.gnu.org/gnu/grep/grep-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/grep.git"
+use_git = false
+stage = 2
+
+[packages.gzip]
+version = "1.14"
+description = "GNU compression utility"
+url = "https://ftp.gnu.org/gnu/gzip/gzip-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/gzip.git"
+use_git = false
+stage = 2
+
+[packages.make]
+version = "4.4.1"
+description = "GNU make"
+url = "https://ftp.gnu.org/gnu/make/make-${version}.tar.gz"
+git_url = "https://git.savannah.gnu.org/git/make.git"
+use_git = false
+stage = 2
+
+[packages.patch]
+version = "2.8"
+description = "GNU patch"
+url = "https://ftp.gnu.org/gnu/patch/patch-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/patch.git"
+use_git = false
+stage = 2
+
+[packages.sed]
+version = "4.9"
+description = "GNU stream editor"
+url = "https://ftp.gnu.org/gnu/sed/sed-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/sed.git"
+use_git = false
+stage = 2
+
+[packages.tar]
+version = "1.35"
+description = "GNU tar"
+url = "https://ftp.gnu.org/gnu/tar/tar-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/tar.git"
+use_git = false
+stage = 2
+
+[packages.xz]
+version = "5.6.4"
+description = "XZ compression utilities"
+url = "https://github.com/tukaani-project/xz/releases/download/v${version}/xz-${version}.tar.xz"
+git_url = "https://github.com/tukaani-project/xz.git"
+use_git = false
+stage = 2
+
+# =============================================================================
+# STAGE 3: Basic System Software
+# =============================================================================
+
+[packages.zlib]
+version = "1.3.1"
+description = "Compression library"
+url = "https://zlib.net/zlib-${version}.tar.xz"
+git_url = "https://github.com/madler/zlib.git"
+use_git = false
+stage = 3
+
+[packages.bzip2]
+version = "1.0.8"
+description = "Block-sorting compression"
+url = "https://sourceware.org/pub/bzip2/bzip2-${version}.tar.gz"
+git_url = "https://gitlab.com/bzip2/bzip2.git"
+use_git = false
+stage = 3
+
+[packages.zstd]
+version = "1.5.7"
+description = "Zstandard compression"
+url = "https://github.com/facebook/zstd/releases/download/v${version}/zstd-${version}.tar.gz"
+git_url = "https://github.com/facebook/zstd.git"
+use_git = false
+stage = 3
+
+[packages.readline]
+version = "8.3"
+description = "GNU readline library"
+url = "https://ftp.gnu.org/gnu/readline/readline-${version}.tar.gz"
+git_url = "https://git.savannah.gnu.org/git/readline.git"
+use_git = false
+stage = 3
+
+[packages.bc]
+version = "7.0.3"
+description = "Arbitrary precision calculator"
+url = "https://github.com/gavinhoward/bc/releases/download/${version}/bc-${version}.tar.xz"
+git_url = "https://github.com/gavinhoward/bc.git"
+use_git = false
+stage = 3
+
+[packages.flex]
+version = "2.6.4"
+description = "Fast lexical analyzer generator"
+url = "https://github.com/westes/flex/releases/download/v${version}/flex-${version}.tar.gz"
+git_url = "https://github.com/westes/flex.git"
+use_git = false
+stage = 3
+
+[packages.gettext]
+version = "0.23"
+description = "GNU internationalization"
+url = "https://ftp.gnu.org/gnu/gettext/gettext-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/gettext.git"
+use_git = false
+stage = 3
+
+[packages.bison]
+version = "3.8.2"
+description = "GNU parser generator"
+url = "https://ftp.gnu.org/gnu/bison/bison-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/bison.git"
+use_git = false
+stage = 3
+
+[packages.perl]
+version = "5.42.0"
+description = "Practical Extraction and Report Language"
+url = "https://www.cpan.org/src/5.0/perl-${version}.tar.xz"
+git_url = "https://github.com/Perl/perl5.git"
+use_git = false
+stage = 3
+
+[packages.python]
+version = "3.14.0"
+description = "Python programming language"
+url = "https://www.python.org/ftp/python/${version}/Python-${version}.tar.xz"
+git_url = "https://github.com/python/cpython.git"
+use_git = false
+stage = 3
+
+[packages.texinfo]
+version = "7.2"
+description = "GNU documentation system"
+url = "https://ftp.gnu.org/gnu/texinfo/texinfo-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/texinfo.git"
+use_git = false
+stage = 3
+
+[packages.util-linux]
+version = "2.41.3"
+description = "Linux system utilities"
+url = "https://www.kernel.org/pub/linux/utils/util-linux/v2.41/util-linux-${version}.tar.xz"
+git_url = "https://github.com/util-linux/util-linux.git"
+use_git = false
+stage = 3
+
+# =============================================================================
+# STAGE 4: System Configuration & Security
+# =============================================================================
+
+[packages.openssl]
+version = "3.5.2"
+description = "TLS/SSL and crypto library"
+url = "https://github.com/openssl/openssl/releases/download/openssl-${version}/openssl-${version}.tar.gz"
+git_url = "https://github.com/openssl/openssl.git"
+use_git = false
+stage = 4
+
+[packages.libffi]
+version = "3.4.7"
+description = "Foreign function interface library"
+url = "https://github.com/libffi/libffi/releases/download/v${version}/libffi-${version}.tar.gz"
+git_url = "https://github.com/libffi/libffi.git"
+use_git = false
+stage = 4
+
+[packages.expat]
+version = "2.7.1"
+description = "XML parser library"
+url = "https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-${version}.tar.xz"
+git_url = "https://github.com/libexpat/libexpat.git"
+use_git = false
+stage = 4
+
+[packages.autoconf]
+version = "2.72"
+description = "GNU autoconf"
+url = "https://ftp.gnu.org/gnu/autoconf/autoconf-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/autoconf.git"
+use_git = false
+stage = 4
+
+[packages.automake]
+version = "1.17"
+description = "GNU automake"
+url = "https://ftp.gnu.org/gnu/automake/automake-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/automake.git"
+use_git = false
+stage = 4
+
+[packages.libtool]
+version = "2.5.4"
+description = "GNU libtool"
+url = "https://ftp.gnu.org/gnu/libtool/libtool-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/libtool.git"
+use_git = false
+stage = 4
+
+[packages.pkgconf]
+version = "2.4.0"
+description = "Package compiler and linker metadata toolkit"
+url = "https://distfiles.ariadne.space/pkgconf/pkgconf-${version}.tar.xz"
+git_url = "https://github.com/pkgconf/pkgconf.git"
+use_git = false
+stage = 4
+
+[packages.ninja]
+version = "1.13.2"
+description = "Small build system with focus on speed"
+url = "https://github.com/ninja-build/ninja/archive/refs/tags/v${version}.tar.gz"
+git_url = "https://github.com/ninja-build/ninja.git"
+use_git = false
+stage = 4
+
+[packages.meson]
+version = "1.10.1"
+description = "Fast and user-friendly build system"
+url = "https://github.com/mesonbuild/meson/releases/download/${version}/meson-${version}.tar.gz"
+git_url = "https://github.com/mesonbuild/meson.git"
+use_git = false
+stage = 4
+
+# =============================================================================
+# STAGE 5: Kernel and Bootloader
+# =============================================================================
+
+[packages.linux]
+version = "6.18.6"
+description = "Linux kernel"
+url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.tar.xz"
+git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+use_git = false
+checksum_url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc"
+stage = 5
+
+# =============================================================================
+# GCC Support Libraries (built before GCC)
+# =============================================================================
+
+[packages.gmp]
+version = "6.3.0"
+description = "GNU Multiple Precision Arithmetic Library"
+url = "https://ftp.gnu.org/gnu/gmp/gmp-${version}.tar.xz"
+git_url = "https://gmplib.org/repo/gmp/"
+use_git = false
+stage = 1
+
+[packages.mpfr]
+version = "4.2.2"
+description = "GNU Multiple Precision Floating-Point Reliable Library"
+url = "https://ftp.gnu.org/gnu/mpfr/mpfr-${version}.tar.xz"
+git_url = "https://gitlab.inria.fr/mpfr/mpfr.git"
+use_git = false
+stage = 1
+
+[packages.mpc]
+version = "1.3.1"
+description = "GNU Multiple Precision Complex Library"
+url = "https://ftp.gnu.org/gnu/mpc/mpc-${version}.tar.gz"
+git_url = "https://gitlab.inria.fr/mpc/mpc.git"
+use_git = false
+stage = 1
+
+[packages.isl]
+version = "0.27"
+description = "Integer Set Library"
+url = "https://libisl.sourceforge.io/isl-${version}.tar.xz"
+git_url = "https://repo.or.cz/isl.git"
+use_git = false
+stage = 1
