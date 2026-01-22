@@ -1135,6 +1135,35 @@ stage_config() {
     cp -v "${ROOT_DIR}/config/etc/passwd" "${LFS}/etc/"
     cp -v "${ROOT_DIR}/config/etc/group" "${LFS}/etc/"
 
+    # Create user home directory
+    mkdir -p "${LFS}/home/${LFS_USERNAME}"
+    chown 1000:1000 "${LFS}/home/${LFS_USERNAME}"
+
+    # Hash the user password
+    local password_hash
+    password_hash=$(openssl passwd -6 "${LFS_PASSWORD}")
+
+    # Create shadow file with locked root (only sudo access via user)
+    cat > "${LFS}/etc/shadow" << EOF
+root:!:19000:0:99999:7:::
+bin:!:19000:0:99999:7:::
+daemon:!:19000:0:99999:7:::
+nobody:!:19000:0:99999:7:::
+${LFS_USERNAME}:${password_hash}:19000:0:99999:7:::
+EOF
+    chmod 600 "${LFS}/etc/shadow"
+
+    # Update passwd and group files with configured username
+    sed -i "s/ert:/${LFS_USERNAME}:/g" "${LFS}/etc/passwd"
+    sed -i "s/:ert/:${LFS_USERNAME}/g" "${LFS}/etc/group"
+
+    # Configure sudo for wheel group
+    mkdir -p "${LFS}/etc/sudoers.d"
+    cat > "${LFS}/etc/sudoers.d/wheel" << "EOF"
+%wheel ALL=(ALL:ALL) ALL
+EOF
+    chmod 440 "${LFS}/etc/sudoers.d/wheel"
+
     # Create hostname
     echo "lfs" > "${LFS}/etc/hostname"
 
@@ -2341,6 +2370,37 @@ XCONF
 # ============================================================================
 # Main execution
 # ============================================================================
+# Configure user credentials for the LFS system
+configure_lfs_user() {
+    # Default to current user if running interactively
+    export LFS_USERNAME="${LFS_USERNAME:-ert}"
+
+    # Only prompt for password if not already set
+    if [[ -z "${LFS_PASSWORD:-}" ]]; then
+        echo ""
+        stage_start "LFS User Configuration"
+        echo "Configure user account for the new LFS system."
+        echo "Username: ${LFS_USERNAME} (set LFS_USERNAME env var to change)"
+        echo ""
+
+        while true; do
+            read -sp "Password for ${LFS_USERNAME} on LFS: " LFS_PASSWORD
+            echo ""
+            read -sp "Confirm password: " LFS_PASSWORD_CONFIRM
+            echo ""
+            if [[ "${LFS_PASSWORD}" == "${LFS_PASSWORD_CONFIRM}" ]]; then
+                break
+            fi
+            warn "Passwords don't match. Try again."
+        done
+
+        [[ -z "${LFS_PASSWORD}" ]] && die "Password cannot be empty"
+        export LFS_PASSWORD
+        ok "User '${LFS_USERNAME}' will be configured with sudo access"
+        echo ""
+    fi
+}
+
 main() {
     log "LFS Build Started"
     log "Target: ${TARGET_STAGE}"
@@ -2349,6 +2409,7 @@ main() {
     log ""
 
     check_prereqs
+    configure_lfs_user
 
     case "${TARGET_STAGE}" in
         all)

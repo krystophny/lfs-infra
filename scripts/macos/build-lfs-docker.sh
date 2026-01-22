@@ -317,7 +317,7 @@ log "Creating user '${LFS_USERNAME}' with sudo access..."
 arch-chroot "${LFS}" useradd -m -G wheel,video,audio -s /bin/bash "${LFS_USERNAME}"
 echo "${LFS_USERNAME}:${LFS_PASSWORD}" | arch-chroot "${LFS}" chpasswd
 echo "%wheel ALL=(ALL:ALL) ALL" > "${LFS}/etc/sudoers.d/wheel"
-# Lock root account (user has sudo)
+# Lock root - only accessible via sudo from user
 arch-chroot "${LFS}" passwd -l root
 
 # Enable services

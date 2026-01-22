@@ -597,6 +597,16 @@ build_system = "custom"
 build_commands = ["./bootstrap --prefix=/usr --parallel=${NPROC}", "make -j${NPROC}", "make install"]
 provides = ["/usr/bin/cmake"]
 
+[packages.sudo]
+version = "1.9.16p2"
+description = "Execute commands as another user"
+url = "https://www.sudo.ws/dist/sudo-${version}.tar.gz"
+git_url = "https://github.com/sudo-project/sudo.git"
+use_git = false
+stage = 4
+configure_flags = "--with-all-insults --with-env-editor --with-passprompt=[sudo] password for %p:"
+provides = ["/usr/bin/sudo"]
+
 # =============================================================================
 # STAGE 6: Init System (runit for fast boot)
 # =============================================================================
