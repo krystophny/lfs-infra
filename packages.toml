@@ -444,7 +444,7 @@ stage = 4
 [packages.expat]
 version = "2.7.3"
 description = "XML parser library"
-url = "https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-${version}.tar.xz"
+url = "https://github.com/libexpat/libexpat/releases/download/R_2_7_3/expat-${version}.tar.xz"
 git_url = "https://github.com/libexpat/libexpat.git"
 use_git = false
 stage = 4
