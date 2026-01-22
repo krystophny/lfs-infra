@@ -240,7 +240,10 @@ mkdir -p "${LFS}/boot/efi"
 mount "${LOOP_EFI}" "${LFS}/boot/efi"
 
 log "Creating minimal directory structure..."
-mkdir -pv "${LFS}"/{boot/efi,root}
+mkdir -pv "${LFS}"/{boot/efi,root,etc}
+
+# Create vconsole.conf to prevent mkinitcpio errors
+echo "KEYMAP=us" > "${LFS}/etc/vconsole.conf"
 
 # Install base system with Arch packages
 # pacstrap will create the proper directory structure
