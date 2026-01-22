@@ -634,7 +634,8 @@ stage_toolchain() {
     make mrproper
     make headers
     find usr/include -type f ! -name '*.h' -delete
-    cp -rv usr/include "${LFS}/usr"
+    mkdir -p "${LFS}/usr/include"
+    cp -rv usr/include/* "${LFS}/usr/include/"
 
     popd > /dev/null
     rm -rf "${build_dir}/linux-"*
