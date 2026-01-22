@@ -339,6 +339,10 @@ arch-chroot "${LFS}" systemctl enable NetworkManager
 arch-chroot "${LFS}" systemctl enable lightdm
 arch-chroot "${LFS}" systemctl enable sshd
 
+# Disable slow boot services
+arch-chroot "${LFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
+arch-chroot "${LFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
+
 # Install Claude Code for the user (native installer - no Node.js needed!)
 log "Installing Claude Code for user '${LFS_USERNAME}'..."
 arch-chroot "${LFS}" su - "${LFS_USERNAME}" -c 'curl -fsSL https://claude.ai/install.sh | bash'
