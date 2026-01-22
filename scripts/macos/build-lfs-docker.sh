@@ -285,7 +285,7 @@ arch-chroot "${LFS}" locale-gen
 echo "LANG=en_US.UTF-8" > "${LFS}/etc/locale.conf"
 
 ln -sf /usr/share/zoneinfo/UTC "${LFS}/etc/localtime"
-arch-chroot "${LFS}" hwclock --systohc
+arch-chroot "${LFS}" hwclock --systohc || true  # May fail in chroot, not critical
 
 # Create user
 arch-chroot "${LFS}" useradd -m -G wheel,video,audio -s /bin/bash user
