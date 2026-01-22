@@ -363,11 +363,15 @@ build_pkg() {
     ok "Built ${pkg} (${build_system})"
 }
 
-# Download a package
+# Download a package (URL from packages.toml or explicit)
 download_pkg() {
     local pkg="$1"
-    local url
-    url=$(get_pkg_url "${pkg}")
+    local url="${2:-}"
+
+    # If no explicit URL, get from packages.toml
+    if [[ -z "${url}" ]]; then
+        url=$(get_pkg_url "${pkg}")
+    fi
 
     [[ -z "${url}" ]] && { warn "No URL for ${pkg}"; return 0; }
 
@@ -1193,25 +1197,6 @@ run_in_chroot() {
         PATH=/usr/bin:/usr/sbin \
         MAKEFLAGS="-j${NPROC}" \
         /bin/bash -c "$1"
-}
-
-# Helper to download a package source
-download_pkg() {
-    local name="$1"
-    local url="$2"
-    local srcdir="${LFS}/sources"
-    local filename=$(basename "$url")
-
-    if [[ -f "${srcdir}/${filename}" ]]; then
-        log "Already downloaded: ${filename}"
-        return 0
-    fi
-
-    log "Downloading: ${name}"
-    curl -L -o "${srcdir}/${filename}" "$url" || {
-        warn "Failed to download ${name}"
-        return 1
-    }
 }
 
 # Helper to build a package in chroot with meson
