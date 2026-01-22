@@ -1235,6 +1235,130 @@ stage_desktop() {
 
     ok "Build tools ready"
 
+    # Build essential system libraries
+    log "========== Building System Libraries =========="
+
+    # libmd (required for libbsd)
+    if [[ ! -f "${LFS}/usr/lib/libmd.so" ]]; then
+        log "Building libmd..."
+        download_pkg "libmd" "https://libbsd.freedesktop.org/releases/libmd-1.1.0.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf libmd-[0-9]*/
+            tar xf libmd-*.tar.xz
+            cd libmd-[0-9]*/
+            ./configure --prefix=/usr --disable-static
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf libmd-[0-9]*/
+        " || die "Failed to build libmd"
+        ok "libmd installed"
+    else
+        log "libmd already installed"
+    fi
+
+    # libbsd (BSD portability library, requires libmd)
+    if [[ ! -f "${LFS}/usr/lib/libbsd.so" ]]; then
+        log "Building libbsd..."
+        download_pkg "libbsd" "https://libbsd.freedesktop.org/releases/libbsd-0.12.2.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf libbsd-[0-9]*/
+            tar xf libbsd-*.tar.xz
+            cd libbsd-[0-9]*/
+            ./configure --prefix=/usr --disable-static
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf libbsd-[0-9]*/
+        " || die "Failed to build libbsd"
+        ok "libbsd installed"
+    else
+        log "libbsd already installed"
+    fi
+
+    # libtirpc (Transport-Independent RPC library)
+    if [[ ! -f "${LFS}/usr/lib/libtirpc.so" ]]; then
+        log "Building libtirpc..."
+        download_pkg "libtirpc" "https://downloads.sourceforge.net/libtirpc/libtirpc-1.3.7.tar.bz2"
+        run_in_chroot "
+            cd /sources
+            rm -rf libtirpc-[0-9]*/
+            tar xf libtirpc-*.tar.bz2 || { bunzip2 -k libtirpc-*.tar.bz2 && tar xf libtirpc-*.tar; }
+            cd libtirpc-[0-9]*/
+            # GCC 15 compatibility
+            CFLAGS='-O2 -Wno-error=incompatible-pointer-types -Wno-error=int-conversion' \
+            ./configure --prefix=/usr --sysconfdir=/etc --disable-static --disable-gssapi
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf libtirpc-[0-9]*/
+        " || die "Failed to build libtirpc"
+        ok "libtirpc installed"
+    else
+        log "libtirpc already installed"
+    fi
+
+    # procps-ng (ps, top, pgrep, etc.)
+    if [[ ! -x "${LFS}/usr/bin/pgrep" ]]; then
+        log "Building procps-ng..."
+        download_pkg "procps-ng" "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-4.0.4.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf procps-ng-[0-9]*/
+            tar xf procps-ng-*.tar.xz
+            cd procps-ng-[0-9]*/
+            ./configure --prefix=/usr --disable-static --disable-kill --without-ncurses
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf procps-ng-[0-9]*/
+        " || die "Failed to build procps-ng"
+        ok "procps-ng installed"
+    else
+        log "procps-ng already installed"
+    fi
+
+    # libglvnd (GL Vendor-Neutral Dispatch)
+    if [[ ! -f "${LFS}/usr/lib/libGL.so" ]] || [[ ! -f "${LFS}/usr/lib/pkgconfig/gl.pc" ]]; then
+        log "Building libglvnd..."
+        download_pkg "libglvnd" "https://gitlab.freedesktop.org/glvnd/libglvnd/-/archive/v1.7.0/libglvnd-v1.7.0.tar.gz"
+        run_in_chroot "
+            cd /sources
+            rm -rf libglvnd-*/
+            tar xf libglvnd-*.tar.gz
+            cd libglvnd-*/
+            mkdir -p build && cd build
+            meson setup --prefix=/usr --buildtype=release ..
+            ninja -j${NPROC}
+            ninja install
+            cd /sources && rm -rf libglvnd-*/
+        " || die "Failed to build libglvnd"
+        ok "libglvnd installed"
+    else
+        log "libglvnd already installed"
+    fi
+
+    # libepoxy (OpenGL function pointer management)
+    if [[ ! -f "${LFS}/usr/lib/libepoxy.so" ]]; then
+        log "Building libepoxy..."
+        download_pkg "libepoxy" "https://github.com/anholt/libepoxy/releases/download/1.5.10/libepoxy-1.5.10.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf libepoxy-[0-9]*/
+            tar xf libepoxy-*.tar.xz
+            cd libepoxy-[0-9]*/
+            mkdir -p build && cd build
+            # Enable both EGL and GLX for glamor support
+            meson setup --prefix=/usr --buildtype=release -Degl=yes -Dglx=yes ..
+            ninja -j${NPROC}
+            ninja install
+            cd /sources && rm -rf libepoxy-[0-9]*/
+        " || die "Failed to build libepoxy"
+        ok "libepoxy installed"
+    else
+        log "libepoxy already installed"
+    fi
+
+    ok "System libraries ready"
+
     # Build D-Bus (required for XFCE)
     log "========== Building D-Bus =========="
     download_pkg "dbus" "https://dbus.freedesktop.org/releases/dbus/dbus-1.16.0.tar.xz"
