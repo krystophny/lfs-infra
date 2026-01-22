@@ -201,7 +201,7 @@ build_commands = [
     "./configure --prefix=/usr --build=$(sh support/config.guess) --host=${LFS_TGT} --without-bash-malloc bash_cv_strtold_broken=no",
     "make -j${NPROC}",
     "make DESTDIR=${LFS} install",
-    "ln -svf bash ${LFS}/bin/sh"
+    "ln -svf bash ${LFS}/usr/bin/sh"
 ]
 
 [packages.coreutils]
