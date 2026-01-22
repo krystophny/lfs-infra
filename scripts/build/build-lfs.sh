@@ -18,6 +18,7 @@ safety_check
 export LFS_TGT="$(uname -m)-lfs-linux-gnu"
 export MAKEFLAGS="-j$(nproc)"
 export NPROC="$(nproc)"
+export FORCE_UNSAFE_CONFIGURE=1  # Required for tar configure as root
 
 # Paths
 SOURCES_DIR="${LFS}/sources"
