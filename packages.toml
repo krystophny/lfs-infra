@@ -1300,7 +1300,23 @@ url = "https://github.com/grassmunk/Chicago95/archive/refs/tags/v${version}.tar.
 git_url = "https://github.com/grassmunk/Chicago95.git"
 use_git = false
 stage = 11
-# Includes GTK theme, icons, cursors, sounds, Plymouth theme
+# Includes GTK theme, icons, cursors, sounds, fonts, Plymouth theme
+
+[packages.dejavu-fonts]
+version = "2.37"
+description = "DejaVu TrueType fonts"
+url = "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_${version}/dejavu-fonts-ttf-${version}.tar.bz2"
+git_url = "https://github.com/dejavu-fonts/dejavu-fonts.git"
+use_git = false
+stage = 11
+
+[packages.liberation-fonts]
+version = "2.1.5"
+description = "Liberation fonts (metric-compatible with Arial, Times, Courier)"
+url = "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-${version}.tar.gz"
+git_url = "https://github.com/liberationfonts/liberation-fonts.git"
+use_git = false
+stage = 11
 
 [packages.nextcloud-client]
 version = "3.16.3"

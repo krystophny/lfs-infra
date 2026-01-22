@@ -1953,6 +1953,154 @@ XCONF
     log "Modesetting driver with glamor acceleration enabled"
     log "VirtIO GPU driver available for VM graphics"
 
+    # ========== Fonts ==========
+    log "========== Installing Fonts =========="
+
+    # DejaVu fonts (good Unicode coverage)
+    download_pkg "dejavu-fonts" "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2"
+    run_in_chroot "
+        cd /sources
+        rm -rf dejavu-fonts-ttf-*/
+        tar xf dejavu-fonts-ttf-*.tar.bz2
+        mkdir -p /usr/share/fonts/truetype/dejavu
+        cp dejavu-fonts-ttf-*/ttf/*.ttf /usr/share/fonts/truetype/dejavu/
+        rm -rf dejavu-fonts-ttf-*/
+    "
+    ok "DejaVu fonts installed"
+
+    # Liberation fonts (metric-compatible with Arial, Times, Courier)
+    download_pkg "liberation-fonts" "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz"
+    run_in_chroot "
+        cd /sources
+        rm -rf liberation-fonts-ttf-*/
+        tar xf liberation-fonts-ttf-*.tar.gz
+        mkdir -p /usr/share/fonts/truetype/liberation
+        cp liberation-fonts-ttf-*/Liberation*.ttf /usr/share/fonts/truetype/liberation/
+        rm -rf liberation-fonts-ttf-*/
+    "
+    ok "Liberation fonts installed"
+
+    # Noto fonts (for emoji and broad language support)
+    download_pkg "noto-fonts" "https://github.com/notofonts/notofonts.github.io/releases/download/noto-fonts-2024.11.01/NotoSans-2024.11.01.zip"
+    run_in_chroot "
+        cd /sources
+        rm -rf NotoSans-*/
+        mkdir -p NotoSans-tmp
+        cd NotoSans-tmp
+        unzip -o ../NotoSans-*.zip 2>/dev/null || true
+        mkdir -p /usr/share/fonts/truetype/noto
+        find . -name '*.ttf' -exec cp {} /usr/share/fonts/truetype/noto/ \; 2>/dev/null || true
+        cd /sources
+        rm -rf NotoSans-tmp
+    " || warn "Noto fonts installation had issues"
+    ok "Noto fonts installed"
+
+    # Update font cache
+    run_in_chroot "
+        fc-cache -fv 2>/dev/null || true
+    "
+    ok "Font cache updated"
+
+    # ========== Chicago95 Theme ==========
+    log "========== Installing Chicago95 Theme =========="
+
+    download_pkg "chicago95" "https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.2.tar.gz"
+    run_in_chroot "
+        cd /sources
+        rm -rf Chicago95-*/
+        tar xf v3.0.2.tar.gz || tar xf chicago95*.tar.gz
+        cd Chicago95-*/
+
+        # Install GTK theme
+        mkdir -p /usr/share/themes
+        cp -r Theme/Chicago95 /usr/share/themes/
+
+        # Install icons
+        mkdir -p /usr/share/icons
+        cp -r Icons/Chicago95 /usr/share/icons/
+        cp -r Icons/Chicago95-tux /usr/share/icons/ 2>/dev/null || true
+
+        # Install cursors
+        cp -r Cursors/Chicago95_Cursor_Black /usr/share/icons/ 2>/dev/null || true
+        cp -r Cursors/Chicago95_Cursor_White /usr/share/icons/ 2>/dev/null || true
+        cp -r 'Cursors/Chicago95 Standard Cursors' /usr/share/icons/ 2>/dev/null || true
+
+        # Install fonts (includes MS Sans Serif style fonts)
+        mkdir -p /usr/share/fonts/truetype/chicago95
+        cp -r Fonts/*.ttf /usr/share/fonts/truetype/chicago95/ 2>/dev/null || true
+        cp -r Fonts/bitmap/* /usr/share/fonts/truetype/chicago95/ 2>/dev/null || true
+
+        # Install sounds
+        mkdir -p /usr/share/sounds/Chicago95
+        cp -r sounds/* /usr/share/sounds/Chicago95/ 2>/dev/null || true
+
+        cd /sources
+        rm -rf Chicago95-*/
+    "
+    ok "Chicago95 theme installed"
+
+    # Update font cache again
+    run_in_chroot "
+        fc-cache -fv 2>/dev/null || true
+    "
+
+    # ========== XFCE Configuration ==========
+    log "========== Installing XFCE Configuration =========="
+
+    # Copy XFCE config from repo
+    if [[ -d "${ROOT_DIR}/config/user/xfce4" ]]; then
+        mkdir -p "${LFS}/root/.config"
+        cp -av "${ROOT_DIR}/config/user/xfce4" "${LFS}/root/.config/"
+        chown -R 0:0 "${LFS}/root/.config/xfce4"
+        log "XFCE configuration installed from repo"
+    fi
+
+    # Copy autostart
+    if [[ -d "${ROOT_DIR}/config/user/autostart" ]]; then
+        mkdir -p "${LFS}/root/.config/autostart"
+        cp -av "${ROOT_DIR}/config/user/autostart"/* "${LFS}/root/.config/autostart/"
+        chown -R 0:0 "${LFS}/root/.config/autostart"
+    fi
+
+    # Copy bash_profile
+    if [[ -f "${ROOT_DIR}/config/user/bash_profile" ]]; then
+        cp -v "${ROOT_DIR}/config/user/bash_profile" "${LFS}/root/.bash_profile"
+    fi
+
+    ok "XFCE configuration installed"
+
+    # ========== Input Configuration for VM ==========
+    log "========== Configuring Input for VM =========="
+
+    # VirtIO input devices need special handling
+    run_in_chroot "
+        cat > /etc/X11/xorg.conf.d/10-virtio-input.conf << 'XCONF'
+Section \"InputClass\"
+    Identifier \"virtio keyboard\"
+    MatchProduct \"QEMU Virtio Keyboard\"
+    MatchIsKeyboard \"on\"
+    Driver \"evdev\"
+    Option \"XkbLayout\" \"us\"
+EndSection
+
+Section \"InputClass\"
+    Identifier \"virtio mouse\"
+    MatchProduct \"QEMU Virtio Mouse\"
+    MatchIsPointer \"on\"
+    Driver \"evdev\"
+EndSection
+
+Section \"InputClass\"
+    Identifier \"virtio tablet\"
+    MatchProduct \"QEMU Virtio Tablet\"
+    MatchIsPointer \"on\"
+    Driver \"evdev\"
+    Option \"Mode\" \"Absolute\"
+EndSection
+XCONF
+    "
+    ok "VirtIO input configuration created"
+
     stage_end "Desktop"
     mark_stage_done "desktop"
 }
