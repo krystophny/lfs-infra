@@ -1318,6 +1318,23 @@ git_url = "https://github.com/liberationfonts/liberation-fonts.git"
 use_git = false
 stage = 11
 
+[packages.vte]
+version = "0.74.2"
+description = "Virtual Terminal Emulator widget library"
+url = "https://download.gnome.org/sources/vte/0.74/vte-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/vte.git"
+use_git = false
+stage = 10
+
+[packages.xfce4-terminal]
+version = "1.1.3"
+description = "XFCE terminal emulator"
+url = "https://archive.xfce.org/src/apps/xfce4-terminal/1.1/xfce4-terminal-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/apps/xfce4-terminal.git"
+use_git = false
+stage = 10
+depends = ["vte"]
+
 [packages.nextcloud-client]
 version = "3.16.3"
 description = "Nextcloud desktop sync client"
