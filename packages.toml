@@ -84,43 +84,46 @@ source_pkg = "gcc"
 stage = 1
 provides = ["${LFS}/tools/bin/${LFS_TGT}-gcc"]
 build_commands = [
-    "tar -xf ../mpfr-*.tar.xz && mv mpfr-* mpfr",
-    "tar -xf ../gmp-*.tar.xz && mv gmp-* gmp",
-    "tar -xf ../mpc-*.tar.* && mv mpc-* mpc",
+    "tar -xf ${LFS}/sources/mpfr-*.tar.xz && mv mpfr-* mpfr",
+    "tar -xf ${LFS}/sources/gmp-*.tar.xz && mv gmp-* gmp",
+    "tar -xf ${LFS}/sources/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build",
-    "../configure --target=${LFS_TGT} --prefix=${LFS}/tools --with-glibc-version=2.42 --with-sysroot=${LFS} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++",
-    "make -j${NPROC}",
-    "make install",
-    "cd .. && cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${LFS}/tools/bin/${LFS_TGT}-gcc -print-libgcc-file-name))/include/limits.h"
+    "mkdir -p build && cd build && ../configure --target=${LFS_TGT} --prefix=${LFS}/tools --with-glibc-version=2.42 --with-sysroot=${LFS} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make install",
+    "cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${LFS}/tools/bin/${LFS_TGT}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
-# GCC Pass 2 - Full cross compiler with libstdc++
+# libstdc++ - Standard C++ library (built from gcc source, after glibc)
+[packages.libstdcxx]
+version = "15.2.0"
+description = "GNU Standard C++ Library"
+source_pkg = "gcc"
+stage = 1
+provides = ["${LFS}/usr/lib/libstdc++.so"]
+build_commands = [
+    "mkdir -p build && cd build && ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${LFS} install",
+    "rm -v ${LFS}/usr/lib/lib{stdc++{,exp,fs},supc++}.la"
+]
+
+# GCC Pass 2 - Full cross compiler (built in chroot after temp tools)
 [packages.gcc-pass2]
 version = "15.2.0"
 description = "GCC cross-compiler pass 2"
 source_pkg = "gcc"
-stage = 1
-provides = ["${LFS}/tools/bin/${LFS_TGT}-g++"]
+stage = 2
+provides = ["${LFS}/usr/bin/cc"]
 build_commands = [
-    "tar -xf ../mpfr-*.tar.xz && mv mpfr-* mpfr",
-    "tar -xf ../gmp-*.tar.xz && mv gmp-* gmp",
-    "tar -xf ../mpc-*.tar.* && mv mpc-* mpc",
+    "tar -xf ${LFS}/sources/mpfr-*.tar.xz && mv mpfr-* mpfr",
+    "tar -xf ${LFS}/sources/gmp-*.tar.xz && mv gmp-* gmp",
+    "tar -xf ${LFS}/sources/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build",
-    "../configure --build=$(../config.guess) --host=${LFS_TGT} --target=${LFS_TGT} LDFLAGS_FOR_TARGET=-L${PWD}/${LFS_TGT}/libgcc --prefix=/usr --with-build-sysroot=${LFS} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++",
-    "make -j${NPROC}",
-    "make DESTDIR=${LFS} install",
+    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${LFS_TGT} --target=${LFS_TGT} LDFLAGS_FOR_TARGET=-L${PWD}/${LFS_TGT}/libgcc --prefix=/usr --with-build-sysroot=${LFS} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${LFS} install",
     "ln -sv gcc ${LFS}/usr/bin/cc"
 ]
 
 [packages.linux-headers]
 version = "6.18.6"
 description = "Linux kernel headers"
-url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.tar.xz"
-git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
-use_git = false
-checksum_url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc"
+source_pkg = "linux"
 stage = 1
 provides = ["${LFS}/usr/include/linux/kernel.h"]
 build_commands = [
@@ -162,6 +165,12 @@ url = "https://ftpmirror.gnu.org/gnu/m4/m4-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/m4.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/m4"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(build-aux/config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.ncurses]
 version = "6.6"
@@ -170,6 +179,15 @@ url = "https://ftpmirror.gnu.org/gnu/ncurses/ncurses-${version}.tar.gz"
 git_url = "https://github.com/mirror/ncurses.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/lib/libncursesw.so"]
+build_commands = [
+    "mkdir -p build && pushd build && ../configure AWK=gawk && make -C include && make -C progs tic && popd",
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess) --mandir=/usr/share/man --with-manpage-format=normal --with-shared --without-normal --without-cxx-binding --without-debug --without-ada --disable-stripping",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} TIC_PATH=$(pwd)/build/progs/tic install",
+    "ln -svf libncursesw.so ${LFS}/usr/lib/libncurses.so",
+    "sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${LFS}/usr/include/curses.h"
+]
 
 [packages.bash]
 version = "5.3"
@@ -178,6 +196,13 @@ url = "https://ftpmirror.gnu.org/gnu/bash/bash-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/bash.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/bash"]
+build_commands = [
+    "./configure --prefix=/usr --build=$(sh support/config.guess) --host=${LFS_TGT} --without-bash-malloc bash_cv_strtold_broken=no",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install",
+    "ln -svf bash ${LFS}/bin/sh"
+]
 
 [packages.coreutils]
 version = "9.9"
@@ -186,6 +211,13 @@ url = "https://ftpmirror.gnu.org/gnu/coreutils/coreutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/coreutils.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/ls"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(build-aux/config.guess) --enable-install-program=hostname",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install",
+    "mv -v ${LFS}/usr/bin/chroot ${LFS}/usr/sbin"
+]
 
 [packages.diffutils]
 version = "3.12"
@@ -194,6 +226,12 @@ url = "https://ftpmirror.gnu.org/gnu/diffutils/diffutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/diffutils.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/diff"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess) gl_cv_func_strcasecmp_works=yes",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.file]
 version = "5.46"
@@ -202,6 +240,14 @@ url = "https://astron.com/pub/file/file-${version}.tar.gz"
 git_url = "https://github.com/file/file.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/file"]
+build_commands = [
+    "mkdir -p build && pushd build && ../configure --disable-bzlib --disable-libseccomp --disable-xzlib --disable-zlib && make && popd",
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make FILE_COMPILE=$(pwd)/build/src/file -j${NPROC}",
+    "make DESTDIR=${LFS} install",
+    "rm -v ${LFS}/usr/lib/libmagic.la"
+]
 
 [packages.findutils]
 version = "4.10.0"
@@ -210,6 +256,12 @@ url = "https://ftpmirror.gnu.org/gnu/findutils/findutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/findutils.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/find"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess) --localstatedir=/var/lib/locate gl_cv_func_wcwidth_works=yes",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.gawk]
 version = "5.3.2"
@@ -218,6 +270,13 @@ url = "https://ftpmirror.gnu.org/gnu/gawk/gawk-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gawk.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/gawk"]
+build_commands = [
+    "sed -i 's/extras//' Makefile.in",
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.grep]
 version = "3.12"
@@ -226,6 +285,12 @@ url = "https://ftpmirror.gnu.org/gnu/grep/grep-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/grep.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/grep"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.gzip]
 version = "1.14"
@@ -234,6 +299,12 @@ url = "https://ftpmirror.gnu.org/gnu/gzip/gzip-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gzip.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/gzip"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.make]
 version = "4.4.1"
@@ -242,6 +313,12 @@ url = "https://ftpmirror.gnu.org/gnu/make/make-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/make.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/make"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(build-aux/config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.patch]
 version = "2.8"
@@ -250,6 +327,12 @@ url = "https://ftpmirror.gnu.org/gnu/patch/patch-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/patch.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/patch"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.sed]
 version = "4.9"
@@ -258,6 +341,12 @@ url = "https://ftpmirror.gnu.org/gnu/sed/sed-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/sed.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/sed"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.tar]
 version = "1.35"
@@ -266,6 +355,12 @@ url = "https://ftpmirror.gnu.org/gnu/tar/tar-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/tar.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/tar"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess)",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install"
+]
 
 [packages.xz]
 version = "5.8.2"
@@ -274,6 +369,25 @@ url = "https://github.com/tukaani-project/xz/releases/download/v${version}/xz-${
 git_url = "https://github.com/tukaani-project/xz.git"
 use_git = false
 stage = 2
+provides = ["${LFS}/usr/bin/xz"]
+build_commands = [
+    "./configure --prefix=/usr --host=${LFS_TGT} --build=$(./config.guess) --disable-static --docdir=/usr/share/doc/xz-${version}",
+    "make -j${NPROC}",
+    "make DESTDIR=${LFS} install",
+    "rm -v ${LFS}/usr/lib/liblzma.la"
+]
+
+# Binutils Pass 2 - Cross binutils for temp tools (after glibc)
+[packages.binutils-pass2]
+version = "2.45.1"
+description = "GNU binary utilities pass 2"
+source_pkg = "binutils"
+stage = 2
+provides = ["${LFS}/usr/bin/ld"]
+build_commands = [
+    "mkdir -p build && cd build && ../configure --prefix=/usr --build=$(../config.guess) --host=${LFS_TGT} --disable-nls --enable-shared --enable-gprofng=no --disable-werror --enable-64-bit-bfd --enable-new-dtags --enable-default-hash-style=gnu && make -j${NPROC} && make DESTDIR=${LFS} install",
+    "rm -v ${LFS}/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}"
+]
 
 # =============================================================================
 # STAGE 3: Basic System Software

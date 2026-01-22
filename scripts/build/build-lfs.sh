@@ -615,153 +615,13 @@ stage_toolchain() {
     local build_dir="${LFS}/build"
     mkdir -p "${build_dir}"
 
-    # Pass 1: Binutils
-    log "Building binutils (pass 1)..."
-    extract_pkg binutils "${build_dir}"
-    pushd "${build_dir}/binutils-"* > /dev/null
-
-    mkdir -p build && cd build
-    ../configure \
-        --prefix="${LFS}/tools" \
-        --with-sysroot="${LFS}" \
-        --target="${LFS_TGT}" \
-        --disable-nls \
-        --enable-gprofng=no \
-        --disable-werror \
-        --enable-new-dtags \
-        --enable-default-hash-style=gnu
-
-    make -j"${NPROC}"
-    make install
-    popd > /dev/null
-    rm -rf "${build_dir}/binutils-"*
-
-    # GCC (pass 1)
-    log "Building GCC (pass 1)..."
-    extract_pkg gcc "${build_dir}"
-    extract_pkg gmp "${build_dir}"
-    extract_pkg mpfr "${build_dir}"
-    extract_pkg mpc "${build_dir}"
-
-    pushd "${build_dir}/gcc-"* > /dev/null
-
-    # Move support libraries
-    mv ../gmp-* gmp
-    mv ../mpfr-* mpfr
-    mv ../mpc-* mpc
-
-    # Fix for x86_64
-    case $(uname -m) in
-        x86_64)
-            sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64
-            ;;
-    esac
-
-    mkdir -p build && cd build
-    ../configure \
-        --target="${LFS_TGT}" \
-        --prefix="${LFS}/tools" \
-        --with-glibc-version=2.42 \
-        --with-sysroot="${LFS}" \
-        --with-newlib \
-        --without-headers \
-        --enable-default-pie \
-        --enable-default-ssp \
-        --disable-nls \
-        --disable-shared \
-        --disable-multilib \
-        --disable-threads \
-        --disable-libatomic \
-        --disable-libgomp \
-        --disable-libquadmath \
-        --disable-libssp \
-        --disable-libvtv \
-        --disable-libstdcxx \
-        --enable-languages=c,c++
-
-    make -j"${NPROC}"
-    make install
-
-    # Create limits.h
-    cd ..
-    cat gcc/limitx.h gcc/glimits.h gcc/limity.h > \
-        "$(dirname "$("${LFS}/tools/bin/${LFS_TGT}-gcc" -print-libgcc-file-name)")"/include/limits.h
-
-    popd > /dev/null
-    rm -rf "${build_dir}/gcc-"*
-
-    # Linux headers
-    log "Installing Linux headers..."
-    extract_pkg linux "${build_dir}"
-    pushd "${build_dir}/linux-"* > /dev/null
-
-    make mrproper
-    make headers
-    find usr/include -type f ! -name '*.h' -delete
-    mkdir -p "${LFS}/usr/include"
-    cp -rv usr/include/* "${LFS}/usr/include/"
-
-    popd > /dev/null
-    rm -rf "${build_dir}/linux-"*
-
-    # Glibc
-    log "Building glibc..."
-    extract_pkg glibc "${build_dir}"
-    pushd "${build_dir}/glibc-"* > /dev/null
-
-    # Create lib64 directory and symlinks for dynamic linker
-    case $(uname -m) in
-        x86_64)
-            mkdir -pv "${LFS}/lib64"
-            ln -sfv ../lib/ld-linux-x86-64.so.2 "${LFS}/lib64/ld-linux-x86-64.so.2"
-            ln -sfv ../lib/ld-linux-x86-64.so.2 "${LFS}/lib64/ld-lsb-x86-64.so.3"
-            ;;
-    esac
-
-    mkdir -p build && cd build
-    echo "rootsbindir=/usr/sbin" > configparms
-
-    ../configure \
-        --prefix=/usr \
-        --host="${LFS_TGT}" \
-        --build="$(../scripts/config.guess)" \
-        --enable-kernel=5.4 \
-        --with-headers="${LFS}/usr/include" \
-        --disable-nscd \
-        libc_cv_slibdir=/usr/lib
-
-    make -j"${NPROC}"
-    make DESTDIR="${LFS}" install
-
-    # Fix ldd path
-    sed '/RTLDLIST=/s@/usr@@g' -i "${LFS}/usr/bin/ldd"
-
-    popd > /dev/null
-    rm -rf "${build_dir}/glibc-"*
-
-    # Libstdc++ (from GCC)
-    log "Building libstdc++..."
-    extract_pkg gcc "${build_dir}"
-    pushd "${build_dir}/gcc-"* > /dev/null
-
-    mkdir -p build && cd build
-    ../libstdc++-v3/configure \
-        --host="${LFS_TGT}" \
-        --build="$(../config.guess)" \
-        --prefix=/usr \
-        --disable-multilib \
-        --disable-nls \
-        --disable-libstdcxx-pch \
-        --with-gxx-include-dir="/tools/${LFS_TGT}/include/c++/$(cat ../gcc/BASE-VER)"
-
-    make -j"${NPROC}"
-    make DESTDIR="${LFS}" install
-
-    # Remove libtool archives
-    rm -v "${LFS}"/usr/lib/lib{stdc++{,exp,fs},supc++}.la
-
-    popd > /dev/null
-    rm -rf "${build_dir}/gcc-"*
+    # Build cross-toolchain packages in order using packages.toml definitions
+    # Order: binutils -> gcc-pass1 -> linux-headers -> glibc -> libstdcxx
+    build_pkg binutils "${build_dir}"
+    build_pkg gcc-pass1 "${build_dir}"
+    build_pkg linux-headers "${build_dir}"
+    build_pkg glibc "${build_dir}"
+    build_pkg libstdcxx "${build_dir}"
 
     stage_end "Toolchain"
     mark_stage_done "toolchain"
@@ -780,7 +640,8 @@ stage_temptools() {
     export PATH="${LFS}/tools/bin:${PATH}"
     export CONFIG_SITE="${LFS}/usr/share/config.site"
 
-    # Create config.site
+    # Create config.site for cross-compilation cache variables
+    mkdir -p "$(dirname "${CONFIG_SITE}")"
     cat > "${CONFIG_SITE}" << "EOF"
 # config.site for LFS cross-compilation
 ac_cv_func_mmap_fixed_mapped=yes
@@ -796,172 +657,15 @@ bash_cv_unusable_rtsigs=no
 gt_cv_int_divbyzero_sigfpe=yes
 EOF
 
-    # Build each temporary tool
+    # Build temporary tools using packages.toml definitions
     local temp_tools=(
         m4 ncurses bash coreutils diffutils file findutils
         gawk grep gzip make patch sed tar xz
-        binutils gcc
+        binutils-pass2 gcc-pass2
     )
 
     for pkg in "${temp_tools[@]}"; do
-        log "Building temporary tool: ${pkg}..."
-
-        extract_pkg "${pkg}" "${build_dir}"
-        pushd "${build_dir}/${pkg}-"* > /dev/null
-
-        case "${pkg}" in
-            m4)
-                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(build-aux/config.guess)"
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ;;
-            ncurses)
-                mkdir -p build
-                pushd build > /dev/null
-                ../configure AWK=gawk
-                make -C include
-                make -C progs tic
-                popd > /dev/null
-
-                ./configure \
-                    --prefix=/usr \
-                    --host="${LFS_TGT}" \
-                    --build="$(./config.guess)" \
-                    --mandir=/usr/share/man \
-                    --with-manpage-format=normal \
-                    --with-shared \
-                    --without-normal \
-                    --without-cxx-binding \
-                    --without-debug \
-                    --without-ada \
-                    --disable-stripping
-
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" TIC_PATH="$(pwd)/build/progs/tic" install
-                ln -svf libncursesw.so "${LFS}/usr/lib/libncurses.so"
-                sed -e 's/^#if.*XOPEN.*$/#if 1/' -i "${LFS}/usr/include/curses.h"
-                ;;
-            bash)
-                ./configure \
-                    --prefix=/usr \
-                    --build="$(sh support/config.guess)" \
-                    --host="${LFS_TGT}" \
-                    --without-bash-malloc \
-                    bash_cv_strtold_broken=no
-
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ln -svf bash "${LFS}/bin/sh"
-                ;;
-            coreutils)
-                ./configure \
-                    --prefix=/usr \
-                    --host="${LFS_TGT}" \
-                    --build="$(build-aux/config.guess)" \
-                    --enable-install-program=hostname
-
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                mv -v "${LFS}/usr/bin/chroot" "${LFS}/usr/sbin"
-                ;;
-            diffutils)
-                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)" \
-                    gl_cv_func_strcasecmp_works=yes
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ;;
-            file)
-                mkdir -p build
-                pushd build > /dev/null
-                ../configure --disable-bzlib --disable-libseccomp \
-                    --disable-xzlib --disable-zlib
-                make
-                popd > /dev/null
-                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)"
-                make FILE_COMPILE="$(pwd)/build/src/file" -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                rm -v "${LFS}/usr/lib/libmagic.la"
-                ;;
-            findutils)
-                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)" \
-                    --localstatedir=/var/lib/locate \
-                    gl_cv_func_wcwidth_works=yes
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ;;
-            gawk)
-                sed -i 's/extras//' Makefile.in
-                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)"
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ;;
-            grep|gzip|make|patch|sed|tar|xz)
-                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess 2>/dev/null || build-aux/config.guess)"
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ;;
-            binutils)
-                mkdir -p build && cd build
-                ../configure \
-                    --prefix=/usr \
-                    --build="$(../config.guess)" \
-                    --host="${LFS_TGT}" \
-                    --disable-nls \
-                    --enable-shared \
-                    --enable-gprofng=no \
-                    --disable-werror \
-                    --enable-64-bit-bfd \
-                    --enable-new-dtags \
-                    --enable-default-hash-style=gnu
-
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                rm -v "${LFS}"/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}
-                ;;
-            gcc)
-                # Extract support libraries
-                extract_pkg gmp "${build_dir}"
-                extract_pkg mpfr "${build_dir}"
-                extract_pkg mpc "${build_dir}"
-
-                mv ../gmp-* gmp
-                mv ../mpfr-* mpfr
-                mv ../mpc-* mpc
-
-                case $(uname -m) in
-                    x86_64)
-                        sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64
-                        ;;
-                esac
-
-                mkdir -p build && cd build
-                ../configure \
-                    --build="$(../config.guess)" \
-                    --host="${LFS_TGT}" \
-                    --target="${LFS_TGT}" \
-                    LDFLAGS_FOR_TARGET=-L"${PWD}/${LFS_TGT}/libgcc" \
-                    --prefix=/usr \
-                    --with-build-sysroot="${LFS}" \
-                    --enable-default-pie \
-                    --enable-default-ssp \
-                    --disable-nls \
-                    --disable-multilib \
-                    --disable-libatomic \
-                    --disable-libgomp \
-                    --disable-libquadmath \
-                    --disable-libsanitizer \
-                    --disable-libssp \
-                    --disable-libvtv \
-                    --enable-languages=c,c++
-
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ln -svf gcc "${LFS}/usr/bin/cc"
-                ;;
-        esac
-
-        popd > /dev/null
-        rm -rf "${build_dir}/${pkg}-"*
+        build_pkg "${pkg}" "${build_dir}"
     done
 
     stage_end "Temporary Tools"
