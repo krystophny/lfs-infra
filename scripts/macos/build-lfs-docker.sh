@@ -53,6 +53,7 @@ Options:
     -o, --output DIR    Output directory (default: ${OUTPUT_DIR})
     -l, --list          List USB drives and exit
     -b, --build-only    Build image but don't write to USB
+    -n, --no-cache      Clear package cache before build
     -h, --help          Show this help
 
 Examples:
@@ -66,6 +67,7 @@ EOF
 DEVICE=""
 BUILD_ONLY=0
 LIST_ONLY=0
+NO_CACHE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -74,6 +76,7 @@ while [[ $# -gt 0 ]]; do
         -o|--output) OUTPUT_DIR="$2"; shift 2 ;;
         -l|--list) LIST_ONLY=1; shift ;;
         -b|--build-only) BUILD_ONLY=1; shift ;;
+        -n|--no-cache) NO_CACHE=1; shift ;;
         -h|--help) usage ;;
         *) die "Unknown option: $1" ;;
     esac
@@ -135,6 +138,12 @@ fi
 # Create output and cache directories
 mkdir -p "${OUTPUT_DIR}"
 mkdir -p "${CACHE_DIR}"
+
+# Clear cache if requested
+if [[ ${NO_CACHE} -eq 1 ]]; then
+    warn "Clearing package cache..."
+    rm -rf "${CACHE_DIR:?}"/*
+fi
 
 header "Building LFS Docker Image (Build Host)"
 
