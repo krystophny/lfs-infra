@@ -238,13 +238,14 @@ get_pkg_build_commands() {
     local pkg="$1"
     awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^build_commands/ {
-            gsub(/^build_commands *= *\[/, "")
-            gsub(/\]$/, "")
-            gsub(/, *"/, "\n")
-            gsub(/"/, "")
-            print
+        /^\[packages\./ && found { exit }
+        found && /^build_commands/ { in_array=1; next }
+        in_array && /^\]/ { in_array=0; next }
+        in_array {
+            # Extract command from quoted string
+            gsub(/^[[:space:]]*"/, "")
+            gsub(/"[[:space:]]*,?[[:space:]]*$/, "")
+            if (length($0) > 0) print
         }
     ' "${PACKAGES_FILE}"
 }
@@ -254,13 +255,25 @@ get_pkg_provides() {
     local pkg="$1"
     awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
+        /^\[packages\./ && found { exit }
         found && /^provides/ {
-            gsub(/^provides *= *\[/, "")
-            gsub(/\]$/, "")
-            gsub(/, *"/, "\n")
-            gsub(/"/, "")
-            print
+            # Handle single-line: provides = ["file1", "file2"]
+            if (/\]/) {
+                gsub(/^provides *= *\[/, "")
+                gsub(/\]$/, "")
+                gsub(/, *"/, "\n")
+                gsub(/"/, "")
+                print
+            } else {
+                in_array=1
+            }
+            next
+        }
+        in_array && /^\]/ { in_array=0; next }
+        in_array {
+            gsub(/^[[:space:]]*"/, "")
+            gsub(/"[[:space:]]*,?[[:space:]]*$/, "")
+            if (length($0) > 0) print
         }
     ' "${PACKAGES_FILE}"
 }
