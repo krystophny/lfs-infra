@@ -38,6 +38,7 @@ target_arch = "x86_64"
 
 [packages.pkgutils]
 version = "5.40.9"
+version_check = "url:https://crux.nu/gitweb/?p=tools/pkgutils.git;a=tags|([0-9]+\.[0-9]+\.[0-9]+)"
 description = "CRUX package management utilities"
 git_url = "https://github.com/zeppe-lin/pkgutils.git"
 use_git = false
@@ -51,6 +52,7 @@ bootstrap = true
 
 [packages.binutils]
 version = "2.45.1"
+version_check = "gnu:binutils"
 description = "GNU binary utilities"
 url = "https://ftpmirror.gnu.org/gnu/binutils/binutils-${version}.tar.xz"
 git_url = "git://sourceware.org/git/binutils-gdb.git"
@@ -67,6 +69,7 @@ build_commands = [
 
 [packages.gcc]
 version = "15.2.0"
+version_check = "gnu:gcc"
 description = "GNU Compiler Collection"
 url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
 git_url = "git://gcc.gnu.org/git/gcc.git"
@@ -79,6 +82,7 @@ languages = "c,c++,fortran"
 # GCC Pass 1 - Cross compiler (limited, for building glibc)
 [packages.gcc-pass1]
 version = "15.2.0"
+version_check = "gnu:gcc"
 description = "GCC cross-compiler pass 1"
 source_pkg = "gcc"
 stage = 1
@@ -95,6 +99,7 @@ build_commands = [
 # libstdc++ - Standard C++ library (built from gcc source, after glibc)
 [packages.libstdcxx]
 version = "15.2.0"
+version_check = "gnu:gcc"
 description = "GNU Standard C++ Library"
 source_pkg = "gcc"
 stage = 1
@@ -107,6 +112,7 @@ build_commands = [
 # GCC Pass 2 - Full cross compiler (built in chroot after temp tools)
 [packages.gcc-pass2]
 version = "15.2.0"
+version_check = "gnu:gcc"
 description = "GCC cross-compiler pass 2"
 source_pkg = "gcc"
 stage = 2
@@ -137,6 +143,7 @@ build_commands = [
 
 [packages.glibc]
 version = "2.42"
+version_check = "gnu:glibc"
 description = "GNU C Library"
 url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
 git_url = "git://sourceware.org/git/glibc.git"
@@ -161,6 +168,7 @@ build_commands = [
 
 [packages.m4]
 version = "1.4.20"
+version_check = "gnu:m4"
 description = "GNU macro processor"
 url = "https://ftpmirror.gnu.org/gnu/m4/m4-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/m4.git"
@@ -175,6 +183,7 @@ build_commands = [
 
 [packages.ncurses]
 version = "6.6"
+version_check = "gnu:ncurses"
 description = "Terminal handling library"
 url = "https://ftpmirror.gnu.org/gnu/ncurses/ncurses-${version}.tar.gz"
 git_url = "https://github.com/mirror/ncurses.git"
@@ -192,6 +201,7 @@ build_commands = [
 
 [packages.bash]
 version = "5.3"
+version_check = "gnu:bash"
 description = "GNU Bourne-Again Shell"
 url = "https://ftpmirror.gnu.org/gnu/bash/bash-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/bash.git"
@@ -207,6 +217,7 @@ build_commands = [
 
 [packages.coreutils]
 version = "9.9"
+version_check = "gnu:coreutils"
 description = "GNU core utilities"
 url = "https://ftpmirror.gnu.org/gnu/coreutils/coreutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/coreutils.git"
@@ -222,6 +233,7 @@ build_commands = [
 
 [packages.diffutils]
 version = "3.12"
+version_check = "gnu:diffutils"
 description = "GNU diff utilities"
 url = "https://ftpmirror.gnu.org/gnu/diffutils/diffutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/diffutils.git"
@@ -253,6 +265,7 @@ build_commands = [
 
 [packages.findutils]
 version = "4.10.0"
+version_check = "gnu:findutils"
 description = "GNU find utilities"
 url = "https://ftpmirror.gnu.org/gnu/findutils/findutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/findutils.git"
@@ -267,6 +280,7 @@ build_commands = [
 
 [packages.gawk]
 version = "5.3.2"
+version_check = "gnu:gawk"
 description = "GNU AWK"
 url = "https://ftpmirror.gnu.org/gnu/gawk/gawk-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gawk.git"
@@ -282,6 +296,7 @@ build_commands = [
 
 [packages.grep]
 version = "3.12"
+version_check = "gnu:grep"
 description = "GNU grep"
 url = "https://ftpmirror.gnu.org/gnu/grep/grep-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/grep.git"
@@ -296,6 +311,7 @@ build_commands = [
 
 [packages.gzip]
 version = "1.14"
+version_check = "gnu:gzip"
 description = "GNU compression utility"
 url = "https://ftpmirror.gnu.org/gnu/gzip/gzip-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gzip.git"
@@ -310,6 +326,7 @@ build_commands = [
 
 [packages.make]
 version = "4.4.1"
+version_check = "gnu:make"
 description = "GNU make"
 url = "https://ftpmirror.gnu.org/gnu/make/make-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/make.git"
@@ -324,6 +341,7 @@ build_commands = [
 
 [packages.patch]
 version = "2.8"
+version_check = "gnu:patch"
 description = "GNU patch"
 url = "https://ftpmirror.gnu.org/gnu/patch/patch-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/patch.git"
@@ -338,6 +356,7 @@ build_commands = [
 
 [packages.sed]
 version = "4.9"
+version_check = "gnu:sed"
 description = "GNU stream editor"
 url = "https://ftpmirror.gnu.org/gnu/sed/sed-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/sed.git"
@@ -352,6 +371,7 @@ build_commands = [
 
 [packages.tar]
 version = "1.35"
+version_check = "gnu:tar"
 description = "GNU tar"
 url = "https://ftpmirror.gnu.org/gnu/tar/tar-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/tar.git"
@@ -366,6 +386,7 @@ build_commands = [
 
 [packages.xz]
 version = "5.8.2"
+version_check = "tukaani:xz"
 description = "XZ compression utilities"
 url = "https://github.com/tukaani-project/xz/releases/download/v${version}/xz-${version}.tar.xz"
 git_url = "https://github.com/tukaani-project/xz.git"
@@ -382,6 +403,7 @@ build_commands = [
 # Binutils Pass 2 - Cross binutils for temp tools (after glibc)
 [packages.binutils-pass2]
 version = "2.45.1"
+version_check = "gnu:binutils"
 description = "GNU binary utilities pass 2"
 source_pkg = "binutils"
 stage = 2
@@ -397,6 +419,7 @@ build_commands = [
 
 [packages.zlib]
 version = "1.3.1"
+version_check = "zlib:"
 description = "Compression library"
 url = "https://zlib.net/zlib-${version}.tar.xz"
 git_url = "https://github.com/madler/zlib.git"
@@ -405,6 +428,7 @@ stage = 3
 
 [packages.bzip2]
 version = "1.0.8"
+version_check = "sourceware:bzip2"
 description = "Block-sorting compression"
 url = "https://sourceware.org/pub/bzip2/bzip2-${version}.tar.gz"
 git_url = "https://gitlab.com/bzip2/bzip2.git"
@@ -413,6 +437,7 @@ stage = 3
 
 [packages.zstd]
 version = "1.5.7"
+version_check = "github:facebook/zstd"
 description = "Zstandard compression"
 url = "https://github.com/facebook/zstd/releases/download/v${version}/zstd-${version}.tar.gz"
 git_url = "https://github.com/facebook/zstd.git"
@@ -421,6 +446,7 @@ stage = 3
 
 [packages.readline]
 version = "8.3"
+version_check = "gnu:readline"
 description = "GNU readline library"
 url = "https://ftpmirror.gnu.org/gnu/readline/readline-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/readline.git"
@@ -429,6 +455,7 @@ stage = 3
 
 [packages.bc]
 version = "7.0.3"
+version_check = "gnu:bc"
 description = "Arbitrary precision calculator"
 url = "https://github.com/gavinhoward/bc/releases/download/${version}/bc-${version}.tar.xz"
 git_url = "https://github.com/gavinhoward/bc.git"
@@ -437,6 +464,7 @@ stage = 3
 
 [packages.flex]
 version = "2.6.4"
+version_check = "github:westes/flex"
 description = "Fast lexical analyzer generator"
 url = "https://github.com/westes/flex/releases/download/v${version}/flex-${version}.tar.gz"
 git_url = "https://github.com/westes/flex.git"
@@ -445,6 +473,7 @@ stage = 3
 
 [packages.gettext]
 version = "0.26"
+version_check = "gnu:gettext"
 description = "GNU internationalization"
 url = "https://ftpmirror.gnu.org/gnu/gettext/gettext-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gettext.git"
@@ -453,6 +482,7 @@ stage = 3
 
 [packages.bison]
 version = "3.8.2"
+version_check = "gnu:bison"
 description = "GNU parser generator"
 url = "https://ftpmirror.gnu.org/gnu/bison/bison-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/bison.git"
@@ -461,6 +491,7 @@ stage = 3
 
 [packages.perl]
 version = "5.42.0"
+version_check = "url:https://www.cpan.org/src/|perl-([0-9]+\.[0-9]+\.[0-9]+)\.tar"
 description = "Practical Extraction and Report Language"
 url = "https://www.cpan.org/src/5.0/perl-${version}.tar.xz"
 git_url = "https://github.com/Perl/perl5.git"
@@ -469,6 +500,7 @@ stage = 3
 
 [packages.python]
 version = "3.14.2"
+version_check = "python:"
 description = "Python programming language"
 url = "https://www.python.org/ftp/python/${version}/Python-${version}.tar.xz"
 git_url = "https://github.com/python/cpython.git"
@@ -477,6 +509,7 @@ stage = 3
 
 [packages.texinfo]
 version = "7.2"
+version_check = "gnu:texinfo"
 description = "GNU documentation system"
 url = "https://ftpmirror.gnu.org/gnu/texinfo/texinfo-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/texinfo.git"
@@ -485,6 +518,7 @@ stage = 3
 
 [packages.util-linux]
 version = "2.41.3"
+version_check = "github:util-linux/util-linux"
 description = "Linux system utilities"
 url = "https://www.kernel.org/pub/linux/utils/util-linux/v2.41/util-linux-${version}.tar.xz"
 git_url = "https://github.com/util-linux/util-linux.git"
@@ -493,6 +527,7 @@ stage = 3
 
 [packages.acl]
 version = "2.3.2"
+version_check = "savannah:acl"
 description = "Access Control Lists"
 url = "https://download.savannah.nongnu.org/releases/acl/acl-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/acl.git"
@@ -501,6 +536,7 @@ stage = 3
 
 [packages.attr]
 version = "2.5.2"
+version_check = "savannah:attr"
 description = "Extended filesystem attributes"
 url = "https://download.savannah.nongnu.org/releases/attr/attr-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/attr.git"
@@ -509,6 +545,7 @@ stage = 3
 
 [packages.shadow]
 version = "4.17.4"
+version_check = "github:shadow-maint/shadow"
 description = "Password and shadow file utilities"
 url = "https://github.com/shadow-maint/shadow/releases/download/${version}/shadow-${version}.tar.xz"
 git_url = "https://github.com/shadow-maint/shadow.git"
@@ -536,6 +573,7 @@ depends = ["libmd"]
 
 [packages.procps-ng]
 version = "4.0.4"
+version_check = "github:procps-ng/procps"
 description = "Process monitoring utilities (ps, top, pgrep)"
 url = "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-${version}.tar.xz"
 git_url = "https://gitlab.com/procps-ng/procps.git"
@@ -577,6 +615,7 @@ provides = ["/usr/lib/libssl.so", "/usr/lib/libcrypto.so"]
 
 [packages.nettle]
 version = "3.10.1"
+version_check = "gnu:nettle"
 description = "Low-level cryptographic library"
 url = "https://ftpmirror.gnu.org/gnu/nettle/nettle-${version}.tar.gz"
 git_url = "https://git.lysator.liu.se/nettle/nettle.git"
@@ -588,6 +627,7 @@ depends = ["gmp"]
 
 [packages.libtasn1]
 version = "4.20.0"
+version_check = "gnu:libtasn1"
 description = "ASN.1 library"
 url = "https://ftpmirror.gnu.org/gnu/libtasn1/libtasn1-${version}.tar.gz"
 git_url = "https://gitlab.com/gnutls/libtasn1.git"
@@ -598,6 +638,7 @@ provides = ["/usr/lib/libtasn1.so"]
 
 [packages.libunistring]
 version = "1.3"
+version_check = "gnu:libunistring"
 description = "Unicode string library"
 url = "https://ftpmirror.gnu.org/gnu/libunistring/libunistring-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/libunistring.git"
@@ -620,6 +661,7 @@ depends = ["nettle", "libtasn1", "libunistring", "gmp"]
 
 [packages.libffi]
 version = "3.4.7"
+version_check = "github:libffi/libffi"
 description = "Foreign function interface library"
 url = "https://github.com/libffi/libffi/releases/download/v${version}/libffi-${version}.tar.gz"
 git_url = "https://github.com/libffi/libffi.git"
@@ -637,6 +679,7 @@ stage = 4
 
 [packages.autoconf]
 version = "2.72"
+version_check = "gnu:autoconf"
 description = "GNU autoconf"
 url = "https://ftpmirror.gnu.org/gnu/autoconf/autoconf-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/autoconf.git"
@@ -645,6 +688,7 @@ stage = 4
 
 [packages.automake]
 version = "1.18.1"
+version_check = "gnu:automake"
 description = "GNU automake"
 url = "https://ftpmirror.gnu.org/gnu/automake/automake-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/automake.git"
@@ -653,6 +697,7 @@ stage = 4
 
 [packages.libtool]
 version = "2.5.4"
+version_check = "gnu:libtool"
 description = "GNU libtool"
 url = "https://ftpmirror.gnu.org/gnu/libtool/libtool-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/libtool.git"
@@ -670,6 +715,7 @@ stage = 4
 
 [packages.ninja]
 version = "1.13.2"
+version_check = "github:ninja-build/ninja"
 description = "Small build system with focus on speed"
 url = "https://github.com/ninja-build/ninja/archive/refs/tags/v${version}.tar.gz"
 git_url = "https://github.com/ninja-build/ninja.git"
@@ -681,6 +727,7 @@ provides = ["/usr/bin/ninja"]
 
 [packages.meson]
 version = "1.10.1"
+version_check = "github:mesonbuild/meson"
 description = "Fast and user-friendly build system"
 url = "https://github.com/mesonbuild/meson/releases/download/${version}/meson-${version}.tar.gz"
 git_url = "https://github.com/mesonbuild/meson.git"
@@ -697,6 +744,7 @@ depends = ["python", "ninja"]
 
 [packages.linux]
 version = "6.18.6"
+version_check = "kernel:"
 description = "Linux kernel"
 url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.tar.xz"
 git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
@@ -709,6 +757,7 @@ provides = ["/boot/vmlinuz-${version}"]
 
 [packages.grub]
 version = "2.14"
+version_check = "gnu:grub"
 description = "GRand Unified Bootloader"
 url = "https://ftpmirror.gnu.org/gnu/grub/grub-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/grub.git"
@@ -739,6 +788,7 @@ stage = 5
 
 [packages.gmp]
 version = "6.3.0"
+version_check = "gnu:gmp"
 description = "GNU Multiple Precision Arithmetic Library"
 url = "https://ftpmirror.gnu.org/gnu/gmp/gmp-${version}.tar.xz"
 git_url = "https://gmplib.org/repo/gmp/"
@@ -749,6 +799,7 @@ provides = ["/usr/lib/libgmp.so"]
 
 [packages.mpfr]
 version = "4.2.2"
+version_check = "gnu:mpfr"
 description = "GNU Multiple Precision Floating-Point Reliable Library"
 url = "https://ftpmirror.gnu.org/gnu/mpfr/mpfr-${version}.tar.xz"
 git_url = "https://gitlab.inria.fr/mpfr/mpfr.git"
@@ -757,6 +808,7 @@ stage = 1
 
 [packages.mpc]
 version = "1.3.1"
+version_check = "gnu:mpc"
 description = "GNU Multiple Precision Complex Library"
 url = "https://ftpmirror.gnu.org/gnu/mpc/mpc-${version}.tar.gz"
 git_url = "https://gitlab.inria.fr/mpc/mpc.git"
@@ -778,6 +830,7 @@ stage = 1
 
 [packages.cmake]
 version = "4.2.2"
+version_check = "github:Kitware/CMake"
 description = "Cross-platform build system generator"
 url = "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}.tar.gz"
 git_url = "https://github.com/Kitware/CMake.git"
@@ -825,6 +878,7 @@ stage = 7
 
 [packages.iwd]
 version = "3.10"
+version_check = "kernelorg:linux/network/wireless|iwd"
 description = "Intel wireless daemon"
 url = "https://www.kernel.org/pub/linux/network/wireless/iwd-${version}.tar.xz"
 git_url = "https://git.kernel.org/pub/scm/network/wireless/iwd.git"
@@ -851,6 +905,7 @@ stage = 7
 
 [packages.dhcpcd]
 version = "10.3.0"
+version_check = "github:NetworkConfiguration/dhcpcd"
 description = "DHCP client daemon"
 url = "https://github.com/NetworkConfiguration/dhcpcd/releases/download/v${version}/dhcpcd-${version}.tar.xz"
 git_url = "https://github.com/NetworkConfiguration/dhcpcd.git"
@@ -868,6 +923,7 @@ stage = 7
 
 [packages.wget]
 version = "1.25"
+version_check = "gnu:wget"
 description = "Network downloader"
 url = "https://ftpmirror.gnu.org/gnu/wget/wget-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/wget.git"
@@ -880,6 +936,7 @@ stage = 7
 
 [packages.xorg-server]
 version = "21.1.21"
+version_check = "xorg:xserver/xorg-server"
 description = "X.Org X11 server"
 url = "https://www.x.org/releases/individual/xserver/xorg-server-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/xserver.git"
@@ -888,6 +945,7 @@ stage = 8
 
 [packages.libX11]
 version = "1.8.12"
+version_check = "xorg:lib/libX11"
 description = "X11 client library"
 url = "https://www.x.org/releases/individual/lib/libX11-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libx11.git"
@@ -896,6 +954,7 @@ stage = 8
 
 [packages.libXft]
 version = "2.3.9"
+version_check = "xorg:lib/libXft"
 description = "X FreeType library"
 url = "https://www.x.org/releases/individual/lib/libXft-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxft.git"
@@ -904,6 +963,7 @@ stage = 8
 
 [packages.libXrender]
 version = "0.9.12"
+version_check = "xorg:lib/libXrender"
 description = "X Render extension library"
 url = "https://www.x.org/releases/individual/lib/libXrender-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxrender.git"
@@ -912,6 +972,7 @@ stage = 8
 
 [packages.libXrandr]
 version = "1.5.4"
+version_check = "xorg:lib/libXrandr"
 description = "X RandR extension library"
 url = "https://www.x.org/releases/individual/lib/libXrandr-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxrandr.git"
@@ -920,6 +981,7 @@ stage = 8
 
 [packages.libXinerama]
 version = "1.1.5"
+version_check = "xorg:lib/libXinerama"
 description = "X Xinerama extension library"
 url = "https://www.x.org/releases/individual/lib/libXinerama-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxinerama.git"
@@ -928,6 +990,7 @@ stage = 8
 
 [packages.libXcursor]
 version = "1.2.3"
+version_check = "xorg:lib/libXcursor"
 description = "X cursor management library"
 url = "https://www.x.org/releases/individual/lib/libXcursor-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcursor.git"
@@ -936,6 +999,7 @@ stage = 8
 
 [packages.libXi]
 version = "1.8.2"
+version_check = "xorg:lib/libXi"
 description = "X Input extension library"
 url = "https://www.x.org/releases/individual/lib/libXi-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxi.git"
@@ -944,6 +1008,7 @@ stage = 8
 
 [packages.libXext]
 version = "1.3.6"
+version_check = "xorg:lib/libXext"
 description = "X extension library"
 url = "https://www.x.org/releases/individual/lib/libXext-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxext.git"
@@ -952,6 +1017,7 @@ stage = 8
 
 [packages.libXcomposite]
 version = "0.4.6"
+version_check = "xorg:lib/libXcomposite"
 description = "X Composite extension library"
 url = "https://www.x.org/releases/individual/lib/libXcomposite-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcomposite.git"
@@ -960,6 +1026,7 @@ stage = 8
 
 [packages.libXdamage]
 version = "1.1.6"
+version_check = "xorg:lib/libXdamage"
 description = "X Damage extension library"
 url = "https://www.x.org/releases/individual/lib/libXdamage-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxdamage.git"
@@ -968,6 +1035,7 @@ stage = 8
 
 [packages.libXfixes]
 version = "6.0.2"
+version_check = "xorg:lib/libXfixes"
 description = "X Fixes extension library"
 url = "https://www.x.org/releases/individual/lib/libXfixes-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxfixes.git"
@@ -1021,6 +1089,7 @@ stage = 8
 
 [packages.fontconfig]
 version = "2.17.1"
+version_check = "freedesktop:fontconfig/fontconfig"
 description = "Font configuration library"
 url = "https://www.freedesktop.org/software/fontconfig/release/fontconfig-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/fontconfig/fontconfig.git"
@@ -1038,6 +1107,7 @@ stage = 8
 
 [packages.libjpeg-turbo]
 version = "3.1.3"
+version_check = "github:libjpeg-turbo/libjpeg-turbo"
 description = "JPEG image library with SIMD acceleration"
 url = "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${version}/libjpeg-turbo-${version}.tar.gz"
 git_url = "https://github.com/libjpeg-turbo/libjpeg-turbo.git"
@@ -1046,6 +1116,7 @@ stage = 8
 
 [packages.mesa]
 version = "25.3.3"
+version_check = "freedesktop:mesa/mesa"
 description = "OpenGL implementation"
 url = "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/mesa/mesa.git"
@@ -1063,6 +1134,7 @@ stage = 8
 
 [packages.libXdmcp]
 version = "1.1.5"
+version_check = "xorg:lib/libXdmcp"
 description = "X Display Manager Control Protocol library"
 url = "https://www.x.org/releases/individual/lib/libXdmcp-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxdmcp.git"
@@ -1071,6 +1143,7 @@ stage = 8
 
 [packages.libglvnd]
 version = "1.7.0"
+version_check = "github:NVIDIA/libglvnd"
 description = "GL Vendor-Neutral Dispatch library"
 url = "https://gitlab.freedesktop.org/glvnd/libglvnd/-/archive/v${version}/libglvnd-v${version}.tar.gz"
 git_url = "https://gitlab.freedesktop.org/glvnd/libglvnd.git"
@@ -1079,6 +1152,7 @@ stage = 8
 
 [packages.libepoxy]
 version = "1.5.10"
+version_check = "github:anholt/libepoxy"
 description = "Library for handling OpenGL function pointer management"
 url = "https://github.com/anholt/libepoxy/releases/download/${version}/libepoxy-${version}.tar.xz"
 git_url = "https://github.com/anholt/libepoxy.git"
@@ -1087,6 +1161,7 @@ stage = 8
 
 [packages.libinput]
 version = "1.30.1"
+version_check = "freedesktop:libinput/libinput"
 description = "Input device handling library"
 url = "https://gitlab.freedesktop.org/libinput/libinput/-/archive/${version}/libinput-${version}.tar.gz"
 git_url = "https://gitlab.freedesktop.org/libinput/libinput.git"
@@ -1095,6 +1170,7 @@ stage = 8
 
 [packages.libevdev]
 version = "1.13.6"
+version_check = "freedesktop:libevdev/libevdev"
 description = "Event device library"
 url = "https://www.freedesktop.org/software/libevdev/libevdev-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/libevdev/libevdev.git"
@@ -1112,6 +1188,7 @@ stage = 8
 
 [packages.xf86-input-libinput]
 version = "1.5.0"
+version_check = "xorg:driver/xf86-input-libinput"
 description = "Xorg libinput input driver"
 url = "https://www.x.org/releases/individual/driver/xf86-input-libinput-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-input-libinput.git"
@@ -1120,6 +1197,7 @@ stage = 8
 
 [packages.xf86-video-fbdev]
 version = "0.5.1"
+version_check = "xorg:driver/xf86-video-fbdev"
 description = "Xorg framebuffer video driver"
 url = "https://www.x.org/releases/individual/driver/xf86-video-fbdev-${version}.tar.bz2"
 git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-video-fbdev.git"
@@ -1128,6 +1206,7 @@ stage = 8
 
 [packages.xf86-video-vesa]
 version = "2.6.0"
+version_check = "xorg:driver/xf86-video-vesa"
 description = "Xorg VESA video driver"
 url = "https://www.x.org/releases/individual/driver/xf86-video-vesa-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-video-vesa.git"
@@ -1136,6 +1215,7 @@ stage = 8
 
 [packages.xinit]
 version = "1.4.2"
+version_check = "xorg:app/xinit"
 description = "X server initialization"
 url = "https://www.x.org/releases/individual/app/xinit-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/app/xinit.git"
@@ -1153,6 +1233,7 @@ stage = 8
 
 [packages.xf86-input-evdev]
 version = "2.11.0"
+version_check = "xorg:driver/xf86-input-evdev"
 description = "Xorg evdev input driver"
 url = "https://www.x.org/releases/individual/driver/xf86-input-evdev-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-input-evdev.git"
@@ -1161,6 +1242,7 @@ stage = 8
 
 [packages.eudev]
 version = "3.2.14"
+version_check = "github:eudev-project/eudev"
 description = "Device manager for Linux (udev fork)"
 url = "https://github.com/eudev-project/eudev/releases/download/v${version}/eudev-${version}.tar.gz"
 git_url = "https://github.com/eudev-project/eudev.git"
@@ -1169,6 +1251,7 @@ stage = 8
 
 [packages.libICE]
 version = "1.1.2"
+version_check = "xorg:lib/libICE"
 description = "X11 Inter-Client Exchange library"
 url = "https://www.x.org/releases/individual/lib/libICE-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libice.git"
@@ -1177,6 +1260,7 @@ stage = 8
 
 [packages.libSM]
 version = "1.2.5"
+version_check = "xorg:lib/libSM"
 description = "X11 Session Management library"
 url = "https://www.x.org/releases/individual/lib/libSM-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libsm.git"
@@ -1185,6 +1269,7 @@ stage = 8
 
 [packages.iceauth]
 version = "1.0.10"
+version_check = "xorg:app/iceauth"
 description = "ICE authority file utility"
 url = "https://www.x.org/releases/individual/app/iceauth-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/app/iceauth.git"
@@ -1193,6 +1278,7 @@ stage = 8
 
 [packages.libxkbfile]
 version = "1.1.3"
+version_check = "xorg:lib/libxkbfile"
 description = "XKB file handling library"
 url = "https://www.x.org/releases/individual/lib/libxkbfile-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxkbfile.git"
@@ -1201,6 +1287,7 @@ stage = 8
 
 [packages.libxshmfence]
 version = "1.3.2"
+version_check = "xorg:lib/libxshmfence"
 description = "X shared memory fence library"
 url = "https://www.x.org/releases/individual/lib/libxshmfence-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxshmfence.git"
@@ -1209,6 +1296,7 @@ stage = 8
 
 [packages.xkbcomp]
 version = "1.4.7"
+version_check = "xorg:app/xkbcomp"
 description = "XKB keyboard compiler"
 url = "https://www.x.org/releases/individual/app/xkbcomp-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/app/xkbcomp.git"
@@ -1217,6 +1305,7 @@ stage = 8
 
 [packages.libfontenc]
 version = "1.1.8"
+version_check = "xorg:lib/libfontenc"
 description = "X font encoding library"
 url = "https://www.x.org/releases/individual/lib/libfontenc-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libfontenc.git"
@@ -1225,6 +1314,7 @@ stage = 8
 
 [packages.libXfont2]
 version = "2.0.7"
+version_check = "xorg:lib/libXfont2"
 description = "X font handling library"
 url = "https://www.x.org/releases/individual/lib/libXfont2-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxfont.git"
@@ -1233,6 +1323,7 @@ stage = 8
 
 [packages.font-util]
 version = "1.4.1"
+version_check = "xorg:font/font-util"
 description = "X font utilities"
 url = "https://www.x.org/releases/individual/font/font-util-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/font/util.git"
@@ -1249,6 +1340,7 @@ stage = 8
 
 [packages.libpciaccess]
 version = "0.18.1"
+version_check = "xorg:lib/libpciaccess"
 description = "PCI access library"
 url = "https://www.x.org/releases/individual/lib/libpciaccess-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libpciaccess.git"
@@ -1257,6 +1349,7 @@ stage = 8
 
 [packages.libXt]
 version = "1.3.1"
+version_check = "xorg:lib/libXt"
 description = "X Toolkit Intrinsics library"
 url = "https://www.x.org/releases/individual/lib/libXt-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxt.git"
@@ -1265,6 +1358,7 @@ stage = 8
 
 [packages.libXmu]
 version = "1.2.1"
+version_check = "xorg:lib/libXmu"
 description = "X miscellaneous utility library"
 url = "https://www.x.org/releases/individual/lib/libXmu-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxmu.git"
@@ -1273,6 +1367,7 @@ stage = 8
 
 [packages.libXaw]
 version = "1.0.16"
+version_check = "xorg:lib/libXaw"
 description = "X Athena Widgets library"
 url = "https://www.x.org/releases/individual/lib/libXaw-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxaw.git"
@@ -1281,6 +1376,7 @@ stage = 8
 
 [packages.libXpm]
 version = "3.5.17"
+version_check = "xorg:lib/libXpm"
 description = "X Pixmap library"
 url = "https://www.x.org/releases/individual/lib/libXpm-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxpm.git"
@@ -1289,6 +1385,7 @@ stage = 8
 
 [packages.hwdata]
 version = "0.391"
+version_check = "github:vcrhonek/hwdata"
 description = "Hardware identification databases"
 url = "https://github.com/vcrhonek/hwdata/archive/v${version}/hwdata-${version}.tar.gz"
 git_url = "https://github.com/vcrhonek/hwdata.git"
@@ -1297,6 +1394,7 @@ stage = 8
 
 [packages.xkeyboard-config]
 version = "2.43"
+version_check = "xorg:data/xkeyboard-config"
 description = "X keyboard configuration database"
 url = "https://www.x.org/releases/individual/data/xkeyboard-config/xkeyboard-config-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config.git"
@@ -1309,6 +1407,7 @@ stage = 8
 
 [packages.glib]
 version = "2.84.1"
+version_check = "gnome:glib"
 description = "GLib core library"
 url = "https://download.gnome.org/sources/glib/2.84/glib-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/glib.git"
@@ -1320,6 +1419,7 @@ provides = ["/usr/lib/libglib-2.0.so"]
 
 [packages.atk]
 version = "2.38.0"
+version_check = "gnome:atk"
 description = "Accessibility toolkit"
 url = "https://download.gnome.org/sources/atk/2.38/atk-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/atk.git"
@@ -1328,6 +1428,7 @@ stage = 9
 
 [packages.pango]
 version = "1.56.1"
+version_check = "gnome:pango"
 description = "Text layout and rendering library"
 url = "https://download.gnome.org/sources/pango/1.56/pango-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/pango.git"
@@ -1350,6 +1451,7 @@ provides = ["/usr/lib/libcairo.so"]
 
 [packages.gdk-pixbuf]
 version = "2.44.4"
+version_check = "gnome:gdk-pixbuf"
 description = "Image loading library"
 url = "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/gdk-pixbuf.git"
@@ -1361,6 +1463,7 @@ provides = ["/usr/lib/libgdk_pixbuf-2.0.so"]
 
 [packages.harfbuzz]
 version = "12.3.1"
+version_check = "github:harfbuzz/harfbuzz"
 description = "Text shaping library"
 url = "https://github.com/harfbuzz/harfbuzz/releases/download/${version}/harfbuzz-${version}.tar.xz"
 git_url = "https://github.com/harfbuzz/harfbuzz.git"
@@ -1369,6 +1472,7 @@ stage = 9
 
 [packages.fribidi]
 version = "1.0.16"
+version_check = "github:fribidi/fribidi"
 description = "Unicode bidirectional algorithm library"
 url = "https://github.com/fribidi/fribidi/releases/download/v${version}/fribidi-${version}.tar.xz"
 git_url = "https://github.com/fribidi/fribidi.git"
@@ -1377,6 +1481,7 @@ stage = 9
 
 [packages.gtk3]
 version = "3.24.47"
+version_check = "gnome:gtk"
 description = "GTK+ 3 toolkit"
 url = "https://download.gnome.org/sources/gtk+/3.24/gtk+-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/gtk.git"
@@ -1406,6 +1511,7 @@ stage = 9
 
 [packages.libxfce4util]
 version = "4.20.1"
+version_check = "xfce:xfce/libxfce4util"
 description = "Xfce utility library"
 url = "https://archive.xfce.org/src/xfce/libxfce4util/4.20/libxfce4util-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/libxfce4util.git"
@@ -1414,6 +1520,7 @@ stage = 9
 
 [packages.xfconf]
 version = "4.20.0"
+version_check = "xfce:xfce/xfconf"
 description = "Xfce configuration system"
 url = "https://archive.xfce.org/src/xfce/xfconf/4.20/xfconf-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfconf.git"
@@ -1422,6 +1529,7 @@ stage = 9
 
 [packages.libxfce4ui]
 version = "4.20.2"
+version_check = "xfce:xfce/libxfce4ui"
 description = "Xfce UI library"
 url = "https://archive.xfce.org/src/xfce/libxfce4ui/4.20/libxfce4ui-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/libxfce4ui.git"
@@ -1430,6 +1538,7 @@ stage = 9
 
 [packages.xfce4-dev-tools]
 version = "4.20.0"
+version_check = "xfce:xfce/xfce4-dev-tools"
 description = "Xfce development tools"
 url = "https://archive.xfce.org/src/xfce/xfce4-dev-tools/4.20/xfce4-dev-tools-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfce4-dev-tools.git"
@@ -1438,6 +1547,7 @@ stage = 9
 
 [packages.libxfce4windowing]
 version = "4.20.4"
+version_check = "xfce:xfce/libxfce4windowing"
 description = "Xfce windowing library"
 url = "https://archive.xfce.org/src/xfce/libxfce4windowing/4.20/libxfce4windowing-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/libxfce4windowing.git"
@@ -1450,6 +1560,7 @@ stage = 9
 
 [packages.exo]
 version = "4.20.0"
+version_check = "xfce:xfce/exo"
 description = "Xfce extension library"
 url = "https://archive.xfce.org/src/xfce/exo/4.20/exo-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/exo.git"
@@ -1458,6 +1569,7 @@ stage = 10
 
 [packages.garcon]
 version = "4.20.0"
+version_check = "xfce:xfce/garcon"
 description = "Xfce menu library"
 url = "https://archive.xfce.org/src/xfce/garcon/4.20/garcon-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/garcon.git"
@@ -1466,6 +1578,7 @@ stage = 10
 
 [packages.xfce4-panel]
 version = "4.20.0"
+version_check = "xfce:xfce/xfce4-panel"
 description = "Xfce panel"
 url = "https://archive.xfce.org/src/xfce/xfce4-panel/4.20/xfce4-panel-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfce4-panel.git"
@@ -1474,6 +1587,7 @@ stage = 10
 
 [packages.thunar]
 version = "4.20.0"
+version_check = "xfce:xfce/thunar"
 description = "Xfce file manager"
 url = "https://archive.xfce.org/src/xfce/thunar/4.20/thunar-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/thunar.git"
@@ -1482,6 +1596,7 @@ stage = 10
 
 [packages.xfce4-settings]
 version = "4.20.0"
+version_check = "xfce:xfce/xfce4-settings"
 description = "Xfce settings manager"
 url = "https://archive.xfce.org/src/xfce/xfce4-settings/4.20/xfce4-settings-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfce4-settings.git"
@@ -1490,6 +1605,7 @@ stage = 10
 
 [packages.xfce4-session]
 version = "4.20.3"
+version_check = "xfce:xfce/xfce4-session"
 description = "Xfce session manager"
 url = "https://archive.xfce.org/src/xfce/xfce4-session/4.20/xfce4-session-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfce4-session.git"
@@ -1498,6 +1614,7 @@ stage = 10
 
 [packages.xfwm4]
 version = "4.20.0"
+version_check = "xfce:xfce/xfwm4"
 description = "Xfce window manager"
 url = "https://archive.xfce.org/src/xfce/xfwm4/4.20/xfwm4-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfwm4.git"
@@ -1506,6 +1623,7 @@ stage = 10
 
 [packages.xfdesktop]
 version = "4.20.1"
+version_check = "xfce:xfce/xfdesktop"
 description = "Xfce desktop manager"
 url = "https://archive.xfce.org/src/xfce/xfdesktop/4.20/xfdesktop-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfdesktop.git"
@@ -1514,6 +1632,7 @@ stage = 10
 
 [packages.xfce4-appfinder]
 version = "4.20.0"
+version_check = "xfce:xfce/xfce4-appfinder"
 description = "Xfce application finder"
 url = "https://archive.xfce.org/src/xfce/xfce4-appfinder/4.20/xfce4-appfinder-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/xfce4-appfinder.git"
@@ -1522,6 +1641,7 @@ stage = 10
 
 [packages.xfce4-terminal]
 version = "1.1.5"
+version_check = "xfce:apps/xfce4-terminal"
 description = "Xfce terminal emulator"
 url = "https://archive.xfce.org/src/apps/xfce4-terminal/1.1/xfce4-terminal-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/apps/xfce4-terminal.git"
@@ -1553,6 +1673,7 @@ stage = 11
 
 [packages.alsa-lib]
 version = "1.2.15"
+version_check = "alsa:lib"
 description = "ALSA sound library"
 url = "https://www.alsa-project.org/files/pub/lib/alsa-lib-${version}.tar.bz2"
 git_url = "https://github.com/alsa-project/alsa-lib.git"
@@ -1561,6 +1682,7 @@ stage = 11
 
 [packages.alsa-utils]
 version = "1.2.15"
+version_check = "alsa:utils"
 description = "ALSA sound utilities"
 url = "https://www.alsa-project.org/files/pub/utils/alsa-utils-${version}.tar.bz2"
 git_url = "https://github.com/alsa-project/alsa-utils.git"
@@ -1569,6 +1691,7 @@ stage = 11
 
 [packages.pulseaudio]
 version = "17.0"
+version_check = "freedesktop:pulseaudio/pulseaudio"
 description = "Sound server"
 url = "https://www.freedesktop.org/software/pulseaudio/releases/pulseaudio-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/pulseaudio/pulseaudio.git"
@@ -1577,6 +1700,7 @@ stage = 11
 
 [packages.xfce4-pulseaudio-plugin]
 version = "0.5.1"
+version_check = "xfce:apps/xfce4-pulseaudio-plugin"
 description = "XFCE panel plugin for PulseAudio"
 url = "https://archive.xfce.org/src/panel-plugins/xfce4-pulseaudio-plugin/0.4/xfce4-pulseaudio-plugin-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/panel-plugins/xfce4-pulseaudio-plugin.git"
@@ -1586,6 +1710,7 @@ repology = "xfce4-pulseaudio-plugin"
 
 [packages.pavucontrol]
 version = "6.2"
+version_check = "freedesktop:pulseaudio/pavucontrol"
 description = "PulseAudio Volume Control"
 url = "https://www.freedesktop.org/software/pulseaudio/pavucontrol/pavucontrol-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/pulseaudio/pavucontrol.git"
@@ -1595,6 +1720,7 @@ repology = "pavucontrol"
 
 [packages.gedit]
 version = "49.0"
+version_check = "github:GNOME/gedit"
 description = "GNOME text editor"
 url = "https://download.gnome.org/sources/gedit/49/gedit-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/gedit.git"
@@ -1614,6 +1740,7 @@ repology = "claws-mail"
 
 [packages.chicago95]
 version = "3.0.2"
+version_check = "github:grassmunk/Chicago95"
 description = "Chicago95 XFCE theme (Windows 95 style)"
 url = "https://github.com/grassmunk/Chicago95/archive/refs/tags/v${version}.tar.gz"
 git_url = "https://github.com/grassmunk/Chicago95.git"
@@ -1623,6 +1750,7 @@ stage = 11
 
 [packages.dejavu-fonts]
 version = "2.37"
+version_check = "github:dejavu-fonts/dejavu-fonts"
 description = "DejaVu TrueType fonts"
 url = "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_${version}/dejavu-fonts-ttf-${version}.tar.bz2"
 git_url = "https://github.com/dejavu-fonts/dejavu-fonts.git"
@@ -1631,6 +1759,7 @@ stage = 11
 
 [packages.liberation-fonts]
 version = "2.1.5"
+version_check = "github:liberationfonts/liberation-fonts"
 description = "Liberation fonts (metric-compatible with Arial, Times, Courier)"
 url = "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-${version}.tar.gz"
 git_url = "https://github.com/liberationfonts/liberation-fonts.git"
@@ -1639,6 +1768,7 @@ stage = 11
 
 [packages.vte]
 version = "0.74.2"
+version_check = "gnome:vte"
 description = "Virtual Terminal Emulator widget library"
 url = "https://download.gnome.org/sources/vte/0.74/vte-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/vte.git"
@@ -1660,6 +1790,7 @@ depends = ["vte"]
 
 [packages.nextcloud-client]
 version = "3.16.3"
+version_check = "github:nextcloud/desktop"
 description = "Nextcloud desktop sync client"
 url = "https://github.com/nextcloud/desktop/releases/download/v${version}/Nextcloud-${version}.tar.xz"
 git_url = "https://github.com/nextcloud/desktop.git"
@@ -1673,6 +1804,7 @@ repology = "nextcloud-client"
 
 [packages.nvidia-driver]
 version = "580.126.09"
+version_check = "url:https://www.nvidia.com/Download/processFind.aspx?psid=101&pfid=816&osid=12&lid=1&whql=&lang=en-us&ctk=0|([0-9]+\.[0-9]+\.?[0-9]*)"
 description = "NVIDIA proprietary driver"
 url = "https://download.nvidia.com/XFree86/Linux-x86_64/${version}/NVIDIA-Linux-x86_64-${version}.run"
 git_url = ""
@@ -1682,6 +1814,7 @@ stage = 12
 
 [packages.nvidia-driver-latest]
 version = "590.48.01"
+version_check = "url:https://www.nvidia.com/Download/processFind.aspx?psid=101&pfid=816&osid=12&lid=1&whql=&lang=en-us&ctk=0|([0-9]+\.[0-9]+\.?[0-9]*)"
 description = "NVIDIA proprietary driver (new feature branch)"
 url = "https://download.nvidia.com/XFree86/Linux-x86_64/${version}/NVIDIA-Linux-x86_64-${version}.run"
 git_url = ""
@@ -1737,6 +1870,7 @@ stage = 13
 
 [packages.dxvk]
 version = "2.6"
+version_check = "github:doitsujin/dxvk"
 description = "Vulkan-based D3D9/D3D10/D3D11 translation"
 url = "https://github.com/doitsujin/dxvk/releases/download/v${version}/dxvk-${version}.tar.gz"
 git_url = "https://github.com/doitsujin/dxvk.git"
@@ -1745,6 +1879,7 @@ stage = 13
 
 [packages.vkd3d-proton]
 version = "2.15"
+version_check = "github:HansKristian-Work/vkd3d-proton"
 description = "Vulkan-based D3D12 translation"
 url = "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v${version}/vkd3d-proton-${version}.tar.zst"
 git_url = "https://github.com/HansKristian-Work/vkd3d-proton.git"
@@ -1753,6 +1888,7 @@ stage = 13
 
 [packages.proton-ge]
 version = "GE-Proton10-2"
+version_check = "github:GloriousEggroll/proton-ge-custom"
 description = "Proton-GE custom Proton build"
 url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${version}/${version}.tar.gz"
 git_url = "https://github.com/GloriousEggroll/proton-ge-custom.git"
@@ -1762,6 +1898,7 @@ stage = 13
 
 [packages.steam]
 version = "1.0.0.81"
+version_check = "url:https://repo.steampowered.com/steam/archive/stable/|steam_([0-9]+\.[0-9]+\.[0-9]+)"
 description = "Steam gaming platform"
 url = "https://repo.steampowered.com/steam/archive/precise/steam_${version}.tar.gz"
 git_url = ""
@@ -1771,6 +1908,7 @@ stage = 13
 
 [packages.gamemode]
 version = "1.8.2"
+version_check = "github:FeralInteractive/gamemode"
 description = "Optimize Linux performance for gaming"
 url = "https://github.com/FeralInteractive/gamemode/releases/download/${version}/gamemode-${version}.tar.xz"
 git_url = "https://github.com/FeralInteractive/gamemode.git"
@@ -1779,6 +1917,7 @@ stage = 13
 
 [packages.mangohud]
 version = "0.8.0"
+version_check = "github:flightlessmango/MangoHud"
 description = "Vulkan/OpenGL overlay for monitoring"
 url = "https://github.com/flightlessmango/MangoHud/releases/download/v${version}/MangoHud-${version}.tar.xz"
 git_url = "https://github.com/flightlessmango/MangoHud.git"
@@ -1823,6 +1962,7 @@ stage = 13
 
 [packages.spirv-tools]
 version = "1.4.310"
+version_check = "github:KhronosGroup/SPIRV-Tools"
 description = "SPIR-V tools"
 url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/vulkan-sdk-${version}/SPIRV-Tools-${version}.tar.gz"
 git_url = "https://github.com/KhronosGroup/SPIRV-Tools.git"
@@ -1831,6 +1971,7 @@ stage = 13
 
 [packages.glslang]
 version = "15.2.0"
+version_check = "github:KhronosGroup/glslang"
 description = "Khronos GLSL/HLSL to SPIR-V compiler"
 url = "https://github.com/KhronosGroup/glslang/archive/${version}/glslang-${version}.tar.gz"
 git_url = "https://github.com/KhronosGroup/glslang.git"
@@ -1843,6 +1984,7 @@ stage = 13
 
 [packages.lib32-glibc]
 version = "2.42"
+version_check = "gnu:glibc"
 description = "GNU C Library (32-bit)"
 url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
 git_url = ""
@@ -1852,6 +1994,7 @@ stage = 13
 
 [packages.lib32-mesa]
 version = "25.0.2"
+version_check = "freedesktop:mesa/mesa"
 description = "OpenGL implementation (32-bit)"
 url = "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
 git_url = ""
@@ -1860,6 +2003,7 @@ stage = 13
 
 [packages.lib32-vulkan-loader]
 version = "1.4.310"
+version_check = "github:KhronosGroup/Vulkan-Loader"
 description = "Vulkan ICD loader (32-bit)"
 url = "https://github.com/KhronosGroup/Vulkan-Loader/archive/v${version}/Vulkan-Loader-${version}.tar.gz"
 git_url = ""
@@ -1872,6 +2016,7 @@ stage = 13
 
 [packages.git]
 version = "2.48.1"
+version_check = "github:git/git"
 description = "Distributed version control system"
 url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz"
 git_url = "https://github.com/git/git.git"
@@ -1910,6 +2055,7 @@ stage = 14
 
 [packages.vscode-source]
 version = "1.98.0"
+version_check = "github:microsoft/vscode"
 description = "Visual Studio Code (source build)"
 url = "https://github.com/microsoft/vscode/archive/refs/tags/${version}.tar.gz"
 git_url = "https://github.com/microsoft/vscode.git"
@@ -1919,6 +2065,7 @@ stage = 14
 
 [packages.nodejs]
 version = "22.13.1"
+version_check = "github:nodejs/node"
 description = "JavaScript runtime"
 url = "https://nodejs.org/dist/v${version}/node-v${version}.tar.xz"
 git_url = "https://github.com/nodejs/node.git"
@@ -1931,6 +2078,7 @@ stage = 14
 
 [packages.nvhpc]
 version = "25.1"
+version_check = "url:https://developer.nvidia.com/hpc-sdk-downloads|([0-9]+\.[0-9]+)"
 description = "NVIDIA HPC SDK (nvfortran, nvc, nvc++)"
 url = "https://developer.download.nvidia.com/hpc-sdk/${version}/nvhpc_2025_251_Linux_x86_64_cuda_12.6.tar.gz"
 git_url = ""
@@ -1941,6 +2089,7 @@ stage = 15
 
 [packages.intel-oneapi-hpc]
 version = "2025.1.0"
+version_check = "url:https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit-download.html|([0-9]+\.[0-9]+)"
 description = "Intel oneAPI HPC Toolkit (ifort, ifx, icc, icx)"
 url = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b5a6d35a-da06-4bb6-9f83-c2d58c96ed61/intel-oneapi-hpc-toolkit-${version}_offline.sh"
 git_url = ""
@@ -1951,6 +2100,7 @@ stage = 15
 
 [packages.intel-oneapi-base]
 version = "2025.1.0"
+version_check = "url:https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html|([0-9]+\.[0-9]+)"
 description = "Intel oneAPI Base Toolkit"
 url = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/e6ff8e9c-ee28-47fb-abd7-5c524c983e1c/intel-oneapi-base-toolkit-${version}_offline.sh"
 git_url = ""
@@ -1964,6 +2114,7 @@ stage = 15
 
 [packages.sunshine]
 version = "0.24.0"
+version_check = "github:LizardByte/Sunshine"
 description = "Self-hosted game streaming host"
 url = "https://github.com/LizardByte/Sunshine/releases/download/v${version}/sunshine-linux-x86_64-${version}.tar.gz"
 git_url = "https://github.com/LizardByte/Sunshine.git"
@@ -1973,6 +2124,7 @@ stage = 16
 
 [packages.moonlight]
 version = "6.1.0"
+version_check = "github:moonlight-stream/moonlight-qt"
 description = "Open source game streaming client"
 url = "https://github.com/moonlight-stream/moonlight-qt/releases/download/v${version}/Moonlight-${version}.tar.gz"
 git_url = "https://github.com/moonlight-stream/moonlight-qt.git"
@@ -1982,6 +2134,7 @@ stage = 16
 
 [packages.moonlight-embedded]
 version = "2.7.1"
+version_check = "github:moonlight-stream/moonlight-embedded"
 description = "Moonlight for embedded/ARM devices"
 url = "https://github.com/moonlight-stream/moonlight-embedded/releases/download/v${version}/moonlight-embedded-${version}.tar.gz"
 git_url = "https://github.com/moonlight-stream/moonlight-embedded.git"
@@ -1992,6 +2145,7 @@ stage = 16
 # Dependencies for Sunshine
 [packages.libva]
 version = "2.22.0"
+version_check = "github:intel/libva"
 description = "VA-API video acceleration"
 url = "https://github.com/intel/libva/releases/download/${version}/libva-${version}.tar.bz2"
 git_url = "https://github.com/intel/libva.git"
@@ -2037,6 +2191,7 @@ stage = 16
 
 [packages.libavif]
 version = "1.2.1"
+version_check = "github:AOMediaCodec/libavif"
 description = "AVIF image format library"
 url = "https://github.com/AOMediaCodec/libavif/archive/v${version}/libavif-${version}.tar.gz"
 git_url = "https://github.com/AOMediaCodec/libavif.git"
@@ -2070,6 +2225,7 @@ stage = 17
 
 [packages.pandoc]
 version = "3.7"
+version_check = "github:jgm/pandoc"
 description = "Universal document converter"
 url = "https://github.com/jgm/pandoc/releases/download/${version}/pandoc-${version}-linux-amd64.tar.gz"
 git_url = "https://github.com/jgm/pandoc.git"
@@ -2079,6 +2235,7 @@ stage = 17
 
 [packages.pandoc-source]
 version = "3.7"
+version_check = "github:jgm/pandoc"
 description = "Pandoc (source build)"
 url = "https://github.com/jgm/pandoc/archive/refs/tags/${version}.tar.gz"
 git_url = "https://github.com/jgm/pandoc.git"
@@ -2120,6 +2277,7 @@ stage = 17
 
 [packages.julia]
 version = "1.12.4"
+version_check = "github:JuliaLang/julia"
 description = "Julia programming language"
 url = "https://julialang-s3.julialang.org/bin/linux/x64/1.12/julia-${version}-linux-x86_64.tar.gz"
 git_url = "https://github.com/JuliaLang/julia.git"
@@ -2129,6 +2287,7 @@ stage = 18
 
 [packages.julia-source]
 version = "1.12.4"
+version_check = "github:JuliaLang/julia"
 description = "Julia (source build)"
 url = "https://github.com/JuliaLang/julia/releases/download/v${version}/julia-${version}.tar.gz"
 git_url = "https://github.com/JuliaLang/julia.git"
@@ -2146,6 +2305,7 @@ stage = 18
 
 [packages.octave]
 version = "9.4.0"
+version_check = "gnu:octave"
 description = "GNU Octave numerical computing"
 url = "https://ftpmirror.gnu.org/gnu/octave/octave-${version}.tar.xz"
 git_url = "https://hg.savannah.gnu.org/hgweb/octave"
@@ -2168,6 +2328,7 @@ stage = 19
 
 [packages.amd-ucode]
 version = "20250106"
+version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/amd-ucode|([0-9]{8})"
 description = "AMD CPU microcode (extracted from linux-firmware)"
 url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
 git_url = ""
@@ -2177,6 +2338,7 @@ stage = 19
 
 [packages.intel-ucode]
 version = "20250108"
+version_check = "github:intel/Intel-Linux-Processor-Microcode-Data-Files"
 description = "Intel CPU microcode"
 url = "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/archive/microcode-${version}.tar.gz"
 git_url = "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files.git"
@@ -2185,6 +2347,7 @@ stage = 19
 
 [packages.sof-firmware]
 version = "2025.02.1"
+version_check = "github:thesofproject/sof-bin"
 description = "Sound Open Firmware"
 url = "https://github.com/thesofproject/sof-bin/releases/download/v${version}/sof-bin-${version}.tar.gz"
 git_url = "https://github.com/thesofproject/sof-bin.git"
@@ -2198,6 +2361,7 @@ stage = 19
 
 [packages.amdgpu-firmware]
 version = "20250106"
+version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/amdgpu|([0-9]{8})"
 description = "AMD GPU firmware (part of linux-firmware)"
 url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
 git_url = ""
@@ -2207,6 +2371,7 @@ stage = 19
 
 [packages.iwlwifi-firmware]
 version = "20250106"
+version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/|([0-9]{8})"
 description = "Intel Wi-Fi 6 AX200/AX201 firmware"
 url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
 git_url = ""
@@ -2217,6 +2382,7 @@ stage = 19
 # Bluetooth firmware
 [packages.bluez]
 version = "5.79"
+version_check = "kernelorg:linux/bluetooth|bluez"
 description = "Bluetooth protocol stack"
 url = "https://www.kernel.org/pub/linux/bluetooth/bluez-${version}.tar.xz"
 git_url = "https://github.com/bluez/bluez.git"
@@ -2225,6 +2391,7 @@ stage = 19
 
 [packages.bluez-firmware]
 version = "1.2"
+version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/|([0-9]{8})"
 description = "Bluetooth firmware files"
 url = "https://www.kernel.org/pub/linux/bluetooth/bluez-firmware-${version}.tar.gz"
 git_url = ""
@@ -2234,6 +2401,7 @@ stage = 19
 # NVMe tools
 [packages.nvme-cli]
 version = "2.11.1"
+version_check = "github:linux-nvme/nvme-cli"
 description = "NVMe management command line interface"
 url = "https://github.com/linux-nvme/nvme-cli/archive/v${version}/nvme-cli-${version}.tar.gz"
 git_url = "https://github.com/linux-nvme/nvme-cli.git"
@@ -2267,6 +2435,7 @@ stage = 19
 
 [packages.libshadow]
 version = "1.21.1"
+version_check = "github:shadow-maint/shadow"
 description = "Xorg shadow framebuffer module (built into xorg-server)"
 url = ""
 git_url = ""
@@ -2278,6 +2447,7 @@ stage = 20
 # For modesetting driver (built into xorg-server >= 1.18)
 [packages.xorg-server-modesetting]
 version = "21.1.21"
+version_check = "xorg:xserver/xorg-server"
 description = "Xorg modesetting driver (built-in)"
 url = ""
 git_url = ""
