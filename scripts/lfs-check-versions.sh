@@ -86,13 +86,24 @@ fetch_cached() {
 # GitHub releases (scrapes HTML, no rate limits)
 check_github() {
     local repo="$1"  # owner/repo
-    local url="https://github.com/${repo}/releases"
-    local content
-    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+    local content tags version
 
-    # Extract version from release tag links
-    echo "$content" | grep -oE '/releases/tag/v?[0-9]+\.[0-9]+(\.[0-9]+)?' | \
-        head -20 | sed 's|.*/tag/||;s|^v||' | sort -V | tail -1
+    # Try releases page first
+    content=$(fetch_cached "https://github.com/${repo}/releases" 2>/dev/null) || content=""
+    tags=$(echo "$content" | grep -oE '/releases/tag/[^"]+' | head -30 | sed 's|.*/tag/||')
+
+    # Fallback to tags page if no releases
+    if [[ -z "$tags" ]]; then
+        content=$(fetch_cached "https://github.com/${repo}/tags" 2>/dev/null) || return 1
+        tags=$(echo "$content" | grep -oE "/${repo}/releases/tag/[^\"]+" | head -30 | sed 's|.*/tag/||')
+    fi
+
+    [[ -z "$tags" ]] && return 1
+
+    # Extract version numbers, converting underscores to dots
+    # Handle: v1.2.3, 1.2.3, pkg-1.2.3, pkg-1_2_3, release-1.2.3
+    echo "$tags" | sed -E 's/^[a-zA-Z_-]+//; s/_/./g; s/^v//' | \
+        grep -E '^[0-9]+\.[0-9]+' | sort -V | tail -1
 }
 
 # GNU FTP directory
@@ -282,7 +293,18 @@ check_url() {
     content=$(fetch_cached "$url" 2>/dev/null) || return 1
 
     if [[ "$pattern" != "$spec" ]]; then
-        echo "$content" | grep -oE "$pattern" | head -1
+        # Handle patterns with capture groups - extract and join with dots
+        # First try to match and extract all versions
+        local versions
+        versions=$(echo "$content" | grep -oE "$pattern" | head -30)
+
+        # Convert formats like FILE5_46 -> 5.46, V3-6-0 -> 3.6.0
+        echo "$versions" | sed -E '
+            s/^[A-Za-z_-]*//
+            s/_/./g
+            s/-/./g
+            s/^\.//
+        ' | grep -E '^[0-9]+\.[0-9]+' | sort -V | tail -1
     else
         echo "$content" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | sort -V | tail -1
     fi

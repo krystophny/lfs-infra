@@ -122,6 +122,7 @@ build_commands = [
 
 [packages.linux-headers]
 version = "6.18.6"
+version_check = "kernel:"
 description = "Linux kernel headers"
 source_pkg = "linux"
 stage = 1
@@ -235,6 +236,7 @@ build_commands = [
 
 [packages.file]
 version = "5.46"
+version_check = "url:https://github.com/file/file/tags|FILE([0-9]+)_([0-9]+)"
 description = "File type identification"
 url = "https://astron.com/pub/file/file-${version}.tar.gz"
 git_url = "https://github.com/file/file.git"
@@ -515,6 +517,7 @@ stage = 3
 
 [packages.libmd]
 version = "1.1.0"
+version_check = "url:https://libbsd.freedesktop.org/releases/|libmd-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar"
 description = "Message digest functions from BSD"
 url = "https://libbsd.freedesktop.org/releases/libmd-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/libbsd/libmd.git"
@@ -523,6 +526,7 @@ stage = 3
 
 [packages.libbsd]
 version = "0.12.2"
+version_check = "url:https://libbsd.freedesktop.org/releases/|libbsd-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar"
 description = "BSD portability library"
 url = "https://libbsd.freedesktop.org/releases/libbsd-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/libbsd/libbsd.git"
@@ -540,6 +544,7 @@ stage = 3
 
 [packages.libtirpc]
 version = "1.3.7"
+version_check = "sourceforge:libtirpc"
 description = "Transport-Independent RPC library"
 url = "https://downloads.sourceforge.net/libtirpc/libtirpc-${version}.tar.bz2"
 git_url = "https://git.linux-nfs.org/projects/steved/libtirpc.git"
@@ -548,6 +553,7 @@ stage = 3
 
 [packages.iana-etc]
 version = "20250117"
+version_check = "url:https://github.com/Mic92/iana-etc/releases|/releases/tag/([0-9]+)"
 description = "IANA /etc files (protocols, services)"
 url = "https://github.com/Mic92/iana-etc/releases/download/${version}/iana-etc-${version}.tar.gz"
 git_url = "https://github.com/Mic92/iana-etc.git"
@@ -560,6 +566,7 @@ stage = 3
 
 [packages.openssl]
 version = "3.5.2"
+version_check = "github:openssl/openssl"
 description = "TLS/SSL and crypto library"
 url = "https://github.com/openssl/openssl/releases/download/openssl-${version}/openssl-${version}.tar.gz"
 git_url = "https://github.com/openssl/openssl.git"
@@ -601,6 +608,7 @@ provides = ["/usr/lib/libunistring.so"]
 
 [packages.gnutls]
 version = "3.8.9"
+version_check = "github:gnutls/gnutls"
 description = "TLS library"
 url = "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-${version}.tar.xz"
 git_url = "https://gitlab.com/gnutls/gnutls.git"
@@ -620,6 +628,7 @@ stage = 4
 
 [packages.expat]
 version = "2.7.3"
+version_check = "github:libexpat/libexpat"
 description = "XML parser library"
 url = "https://github.com/libexpat/libexpat/releases/download/R_2_7_3/expat-${version}.tar.xz"
 git_url = "https://github.com/libexpat/libexpat.git"
@@ -652,6 +661,7 @@ stage = 4
 
 [packages.pkgconf]
 version = "2.5.1"
+version_check = "github:pkgconf/pkgconf"
 description = "Package compiler and linker metadata toolkit"
 url = "https://distfiles.ariadne.space/pkgconf/pkgconf-${version}.tar.xz"
 git_url = "https://github.com/pkgconf/pkgconf.git"
@@ -707,6 +717,7 @@ stage = 5
 
 [packages.efibootmgr]
 version = "18"
+version_check = "github:rhboot/efibootmgr"
 description = "EFI Boot Manager utility"
 url = "https://github.com/rhboot/efibootmgr/releases/download/${version}/efibootmgr-${version}.tar.bz2"
 git_url = "https://github.com/rhboot/efibootmgr.git"
@@ -715,6 +726,7 @@ stage = 5
 
 [packages.efivar]
 version = "39"
+version_check = "github:rhboot/efivar"
 description = "EFI variable manipulation library"
 url = "https://github.com/rhboot/efivar/releases/download/${version}/efivar-${version}.tar.bz2"
 git_url = "https://github.com/rhboot/efivar.git"
@@ -753,6 +765,7 @@ stage = 1
 
 [packages.isl]
 version = "0.27"
+version_check = "url:https://libisl.sourceforge.io/|isl-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar"
 description = "Integer Set Library"
 url = "https://libisl.sourceforge.io/isl-${version}.tar.xz"
 git_url = "https://repo.or.cz/isl.git"
@@ -790,6 +803,7 @@ provides = ["/usr/bin/sudo"]
 
 [packages.runit]
 version = "2.3.0"
+version_check = "url:http://smarden.org/runit/|runit-([0-9]+\.[0-9]+\.[0-9]+)\.tar"
 description = "UNIX init scheme with service supervision"
 url = "http://smarden.org/runit/runit-${version}.tar.gz"
 git_url = "https://github.com/void-linux/runit.git"
@@ -802,6 +816,7 @@ stage = 6
 
 [packages.libnl]
 version = "3.12.0"
+version_check = "url:https://github.com/thom311/libnl/tags|libnl([0-9]+)_([0-9]+)_([0-9]+)"
 description = "Netlink protocol library suite"
 url = "https://github.com/thom311/libnl/releases/download/libnl3_11_0/libnl-${version}.tar.gz"
 git_url = "https://github.com/thom311/libnl.git"
@@ -818,6 +833,7 @@ stage = 7
 
 [packages.wpa_supplicant]
 version = "2.11"
+version_check = "url:https://w1.fi/releases/|wpa_supplicant-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar"
 description = "WPA/WPA2/WPA3 supplicant"
 url = "https://w1.fi/releases/wpa_supplicant-${version}.tar.gz"
 git_url = "https://w1.fi/cgit/hostap/"
@@ -826,6 +842,7 @@ stage = 7
 
 [packages.wireless-tools]
 version = "29"
+version_check = "url:https://hewlettpackard.github.io/wireless-tools/|wireless_tools\.([0-9]+)\.tar"
 description = "Wireless LAN tools"
 url = "https://hewlettpackard.github.io/wireless-tools/wireless_tools.${version}.tar.gz"
 git_url = ""
@@ -842,6 +859,7 @@ stage = 7
 
 [packages.curl]
 version = "8.12.0"
+version_check = "github:curl/curl"
 description = "URL transfer library and tool"
 url = "https://curl.se/download/curl-${version}.tar.xz"
 git_url = "https://github.com/curl/curl.git"
@@ -958,6 +976,7 @@ stage = 8
 
 [packages.xorgproto]
 version = "2025.1"
+version_check = "freedesktop:xorg/proto/xorgproto"
 description = "X.Org protocol headers"
 url = "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/proto/xorgproto.git"
@@ -966,6 +985,7 @@ stage = 8
 
 [packages.xcb-proto]
 version = "1.17.0"
+version_check = "freedesktop:xorg/proto/xcbproto"
 description = "XCB protocol descriptions"
 url = "https://xorg.freedesktop.org/archive/individual/proto/xcb-proto-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/proto/xcbproto.git"
@@ -974,6 +994,7 @@ stage = 8
 
 [packages.libxcb]
 version = "1.17.0"
+version_check = "freedesktop:xorg/lib/libxcb"
 description = "X C Binding library"
 url = "https://xorg.freedesktop.org/archive/individual/lib/libxcb-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcb.git"
@@ -982,6 +1003,7 @@ stage = 8
 
 [packages.pixman]
 version = "0.46.4"
+version_check = "freedesktop:pixman/pixman"
 description = "Pixel manipulation library"
 url = "https://www.cairographics.org/releases/pixman-${version}.tar.gz"
 git_url = "https://gitlab.freedesktop.org/pixman/pixman.git"
@@ -990,6 +1012,7 @@ stage = 8
 
 [packages.freetype]
 version = "2.14.1"
+version_check = "savannah:freetype"
 description = "Font rendering library"
 url = "https://downloads.sourceforge.net/freetype/freetype-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/freetype/freetype.git"
@@ -1006,6 +1029,7 @@ stage = 8
 
 [packages.libpng]
 version = "1.6.54"
+version_check = "github:pnggroup/libpng"
 description = "PNG image library"
 url = "https://downloads.sourceforge.net/libpng/libpng-${version}.tar.xz"
 git_url = "https://github.com/pnggroup/libpng.git"
@@ -1030,6 +1054,7 @@ stage = 8
 
 [packages.libdrm]
 version = "2.4.131"
+version_check = "freedesktop:mesa/drm"
 description = "Direct Rendering Manager library"
 url = "https://dri.freedesktop.org/libdrm/libdrm-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/mesa/drm.git"
@@ -1078,6 +1103,7 @@ stage = 8
 
 [packages.mtdev]
 version = "1.1.7"
+version_check = "github:nicwn/mtdev"
 description = "Multitouch protocol translation library"
 url = "https://bitmath.org/code/mtdev/mtdev-${version}.tar.bz2"
 git_url = "https://bitmath.org/git/mtdev.git"
@@ -1118,6 +1144,7 @@ stage = 8
 
 [packages.xterm]
 version = "397"
+version_check = "url:https://invisible-island.net/xterm/xterm.log.html|xterm-([0-9]+)"
 description = "Standard X terminal emulator"
 url = "https://invisible-mirror.net/archives/xterm/xterm-${version}.tgz"
 git_url = "https://github.com/ThomasDickey/xterm-snapshots.git"
@@ -1311,6 +1338,7 @@ provides = ["/usr/lib/libpango-1.0.so"]
 
 [packages.cairo]
 version = "1.18.4"
+version_check = "freedesktop:cairo/cairo"
 description = "2D graphics library"
 url = "https://cairographics.org/releases/cairo-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/cairo/cairo.git"
@@ -1360,6 +1388,7 @@ provides = ["/usr/lib/libgtk-3.so"]
 
 [packages.dbus]
 version = "1.16.2"
+version_check = "freedesktop:dbus/dbus"
 description = "Message bus system"
 url = "https://dbus.freedesktop.org/releases/dbus/dbus-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/dbus/dbus.git"
@@ -1368,6 +1397,7 @@ stage = 9
 
 [packages.polkit]
 version = "127"
+version_check = "url:https://github.com/polkit-org/polkit/tags|/releases/tag/([0-9]+)"
 description = "Authorization framework"
 url = "https://github.com/polkit-org/polkit/archive/${version}/polkit-${version}.tar.gz"
 git_url = "https://github.com/polkit-org/polkit.git"
@@ -1504,6 +1534,7 @@ stage = 10
 
 [packages.vim]
 version = "9.1.2101"
+version_check = "url:https://github.com/vim/vim/tags|v([0-9]+\.[0-9]+\.[0-9]+)"
 description = "Vi IMproved text editor"
 url = "https://github.com/vim/vim/archive/v${version}/vim-${version}.tar.gz"
 git_url = "https://github.com/vim/vim.git"
@@ -1512,6 +1543,7 @@ stage = 11
 
 [packages.firefox]
 version = "147.0.1"
+version_check = "url:https://archive.mozilla.org/pub/firefox/releases/|([0-9]+\.[0-9]+\.?[0-9]*)/linux"
 description = "Mozilla Firefox web browser"
 url = "https://archive.mozilla.org/pub/firefox/releases/${version}/source/firefox-${version}.source.tar.xz"
 git_url = ""
@@ -1572,6 +1604,7 @@ repology = "gedit"
 
 [packages.claws-mail]
 version = "4.3.1"
+version_check = "url:https://www.claws-mail.org/releases.php|([0-9]+\.[0-9]+\.[0-9]+)"
 description = "Lightweight email client"
 url = "https://www.claws-mail.org/releases/claws-mail-${version}.tar.xz"
 git_url = "https://git.claws-mail.org/readonly/claws.git"
@@ -1662,6 +1695,7 @@ stage = 12
 
 [packages.virtio-gpu]
 version = "0.1"
+version_check = "url:https://github.com/nicwn/mtdev/releases|skip"
 description = "VirtIO GPU driver (built into kernel)"
 url = ""
 git_url = ""
@@ -1671,6 +1705,7 @@ stage = 12
 
 [packages.spice-vdagent]
 version = "0.23.0"
+version_check = "url:https://www.spice-space.org/download/releases/|spice-vdagent-([0-9]+\.[0-9]+\.[0-9]+)\.tar"
 description = "Spice agent for VM integration"
 url = "https://www.spice-space.org/download/releases/spice-vdagent-${version}.tar.bz2"
 git_url = "https://gitlab.freedesktop.org/spice/linux/vd_agent.git"
@@ -1679,6 +1714,7 @@ stage = 12
 
 [packages.qemu-guest-agent]
 version = "9.2.0"
+version_check = "github:qemu/qemu"
 description = "QEMU guest agent"
 url = "https://download.qemu.org/qemu-${version}.tar.xz"
 git_url = "https://gitlab.com/qemu-project/qemu.git"
@@ -1691,6 +1727,7 @@ stage = 12
 
 [packages.wine]
 version = "10.0"
+version_check = "github:wine-mirror/wine"
 description = "Windows compatibility layer"
 url = "https://dl.winehq.org/wine/source/10.0/wine-${version}.tar.xz"
 git_url = "https://gitlab.winehq.org/wine/wine.git"
@@ -1750,6 +1787,7 @@ stage = 13
 
 [packages.gamescope]
 version = "3.18.0"
+version_check = "github:ValveSoftware/gamescope"
 description = "SteamOS session compositing window manager"
 url = "https://github.com/ValveSoftware/gamescope/releases/download/${version}/gamescope-${version}.tar.gz"
 git_url = "https://github.com/ValveSoftware/gamescope.git"
@@ -1758,6 +1796,7 @@ stage = 13
 
 [packages.vulkan-loader]
 version = "1.4.310"
+version_check = "github:KhronosGroup/Vulkan-Loader"
 description = "Vulkan ICD loader"
 url = "https://github.com/KhronosGroup/Vulkan-Loader/archive/v${version}/Vulkan-Loader-${version}.tar.gz"
 git_url = "https://github.com/KhronosGroup/Vulkan-Loader.git"
@@ -1766,6 +1805,7 @@ stage = 13
 
 [packages.vulkan-headers]
 version = "1.4.310"
+version_check = "url:https://github.com/KhronosGroup/Vulkan-Headers/tags|v([0-9]+\.[0-9]+\.[0-9]+)"
 description = "Vulkan header files"
 url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/v${version}/Vulkan-Headers-${version}.tar.gz"
 git_url = "https://github.com/KhronosGroup/Vulkan-Headers.git"
@@ -1774,6 +1814,7 @@ stage = 13
 
 [packages.spirv-headers]
 version = "1.4.310"
+version_check = "url:https://github.com/KhronosGroup/SPIRV-Headers/tags|vulkan-sdk-([0-9]+\.[0-9]+\.[0-9]+)"
 description = "SPIR-V headers"
 url = "https://github.com/KhronosGroup/SPIRV-Headers/archive/vulkan-sdk-${version}/SPIRV-Headers-${version}.tar.gz"
 git_url = "https://github.com/KhronosGroup/SPIRV-Headers.git"
@@ -1839,6 +1880,7 @@ stage = 14
 
 [packages.llvm]
 version = "20.1.0"
+version_check = "url:https://github.com/llvm/llvm-project/tags|llvmorg-([0-9]+\.[0-9]+\.[0-9]+)"
 description = "LLVM compiler infrastructure"
 url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/llvm-project-${version}.src.tar.xz"
 git_url = "https://github.com/llvm/llvm-project.git"
@@ -1848,6 +1890,7 @@ stage = 14
 
 [packages.flang]
 version = "20.1.0"
+version_check = "url:https://github.com/llvm/llvm-project/tags|llvmorg-([0-9]+\.[0-9]+\.[0-9]+)"
 description = "LLVM Fortran compiler"
 url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/llvm-project-${version}.src.tar.xz"
 git_url = "https://github.com/llvm/llvm-project.git"
@@ -1857,6 +1900,7 @@ stage = 14
 
 [packages.vscode]
 version = "1.98.0"
+version_check = "github:microsoft/vscode"
 description = "Visual Studio Code editor"
 url = "https://update.code.visualstudio.com/${version}/linux-x64/stable"
 git_url = ""
@@ -1956,6 +2000,7 @@ stage = 16
 
 [packages.ffmpeg]
 version = "7.1"
+version_check = "url:https://github.com/FFmpeg/FFmpeg/tags|n([0-9]+\.[0-9]+\.?[0-9]*)"
 description = "Complete multimedia framework"
 url = "https://ffmpeg.org/releases/ffmpeg-${version}.tar.xz"
 git_url = "https://git.ffmpeg.org/ffmpeg.git"
@@ -1965,6 +2010,7 @@ stage = 16
 
 [packages.x264]
 version = "stable"
+version_check = "url:https://code.videolan.org/videolan/x264/-/tags|stable"
 description = "H.264 video encoder"
 url = "https://code.videolan.org/videolan/x264/-/archive/stable/x264-stable.tar.bz2"
 git_url = "https://code.videolan.org/videolan/x264.git"
@@ -1973,6 +2019,7 @@ stage = 16
 
 [packages.x265]
 version = "4.1"
+version_check = "url:https://bitbucket.org/multicoreware/x265_git/downloads/|x265_([0-9]+\.[0-9]+)\.tar"
 description = "H.265/HEVC video encoder"
 url = "https://bitbucket.org/multicoreware/x265_git/downloads/x265_${version}.tar.gz"
 git_url = "https://bitbucket.org/multicoreware/x265_git.git"
@@ -1981,6 +2028,7 @@ stage = 16
 
 [packages.opus]
 version = "1.5.3"
+version_check = "github:xiph/opus"
 description = "Audio codec for streaming"
 url = "https://downloads.xiph.org/releases/opus/opus-${version}.tar.gz"
 git_url = "https://gitlab.xiph.org/xiph/opus.git"
@@ -2001,6 +2049,7 @@ stage = 16
 
 [packages.texlive]
 version = "2025"
+version_check = "url:https://tug.org/texlive/|TeX Live ([0-9]{4})"
 description = "TeX Live LaTeX distribution"
 url = "https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz"
 git_url = ""
@@ -2011,6 +2060,7 @@ stage = 17
 
 [packages.texlive-iso]
 version = "2025"
+version_check = "url:https://tug.org/texlive/|TeX Live ([0-9]{4})"
 description = "TeX Live ISO image (full offline)"
 url = "https://mirror.ctan.org/systems/texlive/Images/texlive${version}.iso"
 git_url = ""
@@ -2038,6 +2088,7 @@ stage = 17
 
 [packages.ghc]
 version = "9.10.1"
+version_check = "github:ghc/ghc"
 description = "Glasgow Haskell Compiler"
 url = "https://downloads.haskell.org/~ghc/${version}/ghc-${version}-x86_64-unknown-linux.tar.xz"
 git_url = ""
@@ -2047,6 +2098,7 @@ stage = 17
 
 [packages.poppler]
 version = "25.01.0"
+version_check = "freedesktop:poppler/poppler"
 description = "PDF rendering library"
 url = "https://poppler.freedesktop.org/poppler-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/poppler/poppler.git"
@@ -2055,6 +2107,7 @@ stage = 17
 
 [packages.ghostscript]
 version = "10.05.0"
+version_check = "url:https://github.com/ArtifexSoftware/ghostpdl-downloads/releases|ghostscript-([0-9]+\.[0-9]+\.[0-9]+)"
 description = "PostScript/PDF interpreter"
 url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10050/ghostscript-${version}.tar.xz"
 git_url = ""
@@ -2084,6 +2137,7 @@ stage = 18
 
 [packages.r]
 version = "4.4.2"
+version_check = "url:https://cran.r-project.org/src/base/R-4/|R-([0-9]+\.[0-9]+\.[0-9]+)\.tar"
 description = "R statistical computing language"
 url = "https://cran.r-project.org/src/base/R-4/R-${version}.tar.gz"
 git_url = "https://github.com/wch/r-source.git"
@@ -2104,6 +2158,7 @@ stage = 18
 
 [packages.linux-firmware]
 version = "20250106"
+version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/|linux-firmware-([0-9]+)\.tar"
 description = "Linux kernel firmware files"
 url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
 git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git"
@@ -2189,6 +2244,7 @@ stage = 19
 # Sensors and monitoring
 [packages.lm-sensors]
 version = "3.6.2"
+version_check = "url:https://github.com/lm-sensors/lm-sensors/tags|V([0-9]+-[0-9]+-[0-9]+)"
 description = "Hardware monitoring tools"
 url = "https://github.com/lm-sensors/lm-sensors/archive/V3-6-2/lm-sensors-${version}.tar.gz"
 git_url = "https://github.com/lm-sensors/lm-sensors.git"
@@ -2197,6 +2253,7 @@ stage = 19
 
 [packages.zenpower3]
 version = "0.2.0"
+version_check = "github:ocerman/zenpower"
 description = "AMD Ryzen CPU power monitoring"
 url = "https://github.com/Ta180m/zenpower3/archive/v${version}/zenpower3-${version}.tar.gz"
 git_url = "https://github.com/Ta180m/zenpower3.git"
