@@ -156,7 +156,7 @@ cache_version() {
 }
 
 # Fetch latest version from Repology API
-# Uses jq for proper JSON parsing
+# Uses jq for proper JSON parsing, filters out dev/rc/pre versions
 check_repology_version() {
     local repology_name="$1"
 
@@ -166,17 +166,26 @@ check_repology_version() {
     local response
     response=$(curl -fsSL -A "lfs-version-checker/1.0" "${api_url}" 2>/dev/null) || return 1
 
+    # Filter pattern for unstable versions (case insensitive)
+    # Matches: rc, alpha, beta, pre, dev, snapshot, git, svn, start, test, nightly
+    # Also matches: 9999 (Gentoo live), date-like versions, versions with hyphens
+    local unstable_pattern='(rc|alpha|beta|pre|dev|snapshot|git|svn|start|test|nightly)|^9999$|^20[0-9]{6}|.*-.*'
+
     # Use jq to extract versions with status "newest" (upstream latest)
-    # Sort by version and take the highest
+    # Filter out dev/rc/pre/alpha/beta/snapshot versions
     local version
     version=$(echo "${response}" | \
         jq -r '.[] | select(.status == "newest") | .version' 2>/dev/null | \
+        grep -viE "${unstable_pattern}" | \
+        grep -E '^[0-9]+(\.[0-9]+)+$' | \
         sort -V | uniq | tail -1)
 
-    # If no "newest" status found, try "devel" (for rolling release repos)
+    # If no stable "newest" found, check all versions for stable ones
     if [[ -z "${version}" ]]; then
         version=$(echo "${response}" | \
-            jq -r '.[] | select(.status == "devel") | .version' 2>/dev/null | \
+            jq -r '.[].version' 2>/dev/null | \
+            grep -viE "${unstable_pattern}" | \
+            grep -E '^[0-9]+(\.[0-9]+)+$' | \
             sort -V | uniq | tail -1)
     fi
 
@@ -200,10 +209,23 @@ check_anitya_version() {
     local response
     response=$(curl -fsSL -A "lfs-version-checker/1.0" "${api_url}" 2>/dev/null) || return 1
 
-    # Get the latest version from the first matching project
+    # Filter pattern for unstable versions
+    local unstable_pattern='(rc|alpha|beta|pre|dev|snapshot|git|svn|start|test|nightly)|^9999$|^20[0-9]{6}|.*-.*'
+
+    # Get the stable version, filter out dev/rc versions
     local version
     version=$(echo "${response}" | \
-        jq -r '.items[0].stable_version // .items[0].version // empty' 2>/dev/null)
+        jq -r '.items[0].stable_version // empty' 2>/dev/null | \
+        grep -viE "${unstable_pattern}" | \
+        grep -E '^[0-9]+(\.[0-9]+)+$' | head -1)
+
+    # If no stable_version, try version field
+    if [[ -z "${version}" ]]; then
+        version=$(echo "${response}" | \
+            jq -r '.items[0].version // empty' 2>/dev/null | \
+            grep -viE "${unstable_pattern}" | \
+            grep -E '^[0-9]+(\.[0-9]+)+$' | head -1)
+    fi
 
     if [[ -n "${version}" ]]; then
         echo "${version}"
@@ -338,40 +360,35 @@ fetch_version_bg() {
     echo "${version}" > "${result_file}"
 }
 
-# Parallel fetch all package versions
-parallel_fetch_versions() {
-    local jobs=0
+# Fetch all package versions (sequential with caching for reliability)
+fetch_all_versions() {
+    local total=${#PACKAGES_TO_CHECK[@]}
+    local current=0
 
-    echo -e "${CYAN}Fetching versions in parallel (max ${MAX_PARALLEL} jobs)...${NC}" >&2
+    echo -e "${CYAN}Fetching versions (${total} packages, cached results reused)...${NC}" >&2
 
     for entry in "${PACKAGES_TO_CHECK[@]}"; do
         local pkg="${entry%%=*}"
         local version_info="${entry#*=}"
         local repology_name="${version_info#*|}"
+        current=$((current + 1))
 
         # Check if already cached
         if get_cached_version "${pkg}" &>/dev/null; then
             continue
         fi
 
-        # Launch background job
-        fetch_version_bg "${pkg}" "${repology_name}" &
-        FETCH_PIDS+=($!)
-        jobs=$((jobs + 1))
+        # Fetch and cache
+        local version
+        version=$(get_upstream_version "${pkg}" "${repology_name}" 2>/dev/null) || true
 
-        # Limit parallel jobs
-        if [[ ${jobs} -ge ${MAX_PARALLEL} ]]; then
-            wait -n 2>/dev/null || true
-            jobs=$((jobs - 1))
+        # Show progress for uncached packages
+        if [[ ${VERBOSE} -eq 1 ]]; then
+            log "Fetched ${pkg}: ${version:-unknown}"
         fi
     done
 
-    # Wait for all remaining jobs
-    for pid in "${FETCH_PIDS[@]}"; do
-        wait "${pid}" 2>/dev/null || true
-    done
-
-    echo -e "${GREEN}Done fetching.${NC}" >&2
+    echo -e "${GREEN}Done.${NC}" >&2
 }
 
 # Global array for packages to check
@@ -405,8 +422,8 @@ main() {
         PACKAGES_TO_CHECK=("${filtered[@]}")
     fi
 
-    # Parallel fetch all versions first
-    parallel_fetch_versions
+    # Fetch all versions (sequential with caching)
+    fetch_all_versions
 
     # Now display results
     if [[ ${VERBOSE} -eq 1 ]]; then
