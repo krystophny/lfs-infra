@@ -406,9 +406,8 @@ build_pkg() {
     if [[ -n "${build_commands}" ]]; then
         while IFS= read -r cmd; do
             [[ -z "${cmd}" ]] && continue
-            # Expand all variables
-            cmd=$(eval echo "${cmd}")
             log "  $ ${cmd}"
+            # eval handles variable expansion and command execution
             eval "${cmd}" || die "Build command failed: ${cmd}"
         done <<< "${build_commands}"
         ok "Built ${pkg}"
