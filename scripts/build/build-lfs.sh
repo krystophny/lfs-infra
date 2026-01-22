@@ -177,7 +177,7 @@ get_pkg_version() {
     awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
-        found && /^version/ { gsub(/.*= *"|".*/, ""); print }
+        found && /^version *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
     ' "${PACKAGES_FILE}"
 }
 
