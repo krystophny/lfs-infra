@@ -83,30 +83,16 @@ fetch_cached() {
     return 1
 }
 
-# GitHub releases (uses API, respects GITHUB_TOKEN for rate limits)
+# GitHub releases (scrapes HTML, no rate limits)
 check_github() {
     local repo="$1"  # owner/repo
-    local api_url="https://api.github.com/repos/${repo}/releases/latest"
-    local tags_url="https://api.github.com/repos/${repo}/tags"
-    local auth_header=""
+    local url="https://github.com/${repo}/releases"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
 
-    # Use token if available (5000 req/hour vs 60)
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        auth_header="-H \"Authorization: Bearer ${GITHUB_TOKEN}\""
-    fi
-
-    # Try releases first
-    local version content
-    content=$(curl -sfL --max-time 10 ${auth_header} "$api_url" 2>/dev/null) || content=""
-    version=$(echo "$content" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)"/\1/')
-
-    # Fallback to tags if no releases
-    if [[ -z "$version" ]]; then
-        content=$(curl -sfL --max-time 10 ${auth_header} "$tags_url" 2>/dev/null) || content=""
-        version=$(echo "$content" | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)"/\1/')
-    fi
-
-    echo "$version"
+    # Extract version from release tag links
+    echo "$content" | grep -oE '/releases/tag/v?[0-9]+\.[0-9]+(\.[0-9]+)?' | \
+        head -20 | sed 's|.*/tag/||;s|^v||' | sort -V | tail -1
 }
 
 # GNU FTP directory
