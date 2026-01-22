@@ -315,7 +315,7 @@ stage = 3
 [packages.acl]
 version = "2.3.2"
 description = "Access Control Lists"
-url = "https://download.savannah.gnu.org/releases/acl/acl-${version}.tar.xz"
+url = "https://download.savannah.nongnu.org/releases/acl/acl-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/acl.git"
 use_git = false
 stage = 3
@@ -323,7 +323,7 @@ stage = 3
 [packages.attr]
 version = "2.5.2"
 description = "Extended filesystem attributes"
-url = "https://download.savannah.gnu.org/releases/attr/attr-${version}.tar.xz"
+url = "https://download.savannah.nongnu.org/releases/attr/attr-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/attr.git"
 use_git = false
 stage = 3
