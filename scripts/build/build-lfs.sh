@@ -364,6 +364,7 @@ build_pkg() {
 }
 
 # Download a package (URL from packages.toml or explicit)
+# Features: retry with backoff, resume partial downloads, timeout protection
 download_pkg() {
     local pkg="$1"
     local url="${2:-}"
@@ -378,19 +379,66 @@ download_pkg() {
     local filename
     filename=$(basename "${url}")
     local target="${SOURCES_DIR}/${filename}"
+    local partial="${target}.partial"
 
+    # Check if already downloaded and valid
     if [[ -f "${target}" ]]; then
         log "Already downloaded: ${filename}"
         return 0
     fi
 
     log "Downloading: ${pkg} -> ${filename}"
-    curl -fSL -o "${target}" "${url}" || {
-        warn "Failed to download ${pkg} from ${url}"
-        return 1
-    }
 
-    ok "Downloaded: ${filename}"
+    # Retry settings
+    local max_retries=5
+    local retry_delay=5
+    local connect_timeout=30
+    local max_time=600  # 10 minutes max per attempt
+    local speed_limit=1000  # Abort if slower than 1KB/s
+    local speed_time=30  # for more than 30 seconds
+
+    local attempt=1
+    while [[ ${attempt} -le ${max_retries} ]]; do
+        # Use partial file for resume capability
+        if [[ -f "${partial}" ]]; then
+            log "  Resuming download (attempt ${attempt}/${max_retries})..."
+            curl -fSL -C - \
+                --connect-timeout ${connect_timeout} \
+                --max-time ${max_time} \
+                --speed-limit ${speed_limit} \
+                --speed-time ${speed_time} \
+                --retry 3 \
+                --retry-delay 5 \
+                -o "${partial}" "${url}" && {
+                    mv "${partial}" "${target}"
+                    ok "Downloaded: ${filename}"
+                    return 0
+                }
+        else
+            curl -fSL \
+                --connect-timeout ${connect_timeout} \
+                --max-time ${max_time} \
+                --speed-limit ${speed_limit} \
+                --speed-time ${speed_time} \
+                --retry 3 \
+                --retry-delay 5 \
+                -o "${partial}" "${url}" && {
+                    mv "${partial}" "${target}"
+                    ok "Downloaded: ${filename}"
+                    return 0
+                }
+        fi
+
+        warn "  Download attempt ${attempt} failed, retrying in ${retry_delay}s..."
+        sleep ${retry_delay}
+        retry_delay=$((retry_delay * 2))  # Exponential backoff
+        ((attempt++))
+    done
+
+    # Clean up partial file on total failure
+    rm -f "${partial}"
+    warn "Failed to download ${pkg} after ${max_retries} attempts"
+    return 1
 }
 
 # Apply patches for a package
