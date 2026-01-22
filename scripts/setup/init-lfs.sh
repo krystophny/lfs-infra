@@ -7,9 +7,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first - this validates we're on Linux
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+
 # Source configurations
 source "${ROOT_DIR}/config/lfs.conf"
 source "${ROOT_DIR}/config/build.conf"
+
+# Run comprehensive safety checks
+safety_check
 
 # Colors
 RED='\033[0;31m'
@@ -122,12 +128,11 @@ setup_partition() {
     mkdir -p "${LFS}"
     mount "${device}" "${LFS}"
 
-    # Add to fstab
+    # NOTE: We no longer modify host /etc/fstab for safety
+    # If you need persistent mounts, add manually:
     local uuid=$(blkid -s UUID -o value "${device}")
-    if ! grep -q "${uuid}" /etc/fstab; then
-        echo "UUID=${uuid} ${LFS} ext4 defaults 0 2" >> /etc/fstab
-        log_ok "Added ${device} to /etc/fstab"
-    fi
+    log_info "To mount at boot, add to /etc/fstab:"
+    log_info "  UUID=${uuid} ${LFS} ext4 defaults 0 2"
 
     log_ok "Partition ${device} mounted at ${LFS}"
 }
@@ -173,8 +178,8 @@ create_directories() {
         ln -sfv usr/lib "${LFS}/lib64" 2>/dev/null || true
     fi
 
-    # Create tools symlink
-    ln -sfv "${LFS}/tools" / 2>/dev/null || true
+    # NOTE: We no longer create /tools symlink on host root for safety
+    # The toolchain uses ${LFS}/tools directly
 
     log_ok "Directory structure created"
 }

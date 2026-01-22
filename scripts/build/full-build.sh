@@ -20,11 +20,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+
 # Load configuration
 source "${ROOT_DIR}/config/build.conf" 2>/dev/null || true
 
 # Defaults - optimized for build server
 export LFS="${LFS:-/mnt/lfs}"
+
+# Run safety checks (require Linux, validate LFS)
+safety_check
 export DISK_FILE="${LFS_DISK_FILE:-/mnt/storage/lfs.img}"
 export DISK_SIZE="${LFS_DISK_SIZE:-512G}"
 

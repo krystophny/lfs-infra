@@ -7,6 +7,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first - require Linux for QEMU/KVM
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+require_linux
+
 # VM Configuration - optimized for build server (94GB RAM, 32 cores)
 VM_NAME="${VM_NAME:-lfs-test}"
 VM_MEMORY="${VM_MEMORY:-80G}"

@@ -7,6 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first - validates Linux
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+
+# Require Linux for disk operations
+require_linux
+
 # Defaults - use /mnt/storage for large disk images
 DISK_FILE="${LFS_DISK_FILE:-/mnt/storage/lfs.img}"
 DISK_SIZE="${LFS_DISK_SIZE:-512G}"
@@ -92,6 +98,9 @@ get_loop() {
 create_disk() {
     check_root
 
+    # Validate disk file path is safe (not a block device, not in system dirs)
+    validate_disk_file "${DISK_FILE}"
+
     log "Creating disk image: ${DISK_FILE} (${DISK_SIZE})"
     mkdir -p "$(dirname "${DISK_FILE}")"
 
@@ -148,6 +157,10 @@ create_disk() {
 # Mount disk image
 mount_disk() {
     check_root
+
+    # Validate mount point is safe (will be used as LFS)
+    export LFS="${MOUNT_POINT}"
+    validate_lfs_variable
 
     [[ -f "${DISK_FILE}" ]] || die "Disk image not found: ${DISK_FILE}"
 

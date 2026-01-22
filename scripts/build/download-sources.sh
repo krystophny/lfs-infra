@@ -7,12 +7,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+
 # Source configurations
 source "${ROOT_DIR}/config/lfs.conf" 2>/dev/null || true
 source "${ROOT_DIR}/config/build.conf" 2>/dev/null || true
 
 # Defaults if not sourced
 LFS="${LFS:-/mnt/lfs}"
+
+# Run safety checks (require Linux, validate LFS)
+safety_check
 LFS_SOURCES="${LFS_SOURCES:-${LFS}/sources}"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
 

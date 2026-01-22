@@ -6,6 +6,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+
+# Source safety library - require Linux
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+require_linux
+
 VERSION_CHECKER="${ROOT_DIR}/version-checker/check-versions.sh"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
 BUILD_DIR="${LFS_BUILD:-/var/lfs/build}"

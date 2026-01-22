@@ -7,8 +7,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first - validates Linux and LFS
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+
 # Build configuration
 export LFS="${LFS:-/mnt/lfs}"
+
+# Run comprehensive safety checks before any build operations
+safety_check
 export LFS_TGT="$(uname -m)-lfs-linux-gnu"
 export MAKEFLAGS="-j$(nproc)"
 export NPROC="$(nproc)"

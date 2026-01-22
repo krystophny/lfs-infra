@@ -7,9 +7,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
+# Source safety library first
+source "${ROOT_DIR}/scripts/lib/safety.sh"
+
 source "${ROOT_DIR}/config/lfs.conf" 2>/dev/null || true
 
 LFS="${LFS:-/mnt/lfs}"
+
+# Run safety checks (require Linux, validate LFS)
+safety_check
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -115,6 +121,8 @@ clean_build() {
     log_info "Cleaning build directory..."
 
     if [[ -d "${LFS}/build" ]]; then
+        # Validate path and remove contents
+        validate_path_in_lfs "${LFS}/build"
         rm -rf "${LFS}/build"/*
         log_ok "Build directory cleaned"
     else
@@ -127,6 +135,7 @@ clean_sources() {
     log_info "Cleaning sources directory..."
 
     if [[ -d "${LFS}/sources" ]]; then
+        validate_path_in_lfs "${LFS}/sources"
         rm -rf "${LFS}/sources"/*
         log_ok "Sources directory cleaned"
     else
@@ -139,6 +148,7 @@ clean_packages() {
     log_info "Cleaning packages directory..."
 
     if [[ -d "${LFS}/pkg" ]]; then
+        validate_path_in_lfs "${LFS}/pkg"
         rm -rf "${LFS}/pkg"/*
         log_ok "Packages directory cleaned"
     else
@@ -151,6 +161,7 @@ clean_logs() {
     log_info "Cleaning logs directory..."
 
     if [[ -d "${LFS}/logs" ]]; then
+        validate_path_in_lfs "${LFS}/logs"
         rm -rf "${LFS}/logs"/*
         log_ok "Logs directory cleaned"
     else
@@ -163,14 +174,14 @@ clean_tools() {
     log_info "Removing cross-toolchain..."
 
     if [[ -d "${LFS}/tools" ]]; then
-        rm -rf "${LFS}/tools"
+        # Use safe_rm_rf to validate path is within LFS
+        safe_rm_rf "${LFS}/tools"
         log_ok "Cross-toolchain removed"
     else
         log_warn "Tools directory not found"
     fi
 
-    # Remove symlink
-    rm -f /tools
+    # NOTE: We no longer remove /tools from host root for safety
 }
 
 # Full teardown
@@ -197,14 +208,15 @@ full_teardown() {
         umount -l "${LFS}"
     fi
 
-    # Remove directory
+    # Remove directory - validate it is safe to delete
     if [[ -d "${LFS}" ]]; then
         log_info "Removing ${LFS}..."
+        # Re-validate LFS before dangerous operation
+        validate_lfs_variable
         rm -rf "${LFS}"
     fi
 
-    # Remove /tools symlink
-    rm -f /tools
+    # NOTE: We no longer remove /tools from host root for safety
 
     log_ok "Full teardown complete"
 }
