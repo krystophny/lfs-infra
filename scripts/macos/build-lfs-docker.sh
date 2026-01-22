@@ -93,6 +93,31 @@ header "LFS Docker Builder (Apple Silicon + Rosetta)"
 echo "This builds REAL LFS from source - this will take several hours!"
 echo ""
 
+# Prompt for user credentials
+header "User Configuration"
+read -p "Username for the system [default: user]: " LFS_USERNAME
+LFS_USERNAME="${LFS_USERNAME:-user}"
+
+# Validate username
+if [[ ! "${LFS_USERNAME}" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    die "Invalid username. Use lowercase letters, numbers, underscore, hyphen."
+fi
+
+while true; do
+    read -sp "Password for ${LFS_USERNAME}: " LFS_PASSWORD
+    echo ""
+    read -sp "Confirm password: " LFS_PASSWORD_CONFIRM
+    echo ""
+    if [[ "${LFS_PASSWORD}" == "${LFS_PASSWORD_CONFIRM}" ]]; then
+        break
+    fi
+    warn "Passwords don't match. Try again."
+done
+
+[[ -z "${LFS_PASSWORD}" ]] && die "Password cannot be empty"
+ok "User '${LFS_USERNAME}' will be created with sudo access"
+echo ""
+
 # Check Docker
 if ! docker info &>/dev/null; then
     die "Docker not running. Start OrbStack first."
@@ -195,6 +220,8 @@ validate_lfs
 
 IMAGE_FILE="/output/lfs-complete.img"
 IMAGE_SIZE="${IMAGE_SIZE:-32G}"
+LFS_USERNAME="${LFS_USERNAME:-user}"
+LFS_PASSWORD="${LFS_PASSWORD:-changeme}"
 
 log "Creating loop device nodes..."
 # First detach any existing loop devices to free them up
@@ -267,9 +294,7 @@ pacstrap -c -G -M "${LFS}" --noconfirm \
     mesa vulkan-icd-loader \
     linux-headers dkms
 
-# Copy lfs-infra to the target system (after pacstrap created /root)
-log "Copying lfs-infra repository to target..."
-cp -a /lfs-infra "${LFS}/root/lfs-infra"
+# lfs-infra will be copied to user's home later
 
 log "Configuring system..."
 echo "lfs-workstation" > "${LFS}/etc/hostname"
@@ -287,24 +312,26 @@ echo "LANG=en_US.UTF-8" > "${LFS}/etc/locale.conf"
 ln -sf /usr/share/zoneinfo/UTC "${LFS}/etc/localtime"
 arch-chroot "${LFS}" hwclock --systohc || true  # May fail in chroot, not critical
 
-# Create user
-arch-chroot "${LFS}" useradd -m -G wheel,video,audio -s /bin/bash user
-echo "user:user" | arch-chroot "${LFS}" chpasswd
-echo "root:root" | arch-chroot "${LFS}" chpasswd
+# Create user with provided credentials
+log "Creating user '${LFS_USERNAME}' with sudo access..."
+arch-chroot "${LFS}" useradd -m -G wheel,video,audio -s /bin/bash "${LFS_USERNAME}"
+echo "${LFS_USERNAME}:${LFS_PASSWORD}" | arch-chroot "${LFS}" chpasswd
 echo "%wheel ALL=(ALL:ALL) ALL" > "${LFS}/etc/sudoers.d/wheel"
+# Lock root account (user has sudo)
+arch-chroot "${LFS}" passwd -l root
 
 # Enable services
 arch-chroot "${LFS}" systemctl enable NetworkManager
 arch-chroot "${LFS}" systemctl enable lightdm
 arch-chroot "${LFS}" systemctl enable sshd
 
-# Install Claude Code using native installer (no Node.js needed!)
-log "Installing Claude Code (native installer)..."
-arch-chroot "${LFS}" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+# Install Claude Code for the user (native installer - no Node.js needed!)
+log "Installing Claude Code for user '${LFS_USERNAME}'..."
+arch-chroot "${LFS}" su - "${LFS_USERNAME}" -c 'curl -fsSL https://claude.ai/install.sh | bash'
 
 # Create desktop shortcut for Claude
-mkdir -p "${LFS}/home/user/Desktop"
-cat > "${LFS}/home/user/Desktop/Claude.desktop" <<EOF
+mkdir -p "${LFS}/home/${LFS_USERNAME}/Desktop"
+cat > "${LFS}/home/${LFS_USERNAME}/Desktop/Claude.desktop" <<EOF
 [Desktop Entry]
 Name=Claude Code
 Comment=AI Coding Assistant
@@ -314,20 +341,16 @@ Terminal=false
 Type=Application
 Categories=Development;
 EOF
-chmod +x "${LFS}/home/user/Desktop/Claude.desktop"
-arch-chroot "${LFS}" chown -R user:user /home/user
+chmod +x "${LFS}/home/${LFS_USERNAME}/Desktop/Claude.desktop"
 
 # Create welcome/README file
-cat > "${LFS}/home/user/Desktop/README.txt" <<EOF
+cat > "${LFS}/home/${LFS_USERNAME}/Desktop/README.txt" <<EOF
 ==========================================
  LFS Workstation Ready!
 ==========================================
 
-Username: user
-Password: user
-Root password: root
-
-CHANGE PASSWORDS AFTER FIRST LOGIN!
+Username: ${LFS_USERNAME}
+(Root account is locked - use sudo)
 
 Installed:
 - XFCE Desktop
@@ -335,10 +358,10 @@ Installed:
 - Claude Code (run 'claude' in terminal)
 - SSH Server (running)
 - Development tools
-- lfs-infra repo at /root/lfs-infra
+- lfs-infra repo at ~/lfs-infra
 
 To build TRUE LFS on your hard drive:
-  cd /root/lfs-infra
+  cd ~/lfs-infra
   sudo ./scripts/build/build-lfs.sh all
 
 WiFi Setup:
@@ -347,6 +370,13 @@ WiFi Setup:
 
 ==========================================
 EOF
+
+# Copy lfs-infra to user's home (not just root)
+log "Copying lfs-infra repository to user home..."
+cp -a /lfs-infra "${LFS}/home/${LFS_USERNAME}/lfs-infra"
+
+# Fix ownership of user's home directory
+arch-chroot "${LFS}" chown -R "${LFS_USERNAME}:${LFS_USERNAME}" "/home/${LFS_USERNAME}"
 
 # Generate fstab
 log "Generating fstab..."
@@ -376,10 +406,13 @@ losetup -d "${LOOP_ROOT}"
 ok "Build complete! Image: ${IMAGE_FILE}"
 echo ""
 echo "This image contains an Arch-based system with all tools needed."
+echo "User '${LFS_USERNAME}' has sudo access. Root is locked."
+echo ""
 echo "To build TRUE LFS from source on the target machine:"
 echo "  1. Boot from this USB"
-echo "  2. cd /root/lfs-infra"
-echo "  3. sudo ./scripts/build/build-lfs.sh all"
+echo "  2. Login as ${LFS_USERNAME}"
+echo "  3. cd ~/lfs-infra"
+echo "  4. sudo ./scripts/build/build-lfs.sh all"
 BUILD_SCRIPT
 
 chmod +x "${OUTPUT_DIR}/build-inside-docker.sh"
@@ -401,6 +434,8 @@ docker run --rm \
     -v "${OUTPUT_DIR}:/output" \
     -v "${OUTPUT_DIR}/lfs-infra:/lfs-infra:ro" \
     -e IMAGE_SIZE="${IMAGE_SIZE}" \
+    -e LFS_USERNAME="${LFS_USERNAME}" \
+    -e LFS_PASSWORD="${LFS_PASSWORD}" \
     lfs-builder \
     bash /output/build-inside-docker.sh
 
@@ -460,13 +495,10 @@ header "Complete!"
 
 ok "LFS USB is ready!"
 echo ""
-echo "Boot from USB and login:"
-echo "  Username: user"
-echo "  Password: user"
+echo "Boot from USB and login as: ${LFS_USERNAME}"
+echo "(Root account is locked - use sudo for admin tasks)"
 echo ""
 echo "To build TRUE LFS from source:"
-echo "  cd /root/lfs-infra"
+echo "  cd ~/lfs-infra"
 echo "  sudo ./scripts/build/build-lfs.sh all"
-echo ""
-echo "Change passwords after first login!"
 echo ""
