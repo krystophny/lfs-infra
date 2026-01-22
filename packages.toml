@@ -123,7 +123,7 @@ use_git = false
 stage = 2
 
 [packages.gawk]
-version = "5.4.0"
+version = "5.3.2"
 description = "GNU AWK"
 url = "https://ftp.gnu.org/gnu/gawk/gawk-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gawk.git"
@@ -779,6 +779,174 @@ git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-video-vesa.git"
 use_git = false
 stage = 8
 
+[packages.xinit]
+version = "1.4.2"
+description = "X server initialization"
+url = "https://www.x.org/releases/individual/app/xinit-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/app/xinit.git"
+use_git = false
+stage = 8
+
+[packages.xterm]
+version = "397"
+description = "Standard X terminal emulator"
+url = "https://invisible-mirror.net/archives/xterm/xterm-${version}.tgz"
+git_url = "https://github.com/ThomasDickey/xterm-snapshots.git"
+use_git = false
+stage = 8
+
+[packages.xf86-input-evdev]
+version = "2.11.0"
+description = "Xorg evdev input driver"
+url = "https://www.x.org/releases/individual/driver/xf86-input-evdev-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/driver/xf86-input-evdev.git"
+use_git = false
+stage = 8
+
+[packages.eudev]
+version = "3.2.14"
+description = "Device manager for Linux (udev fork)"
+url = "https://github.com/eudev-project/eudev/releases/download/v${version}/eudev-${version}.tar.gz"
+git_url = "https://github.com/eudev-project/eudev.git"
+use_git = false
+stage = 8
+
+[packages.libICE]
+version = "1.1.2"
+description = "X11 Inter-Client Exchange library"
+url = "https://www.x.org/releases/individual/lib/libICE-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libice.git"
+use_git = false
+stage = 8
+
+[packages.libSM]
+version = "1.2.5"
+description = "X11 Session Management library"
+url = "https://www.x.org/releases/individual/lib/libSM-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libsm.git"
+use_git = false
+stage = 8
+
+[packages.iceauth]
+version = "1.0.10"
+description = "ICE authority file utility"
+url = "https://www.x.org/releases/individual/app/iceauth-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/app/iceauth.git"
+use_git = false
+stage = 8
+
+[packages.libxkbfile]
+version = "1.1.3"
+description = "XKB file handling library"
+url = "https://www.x.org/releases/individual/lib/libxkbfile-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxkbfile.git"
+use_git = false
+stage = 8
+
+[packages.libxshmfence]
+version = "1.3.2"
+description = "X shared memory fence library"
+url = "https://www.x.org/releases/individual/lib/libxshmfence-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxshmfence.git"
+use_git = false
+stage = 8
+
+[packages.xkbcomp]
+version = "1.4.7"
+description = "XKB keyboard compiler"
+url = "https://www.x.org/releases/individual/app/xkbcomp-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/app/xkbcomp.git"
+use_git = false
+stage = 8
+
+[packages.libfontenc]
+version = "1.1.8"
+description = "X font encoding library"
+url = "https://www.x.org/releases/individual/lib/libfontenc-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libfontenc.git"
+use_git = false
+stage = 8
+
+[packages.libXfont2]
+version = "2.0.7"
+description = "X font handling library"
+url = "https://www.x.org/releases/individual/lib/libXfont2-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxfont.git"
+use_git = false
+stage = 8
+
+[packages.font-util]
+version = "1.4.1"
+description = "X font utilities"
+url = "https://www.x.org/releases/individual/font/font-util-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/font/util.git"
+use_git = false
+stage = 8
+
+[packages.libxcvt]
+version = "0.1.2"
+description = "VESA CVT modeline generation library"
+url = "https://www.x.org/releases/individual/lib/libxcvt-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcvt.git"
+use_git = false
+stage = 8
+
+[packages.libpciaccess]
+version = "0.18.1"
+description = "PCI access library"
+url = "https://www.x.org/releases/individual/lib/libpciaccess-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libpciaccess.git"
+use_git = false
+stage = 8
+
+[packages.libXt]
+version = "1.3.1"
+description = "X Toolkit Intrinsics library"
+url = "https://www.x.org/releases/individual/lib/libXt-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxt.git"
+use_git = false
+stage = 8
+
+[packages.libXmu]
+version = "1.2.1"
+description = "X miscellaneous utility library"
+url = "https://www.x.org/releases/individual/lib/libXmu-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxmu.git"
+use_git = false
+stage = 8
+
+[packages.libXaw]
+version = "1.0.16"
+description = "X Athena Widgets library"
+url = "https://www.x.org/releases/individual/lib/libXaw-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxaw.git"
+use_git = false
+stage = 8
+
+[packages.libXpm]
+version = "3.5.17"
+description = "X Pixmap library"
+url = "https://www.x.org/releases/individual/lib/libXpm-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xorg/lib/libxpm.git"
+use_git = false
+stage = 8
+
+[packages.hwdata]
+version = "0.391"
+description = "Hardware identification databases"
+url = "https://github.com/vcrhonek/hwdata/archive/v${version}/hwdata-${version}.tar.gz"
+git_url = "https://github.com/vcrhonek/hwdata.git"
+use_git = false
+stage = 8
+
+[packages.xkeyboard-config]
+version = "2.43"
+description = "X keyboard configuration database"
+url = "https://www.x.org/releases/individual/data/xkeyboard-config/xkeyboard-config-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config.git"
+use_git = false
+stage = 8
+
 # =============================================================================
 # STAGE 9: GTK and Desktop Libraries
 # =============================================================================
@@ -884,6 +1052,22 @@ version = "4.20.2"
 description = "Xfce UI library"
 url = "https://archive.xfce.org/src/xfce/libxfce4ui/4.20/libxfce4ui-${version}.tar.bz2"
 git_url = "https://gitlab.xfce.org/xfce/libxfce4ui.git"
+use_git = false
+stage = 9
+
+[packages.xfce4-dev-tools]
+version = "4.20.0"
+description = "Xfce development tools"
+url = "https://archive.xfce.org/src/xfce/xfce4-dev-tools/4.20/xfce4-dev-tools-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/xfce4-dev-tools.git"
+use_git = false
+stage = 9
+
+[packages.libxfce4windowing]
+version = "4.20.4"
+description = "Xfce windowing library"
+url = "https://archive.xfce.org/src/xfce/libxfce4windowing/4.20/libxfce4windowing-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/xfce/libxfce4windowing.git"
 use_git = false
 stage = 9
 
@@ -1533,3 +1717,134 @@ url = "https://ftp.gnu.org/gnu/octave/octave-${version}.tar.xz"
 git_url = "https://hg.savannah.gnu.org/hgweb/octave"
 use_git = false
 stage = 18
+
+# =============================================================================
+# STAGE 19: Firmware and Hardware Support
+# =============================================================================
+
+[packages.linux-firmware]
+version = "20250106"
+description = "Linux kernel firmware files"
+url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git"
+use_git = false
+stage = 19
+# Includes: Intel Wi-Fi (iwlwifi), AMD GPU, NVIDIA, i915, etc.
+
+[packages.amd-ucode]
+version = "20250106"
+description = "AMD CPU microcode (extracted from linux-firmware)"
+url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 19
+# Extract amd-ucode/ directory and create initrd for early loading
+
+[packages.intel-ucode]
+version = "20250108"
+description = "Intel CPU microcode"
+url = "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/archive/microcode-${version}.tar.gz"
+git_url = "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files.git"
+use_git = false
+stage = 19
+
+[packages.sof-firmware]
+version = "2025.02.1"
+description = "Sound Open Firmware"
+url = "https://github.com/thesofproject/sof-bin/releases/download/v${version}/sof-bin-${version}.tar.gz"
+git_url = "https://github.com/thesofproject/sof-bin.git"
+use_git = false
+stage = 19
+# Required for some Intel audio devices
+
+# =============================================================================
+# Hardware-specific drivers for this system (AMD Ryzen 5950X + RTX 5060 Ti)
+# =============================================================================
+
+[packages.amdgpu-firmware]
+version = "20250106"
+description = "AMD GPU firmware (part of linux-firmware)"
+url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 19
+# For AMD integrated graphics if present
+
+[packages.iwlwifi-firmware]
+version = "20250106"
+description = "Intel Wi-Fi 6 AX200/AX201 firmware"
+url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 19
+# Required for Intel Wi-Fi 6 AX200 [8086:2723]
+
+# Bluetooth firmware
+[packages.bluez]
+version = "5.79"
+description = "Bluetooth protocol stack"
+url = "https://www.kernel.org/pub/linux/bluetooth/bluez-${version}.tar.xz"
+git_url = "https://github.com/bluez/bluez.git"
+use_git = false
+stage = 19
+
+[packages.bluez-firmware]
+version = "1.2"
+description = "Bluetooth firmware files"
+url = "https://www.kernel.org/pub/linux/bluetooth/bluez-firmware-${version}.tar.gz"
+git_url = ""
+use_git = false
+stage = 19
+
+# NVMe tools
+[packages.nvme-cli]
+version = "2.11.1"
+description = "NVMe management command line interface"
+url = "https://github.com/linux-nvme/nvme-cli/archive/v${version}/nvme-cli-${version}.tar.gz"
+git_url = "https://github.com/linux-nvme/nvme-cli.git"
+use_git = false
+stage = 19
+# For Samsung NVMe PM9A1/980PRO management
+
+# Sensors and monitoring
+[packages.lm-sensors]
+version = "3.6.2"
+description = "Hardware monitoring tools"
+url = "https://github.com/lm-sensors/lm-sensors/archive/V3-6-2/lm-sensors-${version}.tar.gz"
+git_url = "https://github.com/lm-sensors/lm-sensors.git"
+use_git = false
+stage = 19
+
+[packages.zenpower3]
+version = "0.2.0"
+description = "AMD Ryzen CPU power monitoring"
+url = "https://github.com/Ta180m/zenpower3/archive/v${version}/zenpower3-${version}.tar.gz"
+git_url = "https://github.com/Ta180m/zenpower3.git"
+use_git = false
+stage = 19
+# Better sensor support for AMD Ryzen 5000 series
+
+# =============================================================================
+# STAGE 20: Xorg Shadow Support (for VESA/fbdev drivers)
+# =============================================================================
+
+[packages.libshadow]
+version = "1.21.1"
+description = "Xorg shadow framebuffer module (built into xorg-server)"
+url = ""
+git_url = ""
+use_git = false
+stage = 20
+# Note: Shadow support is built into xorg-server, no separate package needed
+# Requires xorg-server to be built with shadow support enabled
+
+# For modesetting driver (built into xorg-server >= 1.18)
+[packages.xorg-server-modesetting]
+version = "21.1.21"
+description = "Xorg modesetting driver (built-in)"
+url = ""
+git_url = ""
+use_git = false
+stage = 20
+# Note: modesetting is built into xorg-server, enable in xorg.conf if needed
+# Works with virtio-gpu and most modern GPUs via KMS

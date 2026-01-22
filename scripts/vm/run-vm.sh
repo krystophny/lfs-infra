@@ -11,7 +11,7 @@ ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 VM_NAME="${VM_NAME:-lfs-test}"
 VM_MEMORY="${VM_MEMORY:-80G}"
 VM_CPUS="${VM_CPUS:-$(nproc)}"
-VM_DISK="${VM_DISK:-/mnt/storage/lfs.qcow2}"
+VM_DISK="${VM_DISK:-/mnt/storage/lfs.img}"
 VM_DISK_SIZE="${VM_DISK_SIZE:-512G}"
 
 # Display
@@ -39,6 +39,8 @@ Run LFS in a QEMU/KVM virtual machine.
 Commands:
     create      Create a new VM disk image
     run         Start the VM (default)
+    kernel      Direct kernel boot (no GRUB needed)
+    test        Headless boot test (serial console)
     install     Boot from ISO to install
     ssh         SSH into running VM
 
@@ -48,6 +50,8 @@ Options:
     -d, --disk FILE      Disk image path
     -s, --size SIZE      New disk size (default: 20G)
     -i, --iso FILE       Boot from ISO
+    -k, --kernel FILE    Direct kernel boot (path to vmlinuz)
+    --root DEVICE        Root device for kernel boot (default: /dev/vda2)
     --spice              Use SPICE display (better performance)
     --vnc PORT           Use VNC on port
     -h, --help           Show this help
@@ -58,9 +62,14 @@ Examples:
     $(basename "$0") -m 8G -c 4 run           # Custom resources
     $(basename "$0") --spice run              # SPICE display
     $(basename "$0") -i lfs.iso install       # Install from ISO
+    $(basename "$0") kernel                    # Direct kernel boot (uses LFS mount)
 EOF
     exit 0
 }
+
+# Direct kernel boot configuration
+KERNEL_FILE=""
+ROOT_DEV="/dev/vda2"
 
 ISO_FILE=""
 COMMAND="run"
@@ -72,10 +81,12 @@ while [[ $# -gt 0 ]]; do
         -d|--disk) VM_DISK="$2"; shift 2 ;;
         -s|--size) VM_DISK_SIZE="$2"; shift 2 ;;
         -i|--iso) ISO_FILE="$2"; shift 2 ;;
+        -k|--kernel) KERNEL_FILE="$2"; shift 2 ;;
+        --root) ROOT_DEV="$2"; shift 2 ;;
         --spice) VM_DISPLAY="spice"; shift ;;
         --vnc) VM_DISPLAY="vnc"; VNC_PORT="$2"; shift 2 ;;
         -h|--help) usage ;;
-        create|run|install|ssh) COMMAND="$1"; shift ;;
+        create|run|kernel|test|install|ssh) COMMAND="$1"; shift ;;
         *) log_error "Unknown option: $1" ;;
     esac
 done
@@ -86,10 +97,10 @@ check_qemu() {
         log_error "QEMU not found. Install with: pacman -S qemu-full"
     fi
 
-    # Check KVM support
+    # Check KVM support - use host CPU for full passthrough (march=native support)
     if [[ -r /dev/kvm ]]; then
-        KVM_OPTS="-enable-kvm -cpu host"
-        log_info "KVM acceleration enabled"
+        KVM_OPTS="-enable-kvm -cpu host,migratable=no"
+        log_info "KVM acceleration enabled with CPU passthrough"
     else
         KVM_OPTS="-cpu max"
         log_info "KVM not available, using software emulation"
@@ -106,8 +117,28 @@ create_disk() {
     log_ok "Disk created: ${VM_DISK} (${VM_DISK_SIZE})"
 }
 
+# Detect disk format
+detect_disk_format() {
+    local disk="$1"
+    if [[ ! -f "${disk}" ]]; then
+        echo "raw"
+        return
+    fi
+    local format
+    format=$(qemu-img info "${disk}" 2>/dev/null | grep "file format:" | awk '{print $3}')
+    if [[ -n "${format}" ]]; then
+        echo "${format}"
+    else
+        echo "raw"
+    fi
+}
+
 # Build QEMU command
 build_qemu_cmd() {
+    local disk_format
+    disk_format=$(detect_disk_format "${VM_DISK}")
+    log_info "Disk format: ${disk_format}" >&2
+
     local cmd=(
         qemu-system-x86_64
         ${KVM_OPTS}
@@ -120,7 +151,7 @@ build_qemu_cmd() {
         # -bios /usr/share/ovmf/OVMF.fd
 
         # Boot drive
-        -drive file="${VM_DISK}",if=virtio,format=qcow2,cache=writeback
+        -drive file="${VM_DISK}",if=virtio,format="${disk_format}",cache=writeback
 
         # VirtIO GPU
         -device virtio-vga-gl
@@ -173,7 +204,14 @@ build_qemu_cmd() {
         cmd+=(-cdrom "${ISO_FILE}" -boot d)
     fi
 
-    echo "${cmd[@]}"
+    # Direct kernel boot
+    if [[ -n "${KERNEL_FILE}" ]]; then
+        cmd+=(-kernel "${KERNEL_FILE}")
+        cmd+=(-append "root=${ROOT_DEV} rw console=ttyS0 init=/sbin/init")
+    fi
+
+    # Run the command directly (avoid eval quoting issues)
+    "${cmd[@]}"
 }
 
 # Run VM
@@ -191,12 +229,103 @@ run_vm() {
     log_info "SSH: ssh -p 2222 user@localhost"
     echo ""
 
-    eval "$(build_qemu_cmd)"
+    build_qemu_cmd
 }
 
 # SSH into VM
 ssh_vm() {
     ssh -p 2222 -o StrictHostKeyChecking=no user@localhost
+}
+
+# Direct kernel boot (for testing without bootloader)
+kernel_boot() {
+    check_qemu
+
+    # Use kernel from /tmp if LFS mount not available
+    if [[ -z "${KERNEL_FILE}" ]]; then
+        if [[ -f "/tmp/vmlinuz-lfs" ]]; then
+            KERNEL_FILE="/tmp/vmlinuz-lfs"
+        elif [[ -f "/mnt/lfs/boot/vmlinuz-lfs" ]]; then
+            KERNEL_FILE="/mnt/lfs/boot/vmlinuz-lfs"
+        else
+            log_error "Kernel not found. Copy to /tmp/vmlinuz-lfs or mount LFS"
+        fi
+    fi
+
+    if [[ ! -f "${KERNEL_FILE}" ]]; then
+        log_error "Kernel not found: ${KERNEL_FILE}"
+    fi
+
+    if [[ ! -f "${VM_DISK}" ]]; then
+        log_error "Disk not found: ${VM_DISK}"
+    fi
+
+    # Check if disk is in use
+    if losetup -a | grep -q "${VM_DISK}"; then
+        log_error "Disk is mounted via loop device. Unmount first."
+    fi
+
+    log_info "Direct kernel boot test"
+    log_info "Kernel: ${KERNEL_FILE}"
+    log_info "Root: ${ROOT_DEV}"
+    log_info "Disk: ${VM_DISK}"
+    log_info "Memory: ${VM_MEMORY}, CPUs: ${VM_CPUS}"
+    log_info "Timing boot..."
+    echo ""
+
+    # Record start time
+    local start_time
+    start_time=$(date +%s.%N)
+
+    build_qemu_cmd
+
+    # Record end time (when VM exits)
+    local end_time
+    end_time=$(date +%s.%N)
+    local elapsed
+    elapsed=$(echo "${end_time} - ${start_time}" | bc)
+    log_info "Total VM session time: ${elapsed}s"
+}
+
+# Headless boot test (serial console only)
+test_boot() {
+    check_qemu
+
+    # Use kernel from /tmp if available
+    if [[ -z "${KERNEL_FILE}" ]]; then
+        if [[ -f "/tmp/vmlinuz-lfs" ]]; then
+            KERNEL_FILE="/tmp/vmlinuz-lfs"
+        else
+            log_error "Kernel not found. Copy to /tmp/vmlinuz-lfs"
+        fi
+    fi
+
+    if [[ ! -f "${VM_DISK}" ]]; then
+        log_error "Disk not found: ${VM_DISK}"
+    fi
+
+    local disk_format
+    disk_format=$(detect_disk_format "${VM_DISK}")
+
+    log_info "Headless boot test (serial console)"
+    log_info "Kernel: ${KERNEL_FILE}"
+    log_info "Root: ${ROOT_DEV}"
+    log_info "Disk: ${VM_DISK} (${disk_format})"
+    log_info "Press Ctrl+A X to exit QEMU"
+    echo ""
+
+    # Simpler QEMU command for headless test
+    qemu-system-x86_64 \
+        ${KVM_OPTS} \
+        -name "${VM_NAME}" \
+        -m 4G \
+        -smp 4 \
+        -machine q35,accel=kvm:tcg \
+        -drive file="${VM_DISK}",if=virtio,format="${disk_format}" \
+        -kernel "${KERNEL_FILE}" \
+        -append "root=${ROOT_DEV} rw console=ttyS0 init=/sbin/init" \
+        -nographic \
+        -no-reboot
 }
 
 # Main
@@ -206,6 +335,12 @@ case "${COMMAND}" in
         ;;
     run)
         run_vm
+        ;;
+    kernel)
+        kernel_boot
+        ;;
+    test)
+        test_boot
         ;;
     install)
         if [[ -z "${ISO_FILE}" ]]; then

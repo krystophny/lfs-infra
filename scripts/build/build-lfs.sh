@@ -511,14 +511,14 @@ EOF
                     --with-manpage-format=normal \
                     --with-shared \
                     --without-normal \
-                    --with-cxx-shared \
+                    --without-cxx-binding \
                     --without-debug \
                     --without-ada \
                     --disable-stripping
 
                 make -j"${NPROC}"
                 make DESTDIR="${LFS}" TIC_PATH="$(pwd)/build/progs/tic" install
-                ln -sv libncursesw.so "${LFS}/usr/lib/libncurses.so"
+                ln -svf libncursesw.so "${LFS}/usr/lib/libncurses.so"
                 sed -e 's/^#if.*XOPEN.*$/#if 1/' -i "${LFS}/usr/include/curses.h"
                 ;;
             bash)
@@ -531,7 +531,7 @@ EOF
 
                 make -j"${NPROC}"
                 make DESTDIR="${LFS}" install
-                ln -sv bash "${LFS}/bin/sh"
+                ln -svf bash "${LFS}/bin/sh"
                 ;;
             coreutils)
                 ./configure \
@@ -544,7 +544,38 @@ EOF
                 make DESTDIR="${LFS}" install
                 mv -v "${LFS}/usr/bin/chroot" "${LFS}/usr/sbin"
                 ;;
-            diffutils|file|findutils|gawk|grep|gzip|make|patch|sed|tar|xz)
+            diffutils)
+                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)" \
+                    gl_cv_func_strcasecmp_works=yes
+                make -j"${NPROC}"
+                make DESTDIR="${LFS}" install
+                ;;
+            file)
+                mkdir -p build
+                pushd build > /dev/null
+                ../configure --disable-bzlib --disable-libseccomp \
+                    --disable-xzlib --disable-zlib
+                make
+                popd > /dev/null
+                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)"
+                make FILE_COMPILE="$(pwd)/build/src/file" -j"${NPROC}"
+                make DESTDIR="${LFS}" install
+                rm -v "${LFS}/usr/lib/libmagic.la"
+                ;;
+            findutils)
+                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)" \
+                    --localstatedir=/var/lib/locate \
+                    gl_cv_func_wcwidth_works=yes
+                make -j"${NPROC}"
+                make DESTDIR="${LFS}" install
+                ;;
+            gawk)
+                sed -i 's/extras//' Makefile.in
+                ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess)"
+                make -j"${NPROC}"
+                make DESTDIR="${LFS}" install
+                ;;
+            grep|gzip|make|patch|sed|tar|xz)
                 ./configure --prefix=/usr --host="${LFS_TGT}" --build="$(./config.guess 2>/dev/null || build-aux/config.guess)"
                 make -j"${NPROC}"
                 make DESTDIR="${LFS}" install
@@ -605,7 +636,7 @@ EOF
 
                 make -j"${NPROC}"
                 make DESTDIR="${LFS}" install
-                ln -sv gcc "${LFS}/usr/bin/cc"
+                ln -svf gcc "${LFS}/usr/bin/cc"
                 ;;
         esac
 
@@ -624,13 +655,34 @@ stage_chroot_prep() {
     stage_start "Preparing Chroot Environment"
 
     # Change ownership to root
-    chown -R root:root "${LFS}"/{usr,lib,var,etc,bin,sbin,tools}
+    chown -R root:root "${LFS}"/{usr,var,etc,tools}
+
+    # Create essential directory symlinks (modern LFS structure)
+    # /lib -> usr/lib, /lib64 -> usr/lib, /bin -> usr/bin, /sbin -> usr/sbin
+    for dir in lib bin sbin; do
+        if [[ -d "${LFS}/${dir}" ]] && [[ ! -L "${LFS}/${dir}" ]]; then
+            rm -rf "${LFS}/${dir}"
+        fi
+    done
+    [[ -L "${LFS}/lib" ]] || ln -sv /usr/lib "${LFS}/lib"
+    [[ -L "${LFS}/bin" ]] || ln -sv usr/bin "${LFS}/bin"
+    [[ -L "${LFS}/sbin" ]] || ln -sv usr/sbin "${LFS}/sbin"
+
     case $(uname -m) in
-        x86_64) chown -R root:root "${LFS}/lib64" ;;
+        x86_64)
+            if [[ -d "${LFS}/lib64" ]] && [[ ! -L "${LFS}/lib64" ]]; then
+                rm -rf "${LFS}/lib64"
+            fi
+            [[ -L "${LFS}/lib64" ]] || ln -sv /usr/lib "${LFS}/lib64"
+            ;;
     esac
 
+    # Ensure /usr/bin/sh exists
+    [[ -e "${LFS}/usr/bin/sh" ]] || ln -sv bash "${LFS}/usr/bin/sh"
+
     # Create directories
-    mkdir -pv "${LFS}"/{dev,proc,sys,run}
+    mkdir -pv "${LFS}"/{dev,proc,sys,run,tmp}
+    chmod 1777 "${LFS}/tmp"
 
     # Create device nodes
     if [[ ! -c "${LFS}/dev/console" ]]; then
@@ -709,26 +761,40 @@ set -e
 
 export MAKEFLAGS="-j$(nproc)"
 
+# Build zlib first (required for linker)
+cd /sources
+rm -rf zlib-[0-9]*/
+tar xf zlib-*.tar.gz
+cd zlib-[0-9]*/
+./configure --prefix=/usr
+make -j$(nproc)
+make install
+rm -f /usr/lib/libz.a
+cd /sources && rm -rf zlib-[0-9]*/
+
 # Build gettext
 cd /sources
+rm -rf gettext-[0-9]*/
 tar xf gettext-*.tar.xz
-cd gettext-*
+cd gettext-[0-9]*/
 ./configure --disable-shared
 make -j$(nproc)
 cp -v gettext-tools/src/{msgfmt,msgmerge,xgettext} /usr/bin
-cd /sources && rm -rf gettext-*
+cd /sources && rm -rf gettext-[0-9]*/
 
 # Build bison
+rm -rf bison-[0-9]*/
 tar xf bison-*.tar.xz
-cd bison-*
+cd bison-[0-9]*/
 ./configure --prefix=/usr --docdir=/usr/share/doc/bison
 make -j$(nproc)
 make install
-cd /sources && rm -rf bison-*
+cd /sources && rm -rf bison-[0-9]*/
 
 # Build perl
+rm -rf perl-[0-9]*/
 tar xf perl-*.tar.xz
-cd perl-*
+cd perl-[0-9]*/
 sh Configure -des \
     -D prefix=/usr \
     -D vendorprefix=/usr \
@@ -741,27 +807,30 @@ sh Configure -des \
     -D vendorarch=/usr/lib/perl5/vendor_perl
 make -j$(nproc)
 make install
-cd /sources && rm -rf perl-*
+cd /sources && rm -rf perl-[0-9]*/
 
 # Build Python
+rm -rf Python-[0-9]*/
 tar xf Python-*.tar.xz
-cd Python-*
+cd Python-[0-9]*/
 ./configure --prefix=/usr --enable-shared --without-ensurepip
 make -j$(nproc)
 make install
-cd /sources && rm -rf Python-*
+cd /sources && rm -rf Python-[0-9]*/
 
 # Build texinfo
+rm -rf texinfo-[0-9]*/
 tar xf texinfo-*.tar.xz
-cd texinfo-*
+cd texinfo-[0-9]*/
 ./configure --prefix=/usr
 make -j$(nproc)
 make install
-cd /sources && rm -rf texinfo-*
+cd /sources && rm -rf texinfo-[0-9]*/
 
 # Build util-linux
+rm -rf util-linux-[0-9]*/
 tar xf util-linux-*.tar.xz
-cd util-linux-*
+cd util-linux-[0-9]*/
 mkdir -pv /var/lib/hwclock
 ./configure \
     --libdir=/usr/lib \
@@ -780,7 +849,7 @@ mkdir -pv /var/lib/hwclock
     --docdir=/usr/share/doc/util-linux
 make -j$(nproc)
 make install
-cd /sources && rm -rf util-linux-*
+cd /sources && rm -rf util-linux-[0-9]*/
 
 echo "Base system build complete"
 CHROOT_SCRIPT
@@ -930,14 +999,500 @@ EOF
 # ============================================================================
 # STAGE: Build desktop
 # ============================================================================
+
+# Helper to run commands in chroot
+run_in_chroot() {
+    chroot "${LFS}" /usr/bin/env -i \
+        HOME=/root \
+        TERM="${TERM}" \
+        PS1='(lfs chroot) \u:\w\$ ' \
+        PATH=/usr/bin:/usr/sbin \
+        MAKEFLAGS="-j${NPROC}" \
+        /bin/bash -c "$1"
+}
+
+# Helper to download a package source
+download_pkg() {
+    local name="$1"
+    local url="$2"
+    local srcdir="${LFS}/sources"
+    local filename=$(basename "$url")
+
+    if [[ -f "${srcdir}/${filename}" ]]; then
+        log "Already downloaded: ${filename}"
+        return 0
+    fi
+
+    log "Downloading: ${name}"
+    curl -L -o "${srcdir}/${filename}" "$url" || {
+        warn "Failed to download ${name}"
+        return 1
+    }
+}
+
+# Helper to build a package in chroot with meson
+build_meson_pkg() {
+    local name="$1"
+    local tarball="$2"
+    local opts="${3:-}"
+
+    log "Building ${name} (meson)"
+    run_in_chroot "
+        cd /sources
+        rm -rf ${name}-[0-9]*/
+        tar xf ${tarball}
+        cd ${name}-[0-9]*/
+        mkdir -p build
+        cd build
+        meson setup --prefix=/usr --buildtype=release ${opts} ..
+        ninja -j${NPROC}
+        ninja install
+        cd /sources
+        rm -rf ${name}-[0-9]*/
+    "
+}
+
+# Helper to build a package in chroot with autotools
+build_autotools_pkg() {
+    local name="$1"
+    local tarball="$2"
+    local opts="${3:-}"
+
+    log "Building ${name} (autotools)"
+    run_in_chroot "
+        cd /sources
+        rm -rf ${name}-[0-9]*/
+        tar xf ${tarball}
+        cd ${name}-[0-9]*/
+        ./configure --prefix=/usr ${opts}
+        make -j${NPROC}
+        make install
+        cd /sources
+        rm -rf ${name}-[0-9]*/
+    "
+}
+
+# Helper to build a package in chroot with cmake
+build_cmake_pkg() {
+    local name="$1"
+    local tarball="$2"
+    local opts="${3:-}"
+
+    log "Building ${name} (cmake)"
+    run_in_chroot "
+        cd /sources
+        rm -rf ${name}-[0-9]*/
+        tar xf ${tarball}
+        cd ${name}-[0-9]*/
+        mkdir -p build
+        cd build
+        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release ${opts} ..
+        make -j${NPROC}
+        make install
+        cd /sources
+        rm -rf ${name}-[0-9]*/
+    "
+}
+
 stage_desktop() {
     stage_start "Building Desktop Environment"
 
-    warn "Desktop build stage - this is a large undertaking"
-    warn "This stage builds X11, Mesa, XFCE, and applications"
+    log "This stage builds X11, Mesa, XFCE, and applications"
+    log "This is a large undertaking - expect several hours"
 
-    # This is a placeholder - full desktop build would be extensive
-    # For now, mark as done if we reach this point
+    # Ensure chroot mounts are set up
+    if ! mountpoint -q "${LFS}/proc"; then
+        mount -vt proc proc "${LFS}/proc"
+    fi
+    if ! mountpoint -q "${LFS}/sys"; then
+        mount -vt sysfs sysfs "${LFS}/sys"
+    fi
+    if ! mountpoint -q "${LFS}/dev"; then
+        mount -v --bind /dev "${LFS}/dev"
+    fi
+    if ! mountpoint -q "${LFS}/dev/pts"; then
+        mount -vt devpts devpts -o gid=5,mode=0620 "${LFS}/dev/pts"
+    fi
+    if ! mountpoint -q "${LFS}/run"; then
+        mount -vt tmpfs tmpfs "${LFS}/run"
+    fi
+
+    # First, build essential build tools (always build, skip conditionals)
+    log "========== Building Build Tools =========="
+
+    # pkgconf (modern pkg-config replacement, GCC 15 compatible)
+    if [[ ! -x "${LFS}/usr/bin/pkg-config" ]]; then
+        log "Building pkgconf..."
+        download_pkg "pkgconf" "https://distfiles.ariadne.space/pkgconf/pkgconf-2.3.0.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf pkgconf-[0-9]*/
+            tar xf pkgconf-*.tar.xz
+            cd pkgconf-[0-9]*/
+            ./configure --prefix=/usr --disable-static
+            make -j${NPROC}
+            make install
+            ln -svf pkgconf /usr/bin/pkg-config
+            cd /sources && rm -rf pkgconf-[0-9]*/
+        " || die "Failed to build pkgconf"
+        ok "pkgconf (pkg-config) installed"
+    else
+        log "pkg-config already installed"
+    fi
+
+    # Ninja
+    if [[ ! -x "${LFS}/usr/bin/ninja" ]]; then
+        log "Building ninja..."
+        download_pkg "ninja" "https://github.com/ninja-build/ninja/archive/refs/tags/v1.12.1.tar.gz"
+        run_in_chroot "
+            cd /sources
+            rm -rf ninja-[0-9]*/
+            tar xf v1.12.1.tar.gz || tar xf ninja-*.tar.gz
+            cd ninja-[0-9]*/
+            python3 configure.py --bootstrap
+            install -vm755 ninja /usr/bin/
+            cd /sources && rm -rf ninja-[0-9]*/
+        " || die "Failed to build ninja"
+        ok "ninja installed"
+    else
+        log "ninja already installed"
+    fi
+
+    # Meson (install via setup.py since pip may not be available)
+    if [[ ! -x "${LFS}/usr/bin/meson" ]]; then
+        log "Building meson..."
+        download_pkg "meson" "https://github.com/mesonbuild/meson/releases/download/1.6.1/meson-1.6.1.tar.gz"
+        run_in_chroot "
+            cd /sources
+            rm -rf meson-[0-9]*/
+            tar xf meson-*.tar.gz
+            cd meson-[0-9]*/
+            python3 setup.py build
+            python3 setup.py install --prefix=/usr
+            cd /sources && rm -rf meson-[0-9]*/
+        " || die "Failed to build meson"
+        ok "meson installed"
+    else
+        log "meson already installed"
+    fi
+
+    # Autoconf
+    if [[ ! -x "${LFS}/usr/bin/autoconf" ]]; then
+        log "Building autoconf..."
+        download_pkg "autoconf" "https://ftp.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf autoconf-[0-9]*/
+            tar xf autoconf-*.tar.xz
+            cd autoconf-[0-9]*/
+            ./configure --prefix=/usr
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf autoconf-[0-9]*/
+        " || die "Failed to build autoconf"
+        ok "autoconf installed"
+    else
+        log "autoconf already installed"
+    fi
+
+    # Automake
+    if [[ ! -x "${LFS}/usr/bin/automake" ]]; then
+        log "Building automake..."
+        download_pkg "automake" "https://ftp.gnu.org/gnu/automake/automake-1.17.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf automake-[0-9]*/
+            tar xf automake-*.tar.xz
+            cd automake-[0-9]*/
+            ./configure --prefix=/usr
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf automake-[0-9]*/
+        " || die "Failed to build automake"
+        ok "automake installed"
+    else
+        log "automake already installed"
+    fi
+
+    # Libtool
+    if [[ ! -x "${LFS}/usr/bin/libtool" ]]; then
+        log "Building libtool..."
+        download_pkg "libtool" "https://ftp.gnu.org/gnu/libtool/libtool-2.5.4.tar.xz"
+        run_in_chroot "
+            cd /sources
+            rm -rf libtool-[0-9]*/
+            tar xf libtool-*.tar.xz
+            cd libtool-[0-9]*/
+            ./configure --prefix=/usr
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf libtool-[0-9]*/
+        " || die "Failed to build libtool"
+        ok "libtool installed"
+    else
+        log "libtool already installed"
+    fi
+
+    ok "Build tools ready"
+
+    # Build X11 Foundation
+    log "========== Building X11 Foundation =========="
+
+    # XML/XSLT libraries needed for many X11 packages
+    download_pkg "expat" "https://github.com/libexpat/libexpat/releases/download/R_2_6_6/expat-2.6.6.tar.xz"
+    download_pkg "libxml2" "https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.6.tar.xz"
+
+    run_in_chroot "
+        # expat
+        cd /sources
+        rm -rf expat-[0-9]*/
+        tar xf expat-*.tar.xz
+        cd expat-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf expat-[0-9]*/
+    "
+    ok "expat built"
+
+    run_in_chroot "
+        # libxml2
+        cd /sources
+        rm -rf libxml2-[0-9]*/
+        tar xf libxml2-*.tar.xz
+        cd libxml2-[0-9]*/
+        ./configure --prefix=/usr --disable-static --with-history --without-python
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libxml2-[0-9]*/
+    "
+    ok "libxml2 built"
+
+    # X11 protocol headers
+    download_pkg "xorgproto" "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2024.1.tar.xz"
+    download_pkg "xcb-proto" "https://xorg.freedesktop.org/archive/individual/proto/xcb-proto-1.17.0.tar.xz"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf xorgproto-[0-9]*/
+        tar xf xorgproto-*.tar.xz
+        cd xorgproto-[0-9]*/
+        mkdir build && cd build
+        meson setup --prefix=/usr ..
+        ninja
+        ninja install
+        cd /sources && rm -rf xorgproto-[0-9]*/
+    "
+    ok "xorgproto built"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf xcb-proto-[0-9]*/
+        tar xf xcb-proto-*.tar.xz
+        cd xcb-proto-[0-9]*/
+        ./configure --prefix=/usr
+        make install
+        cd /sources && rm -rf xcb-proto-[0-9]*/
+    "
+    ok "xcb-proto built"
+
+    # X11 utility macros
+    download_pkg "util-macros" "https://www.x.org/releases/individual/util/util-macros-1.20.2.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf util-macros-[0-9]*/
+        tar xf util-macros-*.tar.xz
+        cd util-macros-[0-9]*/
+        ./configure --prefix=/usr
+        make install
+        cd /sources && rm -rf util-macros-[0-9]*/
+    "
+    ok "util-macros built"
+
+    # libXau, libXdmcp
+    download_pkg "libXau" "https://www.x.org/releases/individual/lib/libXau-1.0.12.tar.xz"
+    download_pkg "libXdmcp" "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf libXau-[0-9]*/
+        tar xf libXau-*.tar.xz
+        cd libXau-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libXau-[0-9]*/
+    "
+    ok "libXau built"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf libXdmcp-[0-9]*/
+        tar xf libXdmcp-*.tar.xz
+        cd libXdmcp-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libXdmcp-[0-9]*/
+    "
+    ok "libXdmcp built"
+
+    # libxcb
+    download_pkg "libxcb" "https://xorg.freedesktop.org/archive/individual/lib/libxcb-1.17.0.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf libxcb-[0-9]*/
+        tar xf libxcb-*.tar.xz
+        cd libxcb-[0-9]*/
+        ./configure --prefix=/usr --disable-static --without-doxygen
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libxcb-[0-9]*/
+    "
+    ok "libxcb built"
+
+    # xtrans
+    download_pkg "xtrans" "https://www.x.org/releases/individual/lib/xtrans-1.5.2.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf xtrans-[0-9]*/
+        tar xf xtrans-*.tar.xz
+        cd xtrans-[0-9]*/
+        ./configure --prefix=/usr
+        make install
+        cd /sources && rm -rf xtrans-[0-9]*/
+    "
+    ok "xtrans built"
+
+    # libX11
+    download_pkg "libX11" "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf libX11-[0-9]*/
+        tar xf libX11-*.tar.xz
+        cd libX11-[0-9]*/
+        ./configure --prefix=/usr --disable-static --without-doc
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libX11-[0-9]*/
+    "
+    ok "libX11 built"
+
+    # X11 extension libraries
+    for lib in libXext libXfixes libXrender libXi libXrandr libXcursor libXinerama libXcomposite libXdamage libXtst; do
+        download_pkg "${lib}" "https://www.x.org/releases/individual/lib/${lib}-*.tar.xz" 2>/dev/null || true
+    done
+
+    # Build them
+    download_pkg "libXext" "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz"
+    download_pkg "libXfixes" "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz"
+    download_pkg "libXrender" "https://www.x.org/releases/individual/lib/libXrender-0.9.12.tar.xz"
+
+    for lib in libXext libXfixes libXrender; do
+        run_in_chroot "
+            cd /sources
+            rm -rf ${lib}-[0-9]*/
+            tar xf ${lib}-*.tar.xz
+            cd ${lib}-[0-9]*/
+            ./configure --prefix=/usr --disable-static
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf ${lib}-[0-9]*/
+        "
+        ok "${lib} built"
+    done
+
+    # Font libraries
+    log "========== Building Font Stack =========="
+
+    download_pkg "freetype" "https://downloads.sourceforge.net/freetype/freetype-2.13.3.tar.xz"
+    download_pkg "fontconfig" "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.15.0.tar.xz"
+    download_pkg "libpng" "https://downloads.sourceforge.net/libpng/libpng-1.6.47.tar.xz"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf libpng-[0-9]*/
+        tar xf libpng-*.tar.xz
+        cd libpng-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libpng-[0-9]*/
+    "
+    ok "libpng built"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf freetype-[0-9]*/
+        tar xf freetype-*.tar.xz
+        cd freetype-[0-9]*/
+        ./configure --prefix=/usr --enable-freetype-config --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf freetype-[0-9]*/
+    "
+    ok "freetype built"
+
+    # gperf needed for fontconfig
+    download_pkg "gperf" "https://ftp.gnu.org/gnu/gperf/gperf-3.1.tar.gz"
+    run_in_chroot "
+        cd /sources
+        rm -rf gperf-[0-9]*/
+        tar xf gperf-*.tar.gz
+        cd gperf-[0-9]*/
+        ./configure --prefix=/usr
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf gperf-[0-9]*/
+    "
+
+    run_in_chroot "
+        cd /sources
+        rm -rf fontconfig-[0-9]*/
+        tar xf fontconfig-*.tar.xz
+        cd fontconfig-[0-9]*/
+        ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static --disable-docs
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf fontconfig-[0-9]*/
+    "
+    ok "fontconfig built"
+
+    # Cairo and Pixman
+    log "========== Building Graphics Stack =========="
+
+    download_pkg "pixman" "https://www.cairographics.org/releases/pixman-0.44.2.tar.gz"
+    download_pkg "cairo" "https://cairographics.org/releases/cairo-1.18.2.tar.xz"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf pixman-[0-9]*/
+        tar xf pixman-*.tar.gz
+        cd pixman-[0-9]*/
+        mkdir build && cd build
+        meson setup --prefix=/usr --buildtype=release ..
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf pixman-[0-9]*/
+    "
+    ok "pixman built"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf cairo-[0-9]*/
+        tar xf cairo-*.tar.xz
+        cd cairo-[0-9]*/
+        mkdir build && cd build
+        meson setup --prefix=/usr --buildtype=release -Dtee=enabled ..
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf cairo-[0-9]*/
+    "
+    ok "cairo built"
+
+    log "========== X11 Foundation Complete =========="
+    log "Note: Full XFCE desktop requires many more packages"
+    log "The system now has basic X11 libraries installed"
 
     stage_end "Desktop"
     mark_stage_done "desktop"
