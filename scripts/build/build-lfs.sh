@@ -363,8 +363,37 @@ build_pkg() {
     ok "Built ${pkg} (${build_system})"
 }
 
+# GNU mirror list for fallback
+GNU_MIRRORS=(
+    "https://ftpmirror.gnu.org"
+    "https://mirrors.kernel.org/gnu"
+    "https://ftp.gnu.org/gnu"
+    "https://mirror.csclub.uwaterloo.ca/gnu"
+)
+
+# Get mirror URLs for a package
+get_mirror_urls() {
+    local url="$1"
+    local urls=("${url}")
+
+    # If it's a GNU URL, add mirror alternatives
+    if [[ "${url}" =~ (ftp\.gnu\.org|ftpmirror\.gnu\.org)/gnu/([^/]+)/ ]]; then
+        local gnu_path="${BASH_REMATCH[2]}"
+        local filename
+        filename=$(basename "${url}")
+        for mirror in "${GNU_MIRRORS[@]}"; do
+            local mirror_url="${mirror}/${gnu_path}/${filename}"
+            if [[ "${mirror_url}" != "${url}" ]]; then
+                urls+=("${mirror_url}")
+            fi
+        done
+    fi
+
+    printf '%s\n' "${urls[@]}"
+}
+
 # Download a package (URL from packages.toml or explicit)
-# Features: retry with backoff, resume partial downloads, timeout protection
+# Features: mirror fallback, retry with backoff, resume partial downloads, timeout protection
 download_pkg() {
     local pkg="$1"
     local url="${2:-}"
@@ -389,56 +418,43 @@ download_pkg() {
 
     log "Downloading: ${pkg} -> ${filename}"
 
-    # Retry settings
-    local max_retries=5
-    local retry_delay=5
+    # Get all mirror URLs
+    local -a mirror_urls
+    mapfile -t mirror_urls < <(get_mirror_urls "${url}")
+
+    # Download settings
     local connect_timeout=30
     local max_time=600  # 10 minutes max per attempt
     local speed_limit=1000  # Abort if slower than 1KB/s
     local speed_time=30  # for more than 30 seconds
 
-    local attempt=1
-    while [[ ${attempt} -le ${max_retries} ]]; do
-        # Use partial file for resume capability
-        if [[ -f "${partial}" ]]; then
-            log "  Resuming download (attempt ${attempt}/${max_retries})..."
-            curl -fSL -C - \
-                --connect-timeout ${connect_timeout} \
-                --max-time ${max_time} \
-                --speed-limit ${speed_limit} \
-                --speed-time ${speed_time} \
-                --retry 3 \
-                --retry-delay 5 \
-                -o "${partial}" "${url}" && {
-                    mv "${partial}" "${target}"
-                    ok "Downloaded: ${filename}"
-                    return 0
-                }
-        else
-            curl -fSL \
-                --connect-timeout ${connect_timeout} \
-                --max-time ${max_time} \
-                --speed-limit ${speed_limit} \
-                --speed-time ${speed_time} \
-                --retry 3 \
-                --retry-delay 5 \
-                -o "${partial}" "${url}" && {
-                    mv "${partial}" "${target}"
-                    ok "Downloaded: ${filename}"
-                    return 0
-                }
+    # Try each mirror
+    for try_url in "${mirror_urls[@]}"; do
+        log "  Trying: ${try_url}"
+        rm -f "${partial}"  # Start fresh for each mirror
+
+        # Single attempt per mirror with curl's built-in retry
+        if curl -fSL \
+            --connect-timeout ${connect_timeout} \
+            --max-time ${max_time} \
+            --speed-limit ${speed_limit} \
+            --speed-time ${speed_time} \
+            --retry 2 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            -o "${partial}" "${try_url}"; then
+            mv "${partial}" "${target}"
+            ok "Downloaded: ${filename}"
+            return 0
         fi
 
-        warn "  Download attempt ${attempt} failed, retrying in ${retry_delay}s..."
-        sleep ${retry_delay}
-        retry_delay=$((retry_delay * 2))  # Exponential backoff
-        ((attempt++))
+        warn "  Mirror failed: ${try_url}"
+        sleep 2
     done
 
     # Clean up partial file on total failure
     rm -f "${partial}"
-    warn "Failed to download ${pkg} after ${max_retries} attempts"
-    return 1
+    die "Failed to download ${pkg} from all mirrors"
 }
 
 # Apply patches for a package
