@@ -644,10 +644,13 @@ stage_toolchain() {
     extract_pkg glibc "${build_dir}"
     pushd "${build_dir}/glibc-"* > /dev/null
 
-    # Create symlinks
+    # Create lib64 directory and symlinks for dynamic linker
     case $(uname -m) in
-        x86_64) ln -sfv ../lib/ld-linux-x86-64.so.2 "${LFS}/lib64"
-                ln -sfv ../lib/ld-linux-x86-64.so.2 "${LFS}/lib64/ld-lsb-x86-64.so.3" ;;
+        x86_64)
+            mkdir -pv "${LFS}/lib64"
+            ln -sfv ../lib/ld-linux-x86-64.so.2 "${LFS}/lib64/ld-linux-x86-64.so.2"
+            ln -sfv ../lib/ld-linux-x86-64.so.2 "${LFS}/lib64/ld-lsb-x86-64.so.3"
+            ;;
     esac
 
     mkdir -p build && cd build
