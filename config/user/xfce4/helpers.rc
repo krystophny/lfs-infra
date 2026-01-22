@@ -1,0 +1,4 @@
+WebBrowser=firefox
+MailReader=claws-mail
+FileManager=thunar
+TerminalEmulator=xfce4-terminal

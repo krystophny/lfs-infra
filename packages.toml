@@ -960,6 +960,60 @@ git_url = "https://gitlab.freedesktop.org/pulseaudio/pulseaudio.git"
 use_git = false
 stage = 11
 
+[packages.xfce4-pulseaudio-plugin]
+version = "0.4.9"
+description = "XFCE panel plugin for PulseAudio"
+url = "https://archive.xfce.org/src/panel-plugins/xfce4-pulseaudio-plugin/0.4/xfce4-pulseaudio-plugin-${version}.tar.bz2"
+git_url = "https://gitlab.xfce.org/panel-plugins/xfce4-pulseaudio-plugin.git"
+use_git = false
+stage = 11
+repology = "xfce4-pulseaudio-plugin"
+
+[packages.pavucontrol]
+version = "6.2"
+description = "PulseAudio Volume Control"
+url = "https://www.freedesktop.org/software/pulseaudio/pavucontrol/pavucontrol-${version}.tar.xz"
+git_url = "https://gitlab.freedesktop.org/pulseaudio/pavucontrol.git"
+use_git = false
+stage = 11
+repology = "pavucontrol"
+
+[packages.gedit]
+version = "49.0"
+description = "GNOME text editor"
+url = "https://download.gnome.org/sources/gedit/49/gedit-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/gedit.git"
+use_git = false
+stage = 11
+repology = "gedit"
+
+[packages.claws-mail]
+version = "4.3.1"
+description = "Lightweight email client"
+url = "https://www.claws-mail.org/releases/claws-mail-${version}.tar.xz"
+git_url = "https://git.claws-mail.org/readonly/claws.git"
+use_git = false
+stage = 11
+repology = "claws-mail"
+
+[packages.chicago95]
+version = "3.0.2"
+description = "Chicago95 XFCE theme (Windows 95 style)"
+url = "https://github.com/grassmunk/Chicago95/archive/refs/tags/v${version}.tar.gz"
+git_url = "https://github.com/grassmunk/Chicago95.git"
+use_git = false
+stage = 11
+# Includes GTK theme, icons, cursors, sounds, Plymouth theme
+
+[packages.nextcloud-client]
+version = "3.16.3"
+description = "Nextcloud desktop sync client"
+url = "https://github.com/nextcloud/desktop/releases/download/v${version}/Nextcloud-${version}.tar.xz"
+git_url = "https://github.com/nextcloud/desktop.git"
+use_git = false
+stage = 11
+repology = "nextcloud-client"
+
 # =============================================================================
 # STAGE 12: GPU Drivers
 # =============================================================================

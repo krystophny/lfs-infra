@@ -1,0 +1,23 @@
+<?xml version="1.1" encoding="UTF-8"?>
+
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="Chicago95"/>
+    <property name="IconThemeName" type="string" value="Chicago95"/>
+    <property name="SoundThemeName" type="string" value="Chicago95"/>
+    <property name="EnableEventSounds" type="bool" value="true"/>
+    <property name="EnableInputFeedbackSounds" type="bool" value="true"/>
+    <property name="FallbackIconTheme" type="string" value="Adwaita"/>
+  </property>
+  <property name="Xft" type="empty">
+    <property name="DPI" type="int" value="96"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="FontName" type="string" value="Tahoma 8"/>
+    <property name="CursorThemeName" type="string" value="Chicago95 Standard Cursors"/>
+    <property name="DecorationLayout" type="string" value="icon,menu:minimize,maximize,close"/>
+  </property>
+  <property name="Xfce" type="empty">
+    <property name="LastCustomDPI" type="int" value="96"/>
+  </property>
+</channel>

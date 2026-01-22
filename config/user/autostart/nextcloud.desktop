@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Nextcloud
+GenericName=File Synchronizer
+Comment=Keep your data synced
+Exec=nextcloud --background
+Icon=Nextcloud
+Terminal=false
+Categories=Network;FileTransfer;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true

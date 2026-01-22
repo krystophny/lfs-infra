@@ -1,0 +1,18 @@
+<?xml version="1.1" encoding="UTF-8"?>
+
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="Chicago95"/>
+    <property name="button_layout" type="string" value="O|SHMC"/>
+    <property name="button_offset" type="int" value="0"/>
+    <property name="button_spacing" type="int" value="0"/>
+    <property name="click_to_focus" type="bool" value="true"/>
+    <property name="double_click_action" type="string" value="maximize"/>
+    <property name="full_width_title" type="bool" value="true"/>
+    <property name="placement_mode" type="string" value="center"/>
+    <property name="raise_on_click" type="bool" value="true"/>
+    <property name="borderless_maximize" type="bool" value="true"/>
+    <property name="cycle_preview" type="bool" value="true"/>
+    <property name="scroll_workspaces" type="bool" value="true"/>
+  </property>
+</channel>
