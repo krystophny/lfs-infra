@@ -83,19 +83,27 @@ fetch_cached() {
     return 1
 }
 
-# GitHub releases (uses API, very fast)
+# GitHub releases (uses API, respects GITHUB_TOKEN for rate limits)
 check_github() {
     local repo="$1"  # owner/repo
     local api_url="https://api.github.com/repos/${repo}/releases/latest"
     local tags_url="https://api.github.com/repos/${repo}/tags"
+    local auth_header=""
+
+    # Use token if available (5000 req/hour vs 60)
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        auth_header="-H \"Authorization: Bearer ${GITHUB_TOKEN}\""
+    fi
 
     # Try releases first
-    local version
-    version=$(fetch_cached "$api_url" 2>/dev/null | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)"/\1/')
+    local version content
+    content=$(curl -sfL --max-time 10 ${auth_header} "$api_url" 2>/dev/null) || content=""
+    version=$(echo "$content" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)"/\1/')
 
     # Fallback to tags if no releases
     if [[ -z "$version" ]]; then
-        version=$(fetch_cached "$tags_url" 2>/dev/null | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)"/\1/')
+        content=$(curl -sfL --max-time 10 ${auth_header} "$tags_url" 2>/dev/null) || content=""
+        version=$(echo "$content" | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"v\?\([^"]*\)"/\1/')
     fi
 
     echo "$version"
@@ -124,28 +132,41 @@ check_kernel() {
     echo "$content" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
 }
 
-# PyPI
+# PyPI (for actual PyPI packages)
 check_pypi() {
     local pkg="$1"
     local url="https://pypi.org/pypi/${pkg}/json"
     fetch_cached "$url" 2>/dev/null | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"/\1/'
 }
 
-# CPAN (Perl)
-check_cpan() {
-    local pkg="$1"
-    local url="https://metacpan.org/pod/${pkg}"
-    fetch_cached "$url" 2>/dev/null | grep -oE 'version[^0-9]*[0-9]+\.[0-9]+' | head -1 | grep -oE '[0-9]+\.[0-9]+'
-}
-
-# Sourceware (glibc, binutils, etc.)
-check_sourceware() {
-    local pkg="$1"
-    local url="https://sourceware.org/pub/${pkg}/releases/"
+# Python.org (for Python itself)
+check_python() {
+    local url="https://www.python.org/ftp/python/"
     local content
     content=$(fetch_cached "$url" 2>/dev/null) || return 1
 
-    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+\.tar" | \
+    echo "$content" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+/' | sed 's|/||' | sort -V | tail -1
+}
+
+# CPAN Perl source
+check_cpan() {
+    local pkg="$1"
+    local url="https://www.cpan.org/src/5.0/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE 'perl-[0-9]+\.[0-9]+\.[0-9]+\.tar' | \
+        sed 's/perl-//;s/\.tar//' | sort -V | tail -1
+}
+
+# Sourceware (glibc, binutils, bzip2, etc.)
+check_sourceware() {
+    local pkg="$1"
+    local url="https://sourceware.org/pub/${pkg}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar" | \
         sed "s/${pkg}-//;s/\.tar//" | sort -V | tail -1
 }
 
@@ -154,6 +175,114 @@ check_freedesktop() {
     local pkg="$1"
     local url="https://gitlab.freedesktop.org/${pkg}/-/tags?format=atom"
     fetch_cached "$url" 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1
+}
+
+# X.org releases
+check_xorg() {
+    local spec="$1"  # category/pkg or just pkg
+    local category pkg
+    if [[ "$spec" == */* ]]; then
+        category="${spec%%/*}"
+        pkg="${spec#*/}"
+    else
+        pkg="$spec"
+        category="lib"  # default
+    fi
+    local url="https://www.x.org/releases/individual/${category}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar" | \
+        sed "s/${pkg}-//;s/\.tar//" | sort -V | tail -1
+}
+
+# XFCE releases
+check_xfce() {
+    local spec="$1"  # category/pkg
+    local category="${spec%%/*}"
+    local pkg="${spec#*/}"
+    local url="https://archive.xfce.org/src/${category}/${pkg}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    # XFCE uses x.y directories
+    echo "$content" | grep -oE '[0-9]+\.[0-9]+/' | sed 's|/||' | sort -V | tail -1
+}
+
+# GNOME releases
+check_gnome() {
+    local pkg="$1"
+    local url="https://download.gnome.org/sources/${pkg}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    # GNOME uses x.y directories
+    echo "$content" | grep -oE '[0-9]+\.[0-9]+/' | sed 's|/||' | sort -V | tail -1
+}
+
+# ALSA releases
+check_alsa() {
+    local pkg="$1"
+    local url="https://www.alsa-project.org/files/pub/${pkg}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar" | \
+        sed "s/${pkg}-//;s/\.tar//" | sort -V | tail -1
+}
+
+# Savannah nongnu
+check_savannah() {
+    local pkg="$1"
+    local url="https://download.savannah.nongnu.org/releases/${pkg}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar" | \
+        sed "s/${pkg}-//;s/\.tar//" | sort -V | tail -1
+}
+
+# SourceForge (tricky - try to get from RSS)
+check_sourceforge() {
+    local pkg="$1"
+    local url="https://sourceforge.net/projects/${pkg}/rss?path=/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | sort -V | tail -1
+}
+
+# tukaani.org (xz)
+check_tukaani() {
+    local pkg="$1"
+    local url="https://tukaani.org/${pkg}/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar" | \
+        sed "s/${pkg}-//;s/\.tar//" | sort -V | tail -1
+}
+
+# zlib.net
+check_zlib() {
+    local url="https://zlib.net/"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE 'zlib-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar' | \
+        sed 's/zlib-//;s/\.tar//' | sort -V | tail -1
+}
+
+# Generic FTP/directory listing
+check_ftp() {
+    local spec="$1"  # url|pkg
+    local url="${spec%%|*}"
+    local pkg="${spec#*|}"
+    local content
+    content=$(fetch_cached "$url" 2>/dev/null) || return 1
+
+    echo "$content" | grep -oE "${pkg}-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar" | \
+        sed "s/${pkg}-//;s/\.tar//" | sort -V | tail -1
 }
 
 # Custom URL with pattern
@@ -203,44 +332,116 @@ infer_check_method() {
     git_url=$(get_git_url "$pkg")
     url=$(get_url "$pkg")
 
-    # Check git_url first
-    case "$git_url" in
-        *github.com/*/*)
-            echo "github:$(echo "$git_url" | sed -E 's|.*github\.com[:/]([^/]+/[^/]+)(\.git)?$|\1|')"
-            return
-            ;;
-    esac
-
-    # Check download url - be specific about what kernel.org path
+    # Check download URL FIRST - prefer authoritative source over mirrors
     case "$url" in
+        # GNU sources
         *ftpmirror.gnu.org*|*ftp.gnu.org*)
             echo "gnu:${pkg}"
             return
             ;;
+        # Linux kernel
         *kernel.org/pub/linux/kernel/*)
-            # Only actual linux kernel
             echo "kernel:"
             return
             ;;
+        # Other kernel.org packages (iwd, bluez, etc.)
         *kernel.org/pub/*)
-            # Other kernel.org packages - extract path and include package name
             local kpath
             kpath=$(echo "$url" | sed -E 's|.*kernel\.org/pub/([^/]+(/[^/]+)*)/[^/]+\.tar.*|\1|')
             echo "kernelorg:${kpath}|${pkg}"
             return
             ;;
-        *sourceware.org*)
-            echo "sourceware:${pkg}"
+        # X.org packages
+        *x.org/releases/individual/*)
+            local xcat
+            xcat=$(echo "$url" | sed -E 's|.*individual/([^/]+)/.*|\1|')
+            echo "xorg:${xcat}/${pkg}"
             return
             ;;
+        *x.org/archive/individual/*)
+            local xcat
+            xcat=$(echo "$url" | sed -E 's|.*individual/([^/]+)/.*|\1|')
+            echo "xorg:${xcat}/${pkg}"
+            return
+            ;;
+        # XFCE packages
+        *archive.xfce.org/src/*)
+            local xfcat
+            xfcat=$(echo "$url" | sed -E 's|.*src/([^/]+)/([^/]+)/.*|\1/\2|')
+            echo "xfce:${xfcat}"
+            return
+            ;;
+        # GNOME packages
+        *download.gnome.org/sources/*)
+            local gpkg
+            gpkg=$(echo "$url" | sed -E 's|.*sources/([^/]+)/.*|\1|')
+            echo "gnome:${gpkg}"
+            return
+            ;;
+        # freedesktop.org
+        *freedesktop.org/software/*)
+            local fdpkg
+            fdpkg=$(echo "$url" | sed -E 's|.*software/([^/]+)/.*|\1|')
+            echo "ftp:${url%/*}/|${pkg}"
+            return
+            ;;
+        *mesa.freedesktop.org*)
+            echo "ftp:https://mesa.freedesktop.org/archive/|mesa"
+            return
+            ;;
+        *gitlab.freedesktop.org*)
+            local fdrepo
+            fdrepo=$(echo "$url" | sed -E 's|.*gitlab\.freedesktop\.org/([^/]+/[^/]+).*|\1|')
+            echo "freedesktop:${fdrepo}"
+            return
+            ;;
+        # ALSA
+        *alsa-project.org*)
+            local apkg
+            apkg=$(echo "$url" | sed -E 's|.*pub/([^/]+)/.*|\1|')
+            echo "alsa:${apkg}"
+            return
+            ;;
+        # Savannah nongnu
+        *savannah.nongnu.org*)
+            local spkg
+            spkg=$(echo "$url" | sed -E 's|.*releases/([^/]+)/.*|\1|')
+            echo "savannah:${spkg}"
+            return
+            ;;
+        # SourceForge
+        *sourceforge.net/projects/*)
+            local sfpkg
+            sfpkg=$(echo "$url" | sed -E 's|.*projects/([^/]+)/.*|\1|')
+            echo "sourceforge:${sfpkg}"
+            return
+            ;;
+        # tukaani (xz)
+        *tukaani.org/*)
+            echo "tukaani:${pkg}"
+            return
+            ;;
+        # zlib
+        *zlib.net*)
+            echo "zlib:"
+            return
+            ;;
+        # Python
         *python.org*)
-            echo "pypi:python"
+            echo "python:"
             return
             ;;
+        # CPAN (Perl)
         *cpan.org*)
             echo "cpan:${pkg}"
             return
             ;;
+        # Sourceware
+        *sourceware.org*)
+            echo "sourceware:${pkg}"
+            return
+            ;;
+        # GitHub releases/archives
         *github.com/*/*)
             echo "github:$(echo "$url" | sed -E 's|.*github\.com/([^/]+/[^/]+)/.*|\1|')"
             return
@@ -253,8 +454,22 @@ infer_check_method() {
             echo "gnu:${pkg}"
             return
             ;;
+        *savannah.nongnu.org*)
+            echo "savannah:${pkg}"
+            return
+            ;;
         *sourceware.org*)
             echo "sourceware:${pkg}"
+            return
+            ;;
+        *gitlab.freedesktop.org*)
+            local fdrepo
+            fdrepo=$(echo "$git_url" | sed -E 's|.*gitlab\.freedesktop\.org/([^/]+/[^/]+).*|\1|')
+            echo "freedesktop:${fdrepo}"
+            return
+            ;;
+        *github.com/*/*)
+            echo "github:$(echo "$git_url" | sed -E 's|.*github\.com[:/]([^/]+/[^/]+).*|\1|' | sed 's/\.git$//')"
             return
             ;;
     esac
@@ -286,6 +501,16 @@ get_upstream_version() {
         gnu) check_gnu "$arg" ;;
         kernel) check_kernel ;;
         kernelorg) check_kernelorg "$arg" ;;
+        xorg) check_xorg "$arg" ;;
+        xfce) check_xfce "$arg" ;;
+        gnome) check_gnome "$arg" ;;
+        alsa) check_alsa "$arg" ;;
+        savannah) check_savannah "$arg" ;;
+        sourceforge) check_sourceforge "$arg" ;;
+        tukaani) check_tukaani "$arg" ;;
+        zlib) check_zlib ;;
+        ftp) check_ftp "$arg" ;;
+        python) check_python ;;
         pypi) check_pypi "$arg" ;;
         cpan) check_cpan "$arg" ;;
         sourceware) check_sourceware "$arg" ;;
