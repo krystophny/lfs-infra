@@ -88,53 +88,81 @@ echo "Creates bootable USB with minimal LFS + SSH + networking"
 echo ""
 
 # ============================================================================
+# Load .env file if present
+# ============================================================================
+ENV_FILE="${ROOT_DIR}/.env"
+if [[ -f "${ENV_FILE}" ]]; then
+    log "Loading configuration from .env file..."
+    set -a
+    source "${ENV_FILE}"
+    set +a
+    ok "Configuration loaded from .env"
+fi
+
+# ============================================================================
 # User Configuration
 # ============================================================================
 header "User Configuration"
 
-read -p "Username [default: lfs]: " LFS_USERNAME
-LFS_USERNAME="${LFS_USERNAME:-lfs}"
-[[ "${LFS_USERNAME}" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "Invalid username"
+if [[ -n "${LFS_USERNAME:-}" && -n "${LFS_PASSWORD:-}" ]]; then
+    ok "Using username from .env: ${LFS_USERNAME}"
+else
+    read -p "Username [default: lfs]: " LFS_USERNAME
+    LFS_USERNAME="${LFS_USERNAME:-lfs}"
+    [[ "${LFS_USERNAME}" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "Invalid username"
 
-while true; do
-    read -sp "Password for ${LFS_USERNAME}: " LFS_PASSWORD
-    echo ""
-    read -sp "Confirm password: " LFS_PASSWORD_CONFIRM
-    echo ""
-    [[ "${LFS_PASSWORD}" == "${LFS_PASSWORD_CONFIRM}" ]] && break
-    warn "Passwords don't match."
-done
-[[ -z "${LFS_PASSWORD}" ]] && die "Password cannot be empty"
+    while true; do
+        read -sp "Password for ${LFS_USERNAME}: " LFS_PASSWORD
+        echo ""
+        read -sp "Confirm password: " LFS_PASSWORD_CONFIRM
+        echo ""
+        [[ "${LFS_PASSWORD}" == "${LFS_PASSWORD_CONFIRM}" ]] && break
+        warn "Passwords don't match."
+    done
+    [[ -z "${LFS_PASSWORD}" ]] && die "Password cannot be empty"
+fi
 
 # ============================================================================
 # Network Configuration
 # ============================================================================
 header "Network Configuration"
 
-# WiFi
-echo "WiFi Configuration (leave empty to skip):"
-read -p "WiFi SSID: " WIFI_SSID
-WIFI_PASSWORD=""
-if [[ -n "${WIFI_SSID}" ]]; then
-    read -sp "WiFi Password: " WIFI_PASSWORD
-    echo ""
+if [[ -n "${WIFI_SSID:-}" ]]; then
+    ok "Using WiFi from .env: ${WIFI_SSID}"
+else
+    # WiFi
+    echo "WiFi Configuration (leave empty to skip):"
+    read -p "WiFi SSID: " WIFI_SSID
+    WIFI_PASSWORD=""
+    if [[ -n "${WIFI_SSID}" ]]; then
+        read -sp "WiFi Password: " WIFI_PASSWORD
+        echo ""
+    fi
 fi
 
-# LAN
-echo ""
-echo "LAN Configuration:"
-echo "  1) DHCP (automatic)"
-echo "  2) Static IP"
-read -p "Select [1]: " LAN_MODE
-LAN_MODE="${LAN_MODE:-1}"
+if [[ -n "${LAN_MODE:-}" ]]; then
+    if [[ "${LAN_MODE}" == "2" ]]; then
+        ok "Using static LAN from .env: ${LAN_IP:-not set}"
+    else
+        ok "Using LAN from .env: DHCP"
+    fi
+else
+    # LAN
+    echo ""
+    echo "LAN Configuration:"
+    echo "  1) DHCP (automatic)"
+    echo "  2) Static IP"
+    read -p "Select [1]: " LAN_MODE
+    LAN_MODE="${LAN_MODE:-1}"
 
-LAN_IP=""
-LAN_GATEWAY=""
-LAN_DNS=""
-if [[ "${LAN_MODE}" == "2" ]]; then
-    read -p "Static IP (e.g., 192.168.1.100/24): " LAN_IP
-    read -p "Gateway (e.g., 192.168.1.1): " LAN_GATEWAY
-    read -p "DNS (e.g., 8.8.8.8): " LAN_DNS
+    LAN_IP=""
+    LAN_GATEWAY=""
+    LAN_DNS=""
+    if [[ "${LAN_MODE}" == "2" ]]; then
+        read -p "Static IP (e.g., 192.168.1.100/24): " LAN_IP
+        read -p "Gateway (e.g., 192.168.1.1): " LAN_GATEWAY
+        read -p "DNS (e.g., 8.8.8.8): " LAN_DNS
+    fi
 fi
 
 ok "Network configuration saved"
@@ -463,13 +491,30 @@ mount "\${ROOT_PART}" "\${LFS}"
 btrfs subvolume create "\${LFS}/@"
 btrfs subvolume create "\${LFS}/@home"
 btrfs subvolume create "\${LFS}/@snapshots"
+btrfs subvolume create "\${LFS}/@cache"
 umount "\${LFS}"
 
 mount -o subvol=@,compress=zstd:3,noatime "\${ROOT_PART}" "\${LFS}"
-mkdir -p "\${LFS}/home" "\${LFS}/.snapshots" "\${LFS}/boot/efi"
+mkdir -p "\${LFS}/home" "\${LFS}/.snapshots" "\${LFS}/boot/efi" "\${LFS}/.cache"
 mount -o subvol=@home,compress=zstd:3,noatime "\${ROOT_PART}" "\${LFS}/home"
 mount -o subvol=@snapshots,compress=zstd:3,noatime "\${ROOT_PART}" "\${LFS}/.snapshots"
+mount -o subvol=@cache,compress=zstd:3,noatime "\${ROOT_PART}" "\${LFS}/.cache"
 mount "\${EFI_PART}" "\${LFS}/boot/efi"
+
+header "Setting up Build Cache"
+log "Using target disk for build cache (faster than USB)"
+mkdir -p "\${LFS}/.cache/sources" "\${LFS}/.cache/tools"
+
+# Copy sources from USB to target cache if available
+if [[ -d /root/lfs-infra/sources ]] && ls /root/lfs-infra/sources/*.tar.* &>/dev/null 2>&1; then
+    log "Copying cached sources from USB to target disk..."
+    cp -n /root/lfs-infra/sources/*.tar.* "\${LFS}/.cache/sources/" 2>/dev/null || true
+fi
+
+# Link LFS sources to cache
+mkdir -p "\${LFS}/sources"
+mount --bind "\${LFS}/.cache/sources" "\${LFS}/sources"
+ok "Build cache ready on target disk"
 
 header "User Configuration"
 
@@ -503,6 +548,7 @@ cat > "\${LFS}/etc/fstab" <<FSTABEOF
 UUID=\${ROOT_UUID}  /            btrfs  subvol=@,compress=zstd:3,noatime  0 1
 UUID=\${ROOT_UUID}  /home        btrfs  subvol=@home,compress=zstd:3,noatime  0 2
 UUID=\${ROOT_UUID}  /.snapshots  btrfs  subvol=@snapshots,compress=zstd:3,noatime  0 2
+UUID=\${ROOT_UUID}  /.cache      btrfs  subvol=@cache,compress=zstd:3,noatime  0 2
 UUID=\${EFI_UUID}   /boot/efi    vfat   umask=0077  0 2
 proc               /proc        proc   nosuid,noexec,nodev  0 0
 sysfs              /sys         sysfs  nosuid,noexec,nodev  0 0

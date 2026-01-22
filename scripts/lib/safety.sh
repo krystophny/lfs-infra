@@ -240,8 +240,27 @@ guard_host_fstab() {
 If you need to mount the LFS partition, do it manually or use setup-disk.sh"
 }
 
+# Check if we're inside a Docker container
+is_in_docker() {
+    # Check for Docker-specific marker file
+    [[ -f /.dockerenv ]] && return 0
+
+    # Check cgroups for docker/container indicators
+    if [[ -r /proc/1/cgroup ]]; then
+        grep -qE 'docker|containerd|kubepods|lxc' /proc/1/cgroup 2>/dev/null && return 0
+    fi
+
+    # Check for container environment variable
+    [[ -n "${container:-}" ]] && return 0
+
+    return 1
+}
+
 # Check if we're in a chroot environment
 is_in_chroot() {
+    # Docker containers are NOT chroots for our purposes - they're full build environments
+    is_in_docker && return 1
+
     # Check if root inode is 2 (typical for non-chroot)
     # In a chroot, the root inode is different
     if [[ "$(stat -c %i / 2>/dev/null)" != "2" ]]; then
@@ -289,6 +308,7 @@ safety_status() {
     echo "=== LFS Safety Status ==="
     echo "OS: $(uname -s)"
     echo "LFS: ${LFS:-<not set>}"
+    echo "In Docker: $(is_in_docker && echo 'yes' || echo 'no')"
     echo "In chroot: $(is_in_chroot && echo 'yes' || echo 'no')"
 
     if [[ -n "${LFS:-}" ]]; then
