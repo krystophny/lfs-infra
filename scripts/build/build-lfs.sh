@@ -275,6 +275,26 @@ get_pkg_safe_flags() {
     ' "${PACKAGES_FILE}"
 }
 
+# Get source package (for packages that use another package's source)
+get_pkg_source_pkg() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^source_pkg/ { gsub(/.*= *"|".*/, ""); print }
+    ' "${PACKAGES_FILE}"
+}
+
+# Get package stage
+get_pkg_stage() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^stage/ { gsub(/.*= */, ""); print }
+    ' "${PACKAGES_FILE}"
+}
+
 # Check if package is already installed (idempotency check)
 is_pkg_installed() {
     local pkg="$1"
@@ -297,18 +317,39 @@ is_pkg_installed() {
 }
 
 # Generic build function - reads build config from packages.toml
+# Usage: build_pkg <package_name> [build_dir]
 build_pkg() {
     local pkg="$1"
-    local destdir="${2:-${LFS}}"
+    local build_dir="${2:-${LFS}/build}"
 
-    # Idempotency check
-    if is_pkg_installed "${pkg}"; then
-        log "Package already installed: ${pkg}"
-        return 0
+    # Get source package (for packages like gcc-pass1 that use gcc source)
+    local source_pkg
+    source_pkg=$(get_pkg_source_pkg "${pkg}")
+    local actual_source="${source_pkg:-${pkg}}"
+
+    # Idempotency check - expand provides with current environment vars
+    local provides_raw version
+    version=$(get_pkg_version "${actual_source}")
+    provides_raw=$(get_pkg_provides "${pkg}")
+
+    if [[ -n "${provides_raw}" ]]; then
+        local all_exist=true
+        while IFS= read -r file; do
+            [[ -z "${file}" ]] && continue
+            # Expand all variables
+            file=$(eval echo "${file}")
+            if [[ ! -e "${file}" ]]; then
+                all_exist=false
+                break
+            fi
+        done <<< "${provides_raw}"
+        if [[ "${all_exist}" == "true" ]]; then
+            log "Package already installed: ${pkg}"
+            return 0
+        fi
     fi
 
-    local version build_system configure_flags meson_flags cmake_flags build_commands safe_flags
-    version=$(get_pkg_version "${pkg}")
+    local build_system configure_flags meson_flags cmake_flags build_commands safe_flags
     build_system=$(get_pkg_build_system "${pkg}")
     configure_flags=$(get_pkg_configure_flags "${pkg}")
     meson_flags=$(get_pkg_meson_flags "${pkg}")
@@ -316,57 +357,80 @@ build_pkg() {
     build_commands=$(get_pkg_build_commands "${pkg}")
     safe_flags=$(get_pkg_safe_flags "${pkg}")
 
-    log "Building ${pkg}-${version} (${build_system})..."
+    log "Building ${pkg} (${actual_source}-${version})..."
+
+    # Extract source
+    mkdir -p "${build_dir}"
+    extract_pkg "${actual_source}" "${build_dir}"
+
+    # Find and enter source directory
+    local src_dir
+    src_dir=$(find "${build_dir}" -maxdepth 1 -type d -name "${actual_source}-*" | head -1)
+    [[ -z "${src_dir}" ]] && src_dir=$(find "${build_dir}" -maxdepth 1 -type d -name "${actual_source}*" | head -1)
+    [[ -z "${src_dir}" ]] && die "Could not find source directory for ${actual_source}"
+
+    pushd "${src_dir}" > /dev/null
 
     # Set up build flags
-    local cflags="-O3 -march=native -mtune=native -pipe"
-    if [[ "${safe_flags}" != "true" ]]; then
-        cflags+=" -ffast-math"
+    # LFS_GENERIC_BUILD=1 uses portable flags (for USB installer)
+    # Otherwise uses native optimization (for final system install)
+    local arch_flags
+    if [[ "${LFS_GENERIC_BUILD:-0}" == "1" ]]; then
+        arch_flags="-march=x86-64 -mtune=generic"
+    else
+        arch_flags="-march=native -mtune=native"
     fi
-    export CFLAGS="${cflags}"
-    export CXXFLAGS="${cflags}"
+
+    if [[ "${safe_flags}" != "true" ]]; then
+        export CFLAGS="-O3 ${arch_flags} -pipe -ffast-math"
+        export CXXFLAGS="${CFLAGS}"
+    else
+        export CFLAGS="-O3 ${arch_flags} -pipe"
+        export CXXFLAGS="${CFLAGS}"
+    fi
 
     # Custom build commands override everything
     if [[ -n "${build_commands}" ]]; then
         while IFS= read -r cmd; do
             [[ -z "${cmd}" ]] && continue
-            # Expand variables
-            cmd="${cmd//\$\{version\}/${version}}"
-            cmd="${cmd//\$\{NPROC\}/${NPROC}}"
-            log "  Running: ${cmd}"
+            # Expand all variables
+            cmd=$(eval echo "${cmd}")
+            log "  $ ${cmd}"
             eval "${cmd}" || die "Build command failed: ${cmd}"
         done <<< "${build_commands}"
-        ok "Built ${pkg} (custom)"
-        return 0
+        ok "Built ${pkg}"
+    else
+        # Build based on build system
+        case "${build_system}" in
+            autotools)
+                ./configure --prefix=/usr ${configure_flags}
+                make -j"${NPROC}"
+                make DESTDIR="${LFS}" install
+                ;;
+            meson)
+                meson setup build --prefix=/usr ${meson_flags}
+                ninja -C build
+                DESTDIR="${LFS}" ninja -C build install
+                ;;
+            cmake)
+                cmake -B build -DCMAKE_INSTALL_PREFIX=/usr ${cmake_flags}
+                cmake --build build -j"${NPROC}"
+                DESTDIR="${LFS}" cmake --install build
+                ;;
+            make)
+                make -j"${NPROC}"
+                make DESTDIR="${LFS}" PREFIX=/usr install
+                ;;
+            *)
+                die "Unknown build system: ${build_system}"
+                ;;
+        esac
+        ok "Built ${pkg} (${build_system})"
     fi
 
-    # Build based on build system
-    case "${build_system}" in
-        autotools)
-            ./configure --prefix=/usr ${configure_flags}
-            make -j"${NPROC}"
-            make DESTDIR="${destdir}" install
-            ;;
-        meson)
-            meson setup build --prefix=/usr ${meson_flags}
-            ninja -C build
-            DESTDIR="${destdir}" ninja -C build install
-            ;;
-        cmake)
-            cmake -B build -DCMAKE_INSTALL_PREFIX=/usr ${cmake_flags}
-            cmake --build build -j"${NPROC}"
-            DESTDIR="${destdir}" cmake --install build
-            ;;
-        make)
-            make -j"${NPROC}"
-            make DESTDIR="${destdir}" PREFIX=/usr install
-            ;;
-        *)
-            die "Unknown build system: ${build_system}"
-            ;;
-    esac
-
-    ok "Built ${pkg} (${build_system})"
+    # Cleanup
+    popd > /dev/null
+    rm -rf "${src_dir}"
 }
 
 # GNU mirror list for fallback

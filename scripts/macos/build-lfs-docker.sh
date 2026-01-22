@@ -249,6 +249,7 @@ set -e
 export LFS=/mnt/lfs
 export LFS_TGT=x86_64-lfs-linux-gnu
 export MAKEFLAGS="-j\$(nproc)"
+export LFS_GENERIC_BUILD=1  # USB: generic arch for portability
 export NPROC=\$(nproc)
 export PATH="\${LFS}/tools/bin:\${PATH}"
 
@@ -532,9 +533,11 @@ done
 
 export LFS_USERNAME="\${NEW_USER}"
 export LFS_PASSWORD="\${NEW_PASS}"
+# Native build: DO NOT set LFS_GENERIC_BUILD - uses -march=native for this machine
 
 header "Building Full LFS with Desktop"
 echo "This will take several hours..."
+echo "Building with native optimizations for this machine..."
 
 cd /root/lfs-infra
 ./scripts/build/build-lfs.sh all
