@@ -911,6 +911,12 @@ EOF
         cp -av "${ROOT_DIR}/config/runit"/* "${LFS}/etc/runit/" 2>/dev/null || true
     fi
 
+    # Install init script for XFCE desktop
+    if [[ -f "${ROOT_DIR}/config/etc/init" ]]; then
+        install -m 755 "${ROOT_DIR}/config/etc/init" "${LFS}/sbin/init"
+        log "Installed init script with XFCE desktop support"
+    fi
+
     stage_end "Configuration"
     mark_stage_done "config"
 }
