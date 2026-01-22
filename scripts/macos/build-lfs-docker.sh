@@ -403,6 +403,15 @@ UUID=${EFI_UUID}   /boot/efi  vfat  umask=0077        0 2
 EOF
 
 # Install bootloader
+# Configure GRUB for fast boot (no timeout)
+cat > "${LFS}/etc/default/grub" <<EOF
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=0
+GRUB_DISTRIBUTOR="LFS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3"
+GRUB_CMDLINE_LINUX=""
+EOF
+
 log "Installing GRUB bootloader..."
 arch-chroot "${LFS}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LFS --removable
 arch-chroot "${LFS}" grub-mkconfig -o /boot/grub/grub.cfg
