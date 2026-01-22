@@ -7,12 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
-# VM Configuration
+# VM Configuration - optimized for build server (94GB RAM, 32 cores)
 VM_NAME="${VM_NAME:-lfs-test}"
-VM_MEMORY="${VM_MEMORY:-4G}"
+VM_MEMORY="${VM_MEMORY:-80G}"
 VM_CPUS="${VM_CPUS:-$(nproc)}"
-VM_DISK="${VM_DISK:-${ROOT_DIR}/vm/lfs.qcow2}"
-VM_DISK_SIZE="${VM_DISK_SIZE:-20G}"
+VM_DISK="${VM_DISK:-/mnt/storage/lfs.qcow2}"
+VM_DISK_SIZE="${VM_DISK_SIZE:-512G}"
 
 # Display
 VM_DISPLAY="${VM_DISPLAY:-sdl}"  # sdl, gtk, spice, vnc

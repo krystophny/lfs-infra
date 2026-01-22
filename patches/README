@@ -1,0 +1,22 @@
+# LFS Patches Directory
+
+Store patches for upstream packages here. Create subdirectories named
+after packages, with patches numbered for application order:
+
+    patches/
+    ├── glibc/
+    │   ├── 001-fix-locale.patch
+    │   └── 002-performance.patch
+    ├── gcc/
+    │   └── 001-lfs-version.patch
+    └── linux/
+        └── 001-config-tweak.patch
+
+Patches are automatically applied by build-lfs.sh during extraction.
+Use `patch -p1` format (unified diff with a/ b/ prefixes).
+
+Generate patches with:
+    diff -Naur original/ modified/ > patches/pkgname/001-description.patch
+
+Or from git:
+    git diff > patches/pkgname/001-description.patch
