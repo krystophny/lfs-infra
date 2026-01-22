@@ -1010,7 +1010,7 @@ export MAKEFLAGS="-j$(nproc)"
 # Build zlib first (required for linker)
 cd /sources
 rm -rf zlib-[0-9]*/
-tar xf zlib-*.tar.gz
+tar xf zlib-*.tar.xz
 cd zlib-[0-9]*/
 ./configure --prefix=/usr
 make -j$(nproc)
