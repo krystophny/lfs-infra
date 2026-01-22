@@ -29,6 +29,7 @@ header() { echo -e "\n${CYAN}=== $* ===${NC}\n"; }
 IMAGE_SIZE="${IMAGE_SIZE:-32G}"
 OUTPUT_DIR="${OUTPUT_DIR:-${HOME}/lfs-build}"
 IMAGE_FILE="${OUTPUT_DIR}/lfs-complete.img"
+CACHE_DIR="${OUTPUT_DIR}/cache/pacman"
 CONTAINER_NAME="lfs-builder"
 DOCKER_IMAGE="archlinux:latest"
 
@@ -131,8 +132,9 @@ else
     die "x86_64 emulation not working. Enable Rosetta in OrbStack settings."
 fi
 
-# Create output directory
+# Create output and cache directories
 mkdir -p "${OUTPUT_DIR}"
+mkdir -p "${CACHE_DIR}"
 
 header "Building LFS Docker Image (Build Host)"
 
@@ -396,9 +398,9 @@ log "Installing GRUB bootloader..."
 arch-chroot "${LFS}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LFS --removable
 arch-chroot "${LFS}" grub-mkconfig -o /boot/grub/grub.cfg
 
-# Cleanup
+# Cleanup (keep package cache for faster rebuilds)
 log "Cleaning up..."
-rm -rf "${LFS}/var/cache/pacman/pkg"/*
+# Package cache is on mounted volume, don't delete
 
 # Unmount
 log "Unmounting..."
@@ -429,13 +431,15 @@ echo ""
 # Remove any existing container
 docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
-# Run the build in Docker
+# Run the build in Docker with package cache
+log "Using package cache at: ${CACHE_DIR}"
 docker run --rm \
     --platform linux/amd64 \
     --privileged \
     --name "${CONTAINER_NAME}" \
     -v "${OUTPUT_DIR}:/output" \
     -v "${OUTPUT_DIR}/lfs-infra:/lfs-infra:ro" \
+    -v "${CACHE_DIR}:/var/cache/pacman/pkg" \
     -e IMAGE_SIZE="${IMAGE_SIZE}" \
     -e LFS_USERNAME="${LFS_USERNAME}" \
     -e LFS_PASSWORD="${LFS_PASSWORD}" \
