@@ -842,6 +842,7 @@ provides = ["/usr/bin/cmake"]
 
 [packages.sudo]
 version = "1.9.16p2"
+version_check = "url:https://www.sudo.ws/releases/stable/|sudo-([0-9]+\.[0-9]+[p0-9]*)\.tar"
 description = "Execute commands as another user"
 url = "https://www.sudo.ws/dist/sudo-${version}.tar.gz"
 git_url = "https://github.com/sudo-project/sudo.git"
@@ -1332,6 +1333,7 @@ stage = 8
 
 [packages.libxcvt]
 version = "0.1.2"
+version_check = "freedesktop:xorg/lib/libxcvt"
 description = "VESA CVT modeline generation library"
 url = "https://www.x.org/releases/individual/lib/libxcvt-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/xorg/lib/libxcvt.git"
