@@ -1,9 +1,9 @@
 #!/bin/bash
-# Build LFS in Docker on macOS (Apple Silicon via Rosetta)
-# Creates a complete bootable USB with actual LFS + XFCE + Claude Code
+# Build REAL LFS in Docker on macOS (Apple Silicon via Rosetta)
+# Creates a complete bootable USB with actual LFS built from source
 #
-# The Docker container is the BUILD HOST (Arch Linux)
-# The output is real LFS built from source
+# The Docker container is the BUILD HOST
+# The output is REAL LFS built from source with runit, XFCE, Claude Code
 
 set -euo pipefail
 
@@ -29,19 +29,18 @@ header() { echo -e "\n${CYAN}=== $* ===${NC}\n"; }
 IMAGE_SIZE="${IMAGE_SIZE:-32G}"
 OUTPUT_DIR="${OUTPUT_DIR:-${HOME}/lfs-build}"
 IMAGE_FILE="${OUTPUT_DIR}/lfs-complete.img"
-CACHE_DIR="${OUTPUT_DIR}/cache/pacman"
+CACHE_DIR="${OUTPUT_DIR}/cache"
 CONTAINER_NAME="lfs-builder"
-DOCKER_IMAGE="archlinux:latest"
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Build complete LFS system in Docker and write to USB.
+Build REAL LFS system from source in Docker and write to USB.
 
 The Docker container is the BUILD HOST (Arch Linux with build tools).
 The output is REAL LFS built from source with:
-  - Full LFS base system
+  - runit init system (fast boot)
   - XFCE desktop environment
   - Firefox browser
   - Claude Code (native installer)
@@ -53,7 +52,7 @@ Options:
     -o, --output DIR    Output directory (default: ${OUTPUT_DIR})
     -l, --list          List USB drives and exit
     -b, --build-only    Build image but don't write to USB
-    -n, --no-cache      Clear package cache before build
+    -n, --no-cache      Clear all caches before build
     -h, --help          Show this help
 
 Examples:
@@ -93,13 +92,13 @@ if [[ ${LIST_ONLY} -eq 1 ]]; then
     exit 0
 fi
 
-header "LFS Docker Builder (Apple Silicon + Rosetta)"
+header "LFS Docker Builder - Real LFS from Source"
 echo "This builds REAL LFS from source - this will take several hours!"
 echo ""
 
 # Prompt for user credentials
 header "User Configuration"
-read -p "Username for the system [default: user]: " LFS_USERNAME
+read -p "Username for the LFS system [default: user]: " LFS_USERNAME
 LFS_USERNAME="${LFS_USERNAME:-user}"
 
 # Validate username
@@ -137,35 +136,41 @@ fi
 
 # Create output and cache directories
 mkdir -p "${OUTPUT_DIR}"
-mkdir -p "${CACHE_DIR}"
+mkdir -p "${CACHE_DIR}/sources"
+mkdir -p "${CACHE_DIR}/tools"
 
 # Clear cache if requested
 if [[ ${NO_CACHE} -eq 1 ]]; then
-    warn "Clearing package cache..."
+    warn "Clearing caches..."
     rm -rf "${CACHE_DIR:?}"/*
+    mkdir -p "${CACHE_DIR}/sources"
+    mkdir -p "${CACHE_DIR}/tools"
 fi
 
 header "Building LFS Docker Image (Build Host)"
 
-# Create Dockerfile for the BUILD HOST
+# Create Dockerfile for the BUILD HOST with all LFS dependencies
 cat > "${OUTPUT_DIR}/Dockerfile" <<'DOCKERFILE'
 FROM archlinux:latest
 
-# Update and install LFS build dependencies
+# Update and install ALL LFS build dependencies
 RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
         base-devel git vim wget curl \
         bison flex texinfo gawk m4 \
         python python-pip \
         dosfstools e2fsprogs btrfs-progs parted \
-        arch-install-scripts \
         grub efibootmgr \
         bc libelf openssl \
-        cpio xz zstd \
-        perl \
+        cpio xz zstd lz4 \
+        perl perl-xml-parser \
+        meson ninja cmake \
+        autoconf automake libtool pkgconf \
+        patch diffutils \
+        rsync \
         && pacman -Scc --noconfirm
 
-# Create lfs user for building
+# Create lfs user for building (LFS requires non-root for some steps)
 RUN useradd -m lfs && echo "lfs ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 WORKDIR /lfs-build
@@ -188,7 +193,8 @@ set -e
 export LFS=/mnt/lfs
 export LFS_TGT=x86_64-lfs-linux-gnu
 export MAKEFLAGS="-j$(nproc)"
-export PATH=/tools/bin:$PATH
+export NPROC=$(nproc)
+export PATH="${LFS}/tools/bin:${PATH}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -199,34 +205,21 @@ log() { echo -e "${BLUE}[BUILD]${NC} $*"; }
 ok() { echo -e "${GREEN}[OK]${NC} $*"; }
 die() { echo -e "${RED}[FATAL]${NC} $*"; exit 1; }
 
-# CRITICAL SAFETY CHECK - validate LFS variable before ANY operations
+# CRITICAL SAFETY CHECK
 validate_lfs() {
     if [[ -z "${LFS}" ]]; then
-        die "SAFETY: LFS variable is not set! Refusing to continue."
+        die "SAFETY: LFS variable is not set!"
     fi
-
-    # List of forbidden paths that would destroy a system
-    local forbidden_paths=("/" "/bin" "/boot" "/dev" "/etc" "/home" "/lib" "/lib64"
-                          "/opt" "/proc" "/root" "/run" "/sbin" "/srv" "/sys"
-                          "/tmp" "/usr" "/var")
-
-    local normalized_lfs="${LFS%/}"  # Remove trailing slash
-
-    for forbidden in "${forbidden_paths[@]}"; do
-        if [[ "${normalized_lfs}" == "${forbidden}" ]]; then
-            die "SAFETY: LFS=${LFS} is a protected system path! Refusing to continue."
-        fi
+    local forbidden=("/" "/bin" "/boot" "/dev" "/etc" "/home" "/lib" "/lib64"
+                     "/opt" "/proc" "/root" "/run" "/sbin" "/srv" "/sys" "/tmp" "/usr" "/var")
+    local normalized="${LFS%/}"
+    for f in "${forbidden[@]}"; do
+        [[ "${normalized}" == "${f}" ]] && die "SAFETY: LFS=${LFS} is protected!"
     done
-
-    # Must be an absolute path
-    if [[ "${LFS}" != /* ]]; then
-        die "SAFETY: LFS must be an absolute path, got: ${LFS}"
-    fi
-
+    [[ "${LFS}" != /* ]] && die "SAFETY: LFS must be absolute path"
     ok "LFS variable validated: ${LFS}"
 }
 
-# Run safety check FIRST before anything else
 validate_lfs
 
 IMAGE_FILE="/output/lfs-complete.img"
@@ -235,18 +228,11 @@ LFS_USERNAME="${LFS_USERNAME:-user}"
 LFS_PASSWORD="${LFS_PASSWORD:-changeme}"
 
 log "Creating loop device nodes..."
-# First detach any existing loop devices to free them up
 losetup -D 2>/dev/null || true
-
-# Create loop device nodes (0-31)
 for i in $(seq 0 31); do
-    if [[ ! -e /dev/loop${i} ]]; then
-        mknod /dev/loop${i} b 7 ${i} 2>/dev/null || true
-    fi
+    [[ ! -e /dev/loop${i} ]] && mknod /dev/loop${i} b 7 ${i} 2>/dev/null || true
 done
-if [[ ! -e /dev/loop-control ]]; then
-    mknod /dev/loop-control c 10 237 2>/dev/null || true
-fi
+[[ ! -e /dev/loop-control ]] && mknod /dev/loop-control c 10 237 2>/dev/null || true
 
 log "Creating ${IMAGE_SIZE} disk image..."
 truncate -s "${IMAGE_SIZE}" "${IMAGE_FILE}"
@@ -264,8 +250,7 @@ ROOT_OFFSET=$((513 * 1024 * 1024))
 
 LOOP_EFI=$(losetup -f --show --offset ${EFI_OFFSET} --sizelimit ${EFI_SIZE} "${IMAGE_FILE}")
 LOOP_ROOT=$(losetup -f --show --offset ${ROOT_OFFSET} "${IMAGE_FILE}")
-echo "EFI loop: ${LOOP_EFI}"
-echo "Root loop: ${LOOP_ROOT}"
+log "EFI loop: ${LOOP_EFI}, Root loop: ${LOOP_ROOT}"
 
 log "Formatting partitions..."
 mkfs.fat -F32 "${LOOP_EFI}"
@@ -277,152 +262,78 @@ mount "${LOOP_ROOT}" "${LFS}"
 mkdir -p "${LFS}/boot/efi"
 mount "${LOOP_EFI}" "${LFS}/boot/efi"
 
-log "Creating minimal directory structure..."
-mkdir -pv "${LFS}"/{boot/efi,root,etc}
+# Use cached sources if available
+if [[ -d /cache/sources ]] && ls /cache/sources/*.tar.* &>/dev/null; then
+    log "Using cached sources..."
+    mkdir -p "${LFS}/sources"
+    cp -n /cache/sources/*.tar.* "${LFS}/sources/" 2>/dev/null || true
+fi
 
-# Create vconsole.conf to prevent mkinitcpio errors
-echo "KEYMAP=us" > "${LFS}/etc/vconsole.conf"
+# Use cached tools if available
+if [[ -d /cache/tools ]] && [[ -d /cache/tools/bin ]]; then
+    log "Using cached toolchain..."
+    mkdir -p "${LFS}/tools"
+    cp -a /cache/tools/* "${LFS}/tools/" 2>/dev/null || true
+fi
 
-# Install base system with Arch packages
-# pacstrap will create the proper directory structure
-log "Installing base system (Arch bootstrap for quick start)..."
-log "Note: Run lfs-infra scripts on target to rebuild as true LFS"
+log "=========================================="
+log "Starting REAL LFS Build from Source"
+log "=========================================="
 
-pacstrap -c -G -M "${LFS}" --noconfirm \
-    base linux linux-firmware \
-    base-devel git vim nano \
-    networkmanager iwd dhcpcd wpa_supplicant wireless_tools \
-    openssh \
-    grub efibootmgr \
-    xorg-server xorg-xinit xorg-xrandr \
-    xfce4 xfce4-goodies xfce4-terminal \
-    lightdm lightdm-gtk-greeter \
-    firefox \
-    ttf-dejavu ttf-liberation noto-fonts \
-    pulseaudio pavucontrol \
-    curl wget htop ripgrep fd \
-    ntfs-3g exfatprogs \
-    mesa vulkan-icd-loader \
-    xf86-video-amdgpu xf86-video-intel \
-    xf86-video-qxl xf86-video-vesa xf86-video-fbdev \
-    libva-mesa-driver mesa-vdpau \
-    linux-headers dkms
+cd /lfs-infra
 
-# lfs-infra will be copied to user's home later
+# Export credentials for build-lfs.sh
+export LFS_USERNAME
+export LFS_PASSWORD
 
-log "Configuring system..."
-echo "lfs-workstation" > "${LFS}/etc/hostname"
+# Run the actual LFS build
+log "Running LFS build script..."
+./scripts/build/build-lfs.sh all
 
-cat > "${LFS}/etc/hosts" <<EOF
-127.0.0.1   localhost
-::1         localhost
-127.0.1.1   lfs-workstation.localdomain lfs-workstation
-EOF
+# Cache the sources and tools for next build
+log "Caching sources and tools for future builds..."
+cp -n "${LFS}/sources/"*.tar.* /cache/sources/ 2>/dev/null || true
+if [[ -d "${LFS}/tools/bin" ]]; then
+    cp -a "${LFS}/tools/"* /cache/tools/ 2>/dev/null || true
+fi
 
-echo "en_US.UTF-8 UTF-8" > "${LFS}/etc/locale.gen"
-arch-chroot "${LFS}" locale-gen
-echo "LANG=en_US.UTF-8" > "${LFS}/etc/locale.conf"
-
-ln -sf /usr/share/zoneinfo/UTC "${LFS}/etc/localtime"
-arch-chroot "${LFS}" hwclock --systohc || true  # May fail in chroot, not critical
-
-# Create user with provided credentials
-log "Creating user '${LFS_USERNAME}' with sudo access..."
-arch-chroot "${LFS}" useradd -m -G wheel,video,audio -s /bin/bash "${LFS_USERNAME}"
-echo "${LFS_USERNAME}:${LFS_PASSWORD}" | arch-chroot "${LFS}" chpasswd
-echo "%wheel ALL=(ALL:ALL) ALL" > "${LFS}/etc/sudoers.d/wheel"
-# Lock root - only accessible via sudo from user
-arch-chroot "${LFS}" passwd -l root
-
-# Enable services
-arch-chroot "${LFS}" systemctl enable NetworkManager
-arch-chroot "${LFS}" systemctl enable lightdm
-arch-chroot "${LFS}" systemctl enable sshd
-
-# Disable slow boot services
-arch-chroot "${LFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
-arch-chroot "${LFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
-
-# Install Claude Code for the user (native installer - no Node.js needed!)
-log "Installing Claude Code for user '${LFS_USERNAME}'..."
-arch-chroot "${LFS}" su - "${LFS_USERNAME}" -c 'curl -fsSL https://claude.ai/install.sh | bash'
-
-# Create desktop shortcut for Claude
-mkdir -p "${LFS}/home/${LFS_USERNAME}/Desktop"
-cat > "${LFS}/home/${LFS_USERNAME}/Desktop/Claude.desktop" <<EOF
-[Desktop Entry]
-Name=Claude Code
-Comment=AI Coding Assistant
-Exec=xfce4-terminal -e "claude"
-Icon=utilities-terminal
-Terminal=false
-Type=Application
-Categories=Development;
-EOF
-chmod +x "${LFS}/home/${LFS_USERNAME}/Desktop/Claude.desktop"
-
-# Create welcome/README file
-cat > "${LFS}/home/${LFS_USERNAME}/Desktop/README.txt" <<EOF
-==========================================
- LFS Workstation Ready!
-==========================================
-
-Username: ${LFS_USERNAME}
-(Root account is locked - use sudo)
-
-Installed:
-- XFCE Desktop
-- Firefox Browser
-- Claude Code (run 'claude' in terminal)
-- SSH Server (running)
-- Development tools
-- lfs-infra repo at ~/lfs-infra
-
-To build TRUE LFS on your hard drive:
-  cd ~/lfs-infra
-  sudo ./scripts/build/build-lfs.sh all
-
-WiFi Setup:
-  nmcli device wifi list
-  nmcli device wifi connect "SSID" password "PASS"
-
-==========================================
-EOF
-
-# Copy lfs-infra to user's home (not just root)
-log "Copying lfs-infra repository to user home..."
-cp -a /lfs-infra "${LFS}/home/${LFS_USERNAME}/lfs-infra"
-
-# Fix ownership of user's home directory
-arch-chroot "${LFS}" chown -R "${LFS_USERNAME}:${LFS_USERNAME}" "/home/${LFS_USERNAME}"
-
-# Generate fstab
+# Generate fstab with UUIDs
 log "Generating fstab..."
 ROOT_UUID=$(blkid -s UUID -o value "${LOOP_ROOT}")
 EFI_UUID=$(blkid -s UUID -o value "${LOOP_EFI}")
 
 cat > "${LFS}/etc/fstab" <<EOF
+# /etc/fstab - LFS
 UUID=${ROOT_UUID}  /          ext4  defaults,noatime  0 1
 UUID=${EFI_UUID}   /boot/efi  vfat  umask=0077        0 2
+proc               /proc      proc  nosuid,noexec,nodev  0 0
+sysfs              /sys       sysfs nosuid,noexec,nodev  0 0
+devpts             /dev/pts   devpts gid=5,mode=620      0 0
+tmpfs              /run       tmpfs  defaults            0 0
 EOF
 
-# Install bootloader
-# Configure GRUB for fast boot (no timeout)
-cat > "${LFS}/etc/default/grub" <<EOF
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_DISTRIBUTOR="LFS"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3"
-GRUB_CMDLINE_LINUX=""
-EOF
-
+# Install GRUB bootloader
 log "Installing GRUB bootloader..."
-arch-chroot "${LFS}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LFS --removable
-arch-chroot "${LFS}" grub-mkconfig -o /boot/grub/grub.cfg
+# Copy GRUB modules to LFS
+mkdir -p "${LFS}/boot/grub/x86_64-efi"
 
-# Cleanup (keep package cache for faster rebuilds)
-log "Cleaning up..."
-# Package cache is on mounted volume, don't delete
+# Install GRUB to EFI
+grub-install --target=x86_64-efi \
+    --efi-directory="${LFS}/boot/efi" \
+    --boot-directory="${LFS}/boot" \
+    --bootloader-id=LFS \
+    --removable
+
+# Create GRUB config for fast boot
+cat > "${LFS}/boot/grub/grub.cfg" <<EOF
+set default=0
+set timeout=0
+
+menuentry "LFS" {
+    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet
+    initrd /boot/initrd.img
+}
+EOF
 
 # Unmount
 log "Unmounting..."
@@ -430,38 +341,41 @@ umount -R "${LFS}"
 losetup -d "${LOOP_EFI}"
 losetup -d "${LOOP_ROOT}"
 
-ok "Build complete! Image: ${IMAGE_FILE}"
+ok "=========================================="
+ok "REAL LFS Build Complete!"
+ok "=========================================="
 echo ""
-echo "This image contains an Arch-based system with all tools needed."
-echo "User '${LFS_USERNAME}' has sudo access. Root is locked."
+echo "Image: ${IMAGE_FILE}"
+echo "User: ${LFS_USERNAME} (sudo access, root locked)"
 echo ""
-echo "To build TRUE LFS from source on the target machine:"
-echo "  1. Boot from this USB"
-echo "  2. Login as ${LFS_USERNAME}"
-echo "  3. cd ~/lfs-infra"
-echo "  4. sudo ./scripts/build/build-lfs.sh all"
+echo "This is REAL LFS built from source with:"
+echo "  - runit init system"
+echo "  - XFCE desktop"
+echo "  - Firefox"
+echo "  - Claude Code"
+echo ""
 BUILD_SCRIPT
 
 chmod +x "${OUTPUT_DIR}/build-inside-docker.sh"
 
 header "Starting Docker Build"
 
-log "Building bootable USB image..."
+log "Building REAL LFS from source..."
 log "Image will be created at: ${IMAGE_FILE}"
+log "This will take several hours!"
 echo ""
 
 # Remove any existing container
 docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
-# Run the build in Docker with package cache
-log "Using package cache at: ${CACHE_DIR}"
+# Run the build in Docker with caches
 docker run --rm \
     --platform linux/amd64 \
     --privileged \
     --name "${CONTAINER_NAME}" \
     -v "${OUTPUT_DIR}:/output" \
     -v "${OUTPUT_DIR}/lfs-infra:/lfs-infra:ro" \
-    -v "${CACHE_DIR}:/var/cache/pacman/pkg" \
+    -v "${CACHE_DIR}:/cache" \
     -e IMAGE_SIZE="${IMAGE_SIZE}" \
     -e LFS_USERNAME="${LFS_USERNAME}" \
     -e LFS_PASSWORD="${LFS_PASSWORD}" \
@@ -499,7 +413,7 @@ DEVICE="disk${DEVICE}"
 
 # Safety check
 if ! diskutil info "/dev/${DEVICE}" 2>/dev/null | grep -q "Removable Media:.*Yes\|Protocol:.*USB\|Location:.*External"; then
-    die "disk${DEVICE} doesn't appear to be a USB drive"
+    die "${DEVICE} doesn't appear to be a USB drive"
 fi
 
 header "Writing to /dev/${DEVICE}"
@@ -522,12 +436,8 @@ diskutil eject "/dev/${DEVICE}" || true
 
 header "Complete!"
 
-ok "LFS USB is ready!"
+ok "REAL LFS USB is ready!"
 echo ""
 echo "Boot from USB and login as: ${LFS_USERNAME}"
 echo "(Root account is locked - use sudo for admin tasks)"
-echo ""
-echo "To build TRUE LFS from source:"
-echo "  cd ~/lfs-infra"
-echo "  sudo ./scripts/build/build-lfs.sh all"
 echo ""
