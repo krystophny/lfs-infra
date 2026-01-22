@@ -635,10 +635,17 @@ main() {
         echo "Updating packages.toml..."
         for entry in "${outdated[@]}"; do
             IFS='|' read -r pkg old new <<< "$entry"
-            sed -i.bak -E "/^\[packages\.${pkg}\]/,/^\[packages\./{s/^(version *= *\").*(\")/\1${new}\2/}" "${PACKAGES_FILE}"
+            # Use Python for reliable cross-platform TOML updates
+            python3 -c "
+import re, sys
+pkg, new_ver = sys.argv[1], sys.argv[2]
+with open('${PACKAGES_FILE}', 'r') as f: content = f.read()
+pattern = rf'(\[packages\.{re.escape(pkg)}\].*?version *= *)\"[^\"]*\"'
+content = re.sub(pattern, rf'\1\"{new_ver}\"', content, count=1, flags=re.DOTALL)
+with open('${PACKAGES_FILE}', 'w') as f: f.write(content)
+" "$pkg" "$new"
             echo "  $pkg: $old -> $new"
         done
-        rm -f "${PACKAGES_FILE}.bak"
         echo -e "${GREEN}Done!${NC} Run build to apply updates."
     fi
 }
