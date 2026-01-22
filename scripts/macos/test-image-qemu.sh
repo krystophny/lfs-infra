@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-IMAGE="${1:-${HOME}/lfs-build/lfs-complete.img}"
+IMAGE="${1:-${HOME}/lfs-build/lfs-minimal.img}"
 MEMORY="${MEMORY:-4G}"
 CPUS="${CPUS:-4}"
 
