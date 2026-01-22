@@ -52,19 +52,19 @@ bootstrap = true
 [packages.binutils]
 version = "2.45.1"
 description = "GNU binary utilities"
-url = "https://ftp.gnu.org/gnu/binutils/binutils-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/binutils/binutils-${version}.tar.xz"
 git_url = "git://sourceware.org/git/binutils-gdb.git"
 use_git = false
-checksum_url = "https://ftp.gnu.org/gnu/binutils/binutils-${version}.tar.xz.sig"
+checksum_url = "https://ftpmirror.gnu.org/gnu/binutils/binutils-${version}.tar.xz.sig"
 stage = 1
 
 [packages.gcc]
 version = "15.2.0"
 description = "GNU Compiler Collection"
-url = "https://ftp.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
 git_url = "git://gcc.gnu.org/git/gcc.git"
 use_git = false
-checksum_url = "https://ftp.gnu.org/gnu/gcc/gcc-${version}/sha512.sum"
+checksum_url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/sha512.sum"
 stage = 1
 depends = ["gmp", "mpfr", "mpc"]
 # IMPORTANT: Enable Fortran language
@@ -82,10 +82,10 @@ stage = 1
 [packages.glibc]
 version = "2.42"
 description = "GNU C Library"
-url = "https://ftp.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
 git_url = "git://sourceware.org/git/glibc.git"
 use_git = false
-checksum_url = "https://ftp.gnu.org/gnu/glibc/glibc-${version}.tar.xz.sig"
+checksum_url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz.sig"
 stage = 1
 
 # =============================================================================
@@ -95,7 +95,7 @@ stage = 1
 [packages.m4]
 version = "1.4.20"
 description = "GNU macro processor"
-url = "https://ftp.gnu.org/gnu/m4/m4-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/m4/m4-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/m4.git"
 use_git = false
 stage = 2
@@ -103,7 +103,7 @@ stage = 2
 [packages.ncurses]
 version = "6.6"
 description = "Terminal handling library"
-url = "https://ftp.gnu.org/gnu/ncurses/ncurses-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/ncurses/ncurses-${version}.tar.gz"
 git_url = "https://github.com/mirror/ncurses.git"
 use_git = false
 stage = 2
@@ -111,7 +111,7 @@ stage = 2
 [packages.bash]
 version = "5.3"
 description = "GNU Bourne-Again Shell"
-url = "https://ftp.gnu.org/gnu/bash/bash-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/bash/bash-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/bash.git"
 use_git = false
 stage = 2
@@ -119,7 +119,7 @@ stage = 2
 [packages.coreutils]
 version = "9.9"
 description = "GNU core utilities"
-url = "https://ftp.gnu.org/gnu/coreutils/coreutils-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/coreutils/coreutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/coreutils.git"
 use_git = false
 stage = 2
@@ -127,7 +127,7 @@ stage = 2
 [packages.diffutils]
 version = "3.12"
 description = "GNU diff utilities"
-url = "https://ftp.gnu.org/gnu/diffutils/diffutils-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/diffutils/diffutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/diffutils.git"
 use_git = false
 stage = 2
@@ -143,7 +143,7 @@ stage = 2
 [packages.findutils]
 version = "4.10.0"
 description = "GNU find utilities"
-url = "https://ftp.gnu.org/gnu/findutils/findutils-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/findutils/findutils-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/findutils.git"
 use_git = false
 stage = 2
@@ -151,7 +151,7 @@ stage = 2
 [packages.gawk]
 version = "5.3.2"
 description = "GNU AWK"
-url = "https://ftp.gnu.org/gnu/gawk/gawk-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/gawk/gawk-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gawk.git"
 use_git = false
 stage = 2
@@ -159,7 +159,7 @@ stage = 2
 [packages.grep]
 version = "3.12"
 description = "GNU grep"
-url = "https://ftp.gnu.org/gnu/grep/grep-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/grep/grep-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/grep.git"
 use_git = false
 stage = 2
@@ -167,7 +167,7 @@ stage = 2
 [packages.gzip]
 version = "1.14"
 description = "GNU compression utility"
-url = "https://ftp.gnu.org/gnu/gzip/gzip-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/gzip/gzip-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gzip.git"
 use_git = false
 stage = 2
@@ -175,7 +175,7 @@ stage = 2
 [packages.make]
 version = "4.4.1"
 description = "GNU make"
-url = "https://ftp.gnu.org/gnu/make/make-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/make/make-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/make.git"
 use_git = false
 stage = 2
@@ -183,7 +183,7 @@ stage = 2
 [packages.patch]
 version = "2.8"
 description = "GNU patch"
-url = "https://ftp.gnu.org/gnu/patch/patch-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/patch/patch-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/patch.git"
 use_git = false
 stage = 2
@@ -191,7 +191,7 @@ stage = 2
 [packages.sed]
 version = "4.9"
 description = "GNU stream editor"
-url = "https://ftp.gnu.org/gnu/sed/sed-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/sed/sed-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/sed.git"
 use_git = false
 stage = 2
@@ -199,7 +199,7 @@ stage = 2
 [packages.tar]
 version = "1.35"
 description = "GNU tar"
-url = "https://ftp.gnu.org/gnu/tar/tar-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/tar/tar-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/tar.git"
 use_git = false
 stage = 2
@@ -243,7 +243,7 @@ stage = 3
 [packages.readline]
 version = "8.3"
 description = "GNU readline library"
-url = "https://ftp.gnu.org/gnu/readline/readline-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/readline/readline-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/readline.git"
 use_git = false
 stage = 3
@@ -267,7 +267,7 @@ stage = 3
 [packages.gettext]
 version = "0.26"
 description = "GNU internationalization"
-url = "https://ftp.gnu.org/gnu/gettext/gettext-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/gettext/gettext-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gettext.git"
 use_git = false
 stage = 3
@@ -275,7 +275,7 @@ stage = 3
 [packages.bison]
 version = "3.8.2"
 description = "GNU parser generator"
-url = "https://ftp.gnu.org/gnu/bison/bison-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/bison/bison-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/bison.git"
 use_git = false
 stage = 3
@@ -299,7 +299,7 @@ stage = 3
 [packages.texinfo]
 version = "7.2"
 description = "GNU documentation system"
-url = "https://ftp.gnu.org/gnu/texinfo/texinfo-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/texinfo/texinfo-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/texinfo.git"
 use_git = false
 stage = 3
@@ -394,7 +394,7 @@ provides = ["/usr/lib/libssl.so", "/usr/lib/libcrypto.so"]
 [packages.nettle]
 version = "3.10.1"
 description = "Low-level cryptographic library"
-url = "https://ftp.gnu.org/gnu/nettle/nettle-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/nettle/nettle-${version}.tar.gz"
 git_url = "https://git.lysator.liu.se/nettle/nettle.git"
 use_git = false
 stage = 4
@@ -405,7 +405,7 @@ depends = ["gmp"]
 [packages.libtasn1]
 version = "4.20.0"
 description = "ASN.1 library"
-url = "https://ftp.gnu.org/gnu/libtasn1/libtasn1-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/libtasn1/libtasn1-${version}.tar.gz"
 git_url = "https://gitlab.com/gnutls/libtasn1.git"
 use_git = false
 stage = 4
@@ -415,7 +415,7 @@ provides = ["/usr/lib/libtasn1.so"]
 [packages.libunistring]
 version = "1.3"
 description = "Unicode string library"
-url = "https://ftp.gnu.org/gnu/libunistring/libunistring-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/libunistring/libunistring-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/libunistring.git"
 use_git = false
 stage = 4
@@ -452,7 +452,7 @@ stage = 4
 [packages.autoconf]
 version = "2.72"
 description = "GNU autoconf"
-url = "https://ftp.gnu.org/gnu/autoconf/autoconf-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/autoconf/autoconf-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/autoconf.git"
 use_git = false
 stage = 4
@@ -460,7 +460,7 @@ stage = 4
 [packages.automake]
 version = "1.18.1"
 description = "GNU automake"
-url = "https://ftp.gnu.org/gnu/automake/automake-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/automake/automake-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/automake.git"
 use_git = false
 stage = 4
@@ -468,7 +468,7 @@ stage = 4
 [packages.libtool]
 version = "2.5.4"
 description = "GNU libtool"
-url = "https://ftp.gnu.org/gnu/libtool/libtool-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/libtool/libtool-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/libtool.git"
 use_git = false
 stage = 4
@@ -523,7 +523,7 @@ provides = ["/boot/vmlinuz-${version}"]
 [packages.grub]
 version = "2.14"
 description = "GRand Unified Bootloader"
-url = "https://ftp.gnu.org/gnu/grub/grub-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/grub/grub-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/grub.git"
 use_git = false
 stage = 5
@@ -551,7 +551,7 @@ stage = 5
 [packages.gmp]
 version = "6.3.0"
 description = "GNU Multiple Precision Arithmetic Library"
-url = "https://ftp.gnu.org/gnu/gmp/gmp-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/gmp/gmp-${version}.tar.xz"
 git_url = "https://gmplib.org/repo/gmp/"
 use_git = false
 stage = 1
@@ -561,7 +561,7 @@ provides = ["/usr/lib/libgmp.so"]
 [packages.mpfr]
 version = "4.2.2"
 description = "GNU Multiple Precision Floating-Point Reliable Library"
-url = "https://ftp.gnu.org/gnu/mpfr/mpfr-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/mpfr/mpfr-${version}.tar.xz"
 git_url = "https://gitlab.inria.fr/mpfr/mpfr.git"
 use_git = false
 stage = 1
@@ -569,7 +569,7 @@ stage = 1
 [packages.mpc]
 version = "1.3.1"
 description = "GNU Multiple Precision Complex Library"
-url = "https://ftp.gnu.org/gnu/mpc/mpc-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/mpc/mpc-${version}.tar.gz"
 git_url = "https://gitlab.inria.fr/mpc/mpc.git"
 use_git = false
 stage = 1
@@ -664,7 +664,7 @@ stage = 7
 [packages.wget]
 version = "1.25"
 description = "Network downloader"
-url = "https://ftp.gnu.org/gnu/wget/wget-${version}.tar.gz"
+url = "https://ftpmirror.gnu.org/gnu/wget/wget-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/wget.git"
 use_git = false
 stage = 7
@@ -1616,7 +1616,7 @@ stage = 13
 [packages.lib32-glibc]
 version = "2.42"
 description = "GNU C Library (32-bit)"
-url = "https://ftp.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz"
 git_url = ""
 use_git = false
 stage = 13
@@ -1906,7 +1906,7 @@ stage = 18
 [packages.octave]
 version = "9.4.0"
 description = "GNU Octave numerical computing"
-url = "https://ftp.gnu.org/gnu/octave/octave-${version}.tar.xz"
+url = "https://ftpmirror.gnu.org/gnu/octave/octave-${version}.tar.xz"
 git_url = "https://hg.savannah.gnu.org/hgweb/octave"
 use_git = false
 stage = 18
