@@ -153,9 +153,9 @@ build_qemu_cmd() {
         # Boot drive
         -drive file="${VM_DISK}",if=virtio,format="${disk_format}",cache=writeback
 
-        # VirtIO GPU
-        -device virtio-vga-gl
-        -display "${VM_DISPLAY},gl=on"
+        # VirtIO GPU (provides DRM for modesetting driver)
+        -device virtio-vga
+        -display "${VM_DISPLAY}"
 
         # Network
         -netdev user,id=net0,hostfwd=tcp::2222-:22

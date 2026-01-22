@@ -1235,6 +1235,29 @@ stage_desktop() {
 
     ok "Build tools ready"
 
+    # Build D-Bus (required for XFCE)
+    log "========== Building D-Bus =========="
+    download_pkg "dbus" "https://dbus.freedesktop.org/releases/dbus/dbus-1.16.0.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf dbus-[0-9]*/
+        tar xf dbus-*.tar.xz
+        cd dbus-[0-9]*/
+        ./configure --prefix=/usr \
+            --sysconfdir=/etc \
+            --localstatedir=/var \
+            --runstatedir=/run \
+            --disable-static \
+            --with-system-socket=/run/dbus/system_bus_socket
+        make -j${NPROC}
+        make install
+        # Create machine-id
+        dbus-uuidgen --ensure=/etc/machine-id
+        dbus-uuidgen --ensure=/var/lib/dbus/machine-id
+        cd /sources && rm -rf dbus-[0-9]*/
+    "
+    ok "dbus built"
+
     # Build X11 Foundation
     log "========== Building X11 Foundation =========="
 
@@ -1490,9 +1513,315 @@ stage_desktop() {
     "
     ok "cairo built"
 
-    log "========== X11 Foundation Complete =========="
-    log "Note: Full XFCE desktop requires many more packages"
-    log "The system now has basic X11 libraries installed"
+    # More X11 libraries needed for Mesa and Xorg
+    log "========== Building Additional X11 Libraries =========="
+
+    download_pkg "libXi" "https://www.x.org/releases/individual/lib/libXi-1.8.2.tar.xz"
+    download_pkg "libXrandr" "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz"
+    download_pkg "libXcursor" "https://www.x.org/releases/individual/lib/libXcursor-1.2.3.tar.xz"
+    download_pkg "libXinerama" "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz"
+    download_pkg "libXcomposite" "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz"
+    download_pkg "libXdamage" "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz"
+    download_pkg "libXtst" "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz"
+    download_pkg "libXt" "https://www.x.org/releases/individual/lib/libXt-1.3.1.tar.xz"
+    download_pkg "libXmu" "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz"
+    download_pkg "libXpm" "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz"
+    download_pkg "libXaw" "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz"
+    download_pkg "libxshmfence" "https://www.x.org/releases/individual/lib/libxshmfence-1.3.3.tar.xz"
+    download_pkg "libxkbfile" "https://www.x.org/releases/individual/lib/libxkbfile-1.1.3.tar.xz"
+    download_pkg "libpciaccess" "https://www.x.org/releases/individual/lib/libpciaccess-0.18.1.tar.xz"
+    download_pkg "libxcvt" "https://www.x.org/releases/individual/lib/libxcvt-0.1.3.tar.xz"
+    download_pkg "libfontenc" "https://www.x.org/releases/individual/lib/libfontenc-1.1.8.tar.xz"
+    download_pkg "libXfont2" "https://www.x.org/releases/individual/lib/libXfont2-2.0.7.tar.xz"
+    download_pkg "libICE" "https://www.x.org/releases/individual/lib/libICE-1.1.2.tar.xz"
+    download_pkg "libSM" "https://www.x.org/releases/individual/lib/libSM-1.2.5.tar.xz"
+
+    # Build these X11 libraries
+    for lib in libXi libXrandr libXcursor libXinerama libXcomposite libXdamage libXtst libxshmfence libxkbfile libpciaccess libfontenc libICE; do
+        run_in_chroot "
+            cd /sources
+            rm -rf ${lib}-[0-9]*/
+            tar xf ${lib}-*.tar.xz
+            cd ${lib}-[0-9]*/
+            ./configure --prefix=/usr --disable-static
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf ${lib}-[0-9]*/
+        "
+        ok "${lib} built"
+    done
+
+    # libSM needs libICE first
+    run_in_chroot "
+        cd /sources
+        rm -rf libSM-[0-9]*/
+        tar xf libSM-*.tar.xz
+        cd libSM-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libSM-[0-9]*/
+    "
+    ok "libSM built"
+
+    # libXt needs libICE/libSM
+    run_in_chroot "
+        cd /sources
+        rm -rf libXt-[0-9]*/
+        tar xf libXt-*.tar.xz
+        cd libXt-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libXt-[0-9]*/
+    "
+    ok "libXt built"
+
+    # libXmu needs libXt
+    run_in_chroot "
+        cd /sources
+        rm -rf libXmu-[0-9]*/
+        tar xf libXmu-*.tar.xz
+        cd libXmu-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libXmu-[0-9]*/
+    "
+    ok "libXmu built"
+
+    # libXpm and libXaw
+    for lib in libXpm libXaw; do
+        run_in_chroot "
+            cd /sources
+            rm -rf ${lib}-[0-9]*/
+            tar xf ${lib}-*.tar.xz
+            cd ${lib}-[0-9]*/
+            ./configure --prefix=/usr --disable-static
+            make -j${NPROC}
+            make install
+            cd /sources && rm -rf ${lib}-[0-9]*/
+        "
+        ok "${lib} built"
+    done
+
+    # libxcvt (meson)
+    run_in_chroot "
+        cd /sources
+        rm -rf libxcvt-[0-9]*/
+        tar xf libxcvt-*.tar.xz
+        cd libxcvt-[0-9]*/
+        mkdir build && cd build
+        meson setup --prefix=/usr --buildtype=release ..
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf libxcvt-[0-9]*/
+    "
+    ok "libxcvt built"
+
+    # libXfont2 needs libfontenc and freetype
+    run_in_chroot "
+        cd /sources
+        rm -rf libXfont2-[0-9]*/
+        tar xf libXfont2-*.tar.xz
+        cd libXfont2-[0-9]*/
+        ./configure --prefix=/usr --disable-static
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf libXfont2-[0-9]*/
+    "
+    ok "libXfont2 built"
+
+    # drm library needed for Mesa
+    download_pkg "libdrm" "https://dri.freedesktop.org/libdrm/libdrm-2.4.124.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf libdrm-[0-9]*/
+        tar xf libdrm-*.tar.xz
+        cd libdrm-[0-9]*/
+        mkdir build && cd build
+        meson setup --prefix=/usr --buildtype=release -Dudev=false ..
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf libdrm-[0-9]*/
+    "
+    ok "libdrm built"
+
+    log "========== Building Mesa (with GBM/EGL/glamor) =========="
+
+    # Install mako Python module for Mesa
+    run_in_chroot "
+        pip3 install mako 2>/dev/null || python3 -m pip install mako || {
+            cd /sources
+            curl -LO https://files.pythonhosted.org/packages/source/M/Mako/mako-1.3.8.tar.gz
+            tar xf mako-*.tar.gz
+            cd Mako-[0-9]*/
+            python3 setup.py install
+            cd /sources && rm -rf Mako-[0-9]*/
+        }
+    "
+    ok "mako installed"
+
+    # Download and build Mesa with GBM/EGL/virgl for VM support
+    download_pkg "mesa" "https://archive.mesa3d.org/mesa-24.3.4.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf mesa-[0-9]*/
+        tar xf mesa-*.tar.xz
+        cd mesa-[0-9]*/
+        mkdir build && cd build
+
+        # Build Mesa with GBM, EGL, GLX for glamor acceleration
+        # softpipe = CPU fallback, virgl = VM GPU passthrough
+        meson setup --prefix=/usr --buildtype=release \
+            -Dplatforms=x11 \
+            -Dgallium-drivers=softpipe,virgl \
+            -Degl=enabled \
+            -Dgbm=enabled \
+            -Dglx=dri \
+            -Dgles1=disabled \
+            -Dgles2=disabled \
+            -Dllvm=disabled \
+            -Dvalgrind=disabled \
+            -Dvulkan-drivers= \
+            ..
+
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf mesa-[0-9]*/
+    "
+    ok "Mesa built with GBM/EGL/virgl support"
+
+    log "========== Building Xorg Server (with glamor) =========="
+
+    # xkbcomp and xkeyboard-config needed for keyboard support
+    download_pkg "xkbcomp" "https://www.x.org/releases/individual/app/xkbcomp-1.4.7.tar.xz"
+    download_pkg "xkeyboard-config" "https://www.x.org/releases/individual/data/xkeyboard-config/xkeyboard-config-2.43.tar.xz"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf xkbcomp-[0-9]*/
+        tar xf xkbcomp-*.tar.xz
+        cd xkbcomp-[0-9]*/
+        ./configure --prefix=/usr
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf xkbcomp-[0-9]*/
+    "
+    ok "xkbcomp built"
+
+    run_in_chroot "
+        cd /sources
+        rm -rf xkeyboard-config-[0-9]*/
+        tar xf xkeyboard-config-*.tar.xz
+        cd xkeyboard-config-[0-9]*/
+        mkdir build && cd build
+        meson setup --prefix=/usr --buildtype=release ..
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf xkeyboard-config-[0-9]*/
+    "
+    ok "xkeyboard-config built"
+
+    # font-util needed for fonts
+    download_pkg "font-util" "https://www.x.org/releases/individual/font/font-util-1.4.1.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf font-util-[0-9]*/
+        tar xf font-util-*.tar.xz
+        cd font-util-[0-9]*/
+        ./configure --prefix=/usr
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf font-util-[0-9]*/
+    "
+    ok "font-util built"
+
+    # Xorg server with glamor for modesetting acceleration
+    download_pkg "xorg-server" "https://www.x.org/releases/individual/xserver/xorg-server-21.1.15.tar.xz"
+    run_in_chroot "
+        cd /sources
+        rm -rf xorg-server-[0-9]*/
+        tar xf xorg-server-*.tar.xz
+        cd xorg-server-[0-9]*/
+        mkdir build && cd build
+
+        # Build Xorg with glamor for GPU acceleration via modesetting driver
+        # Disable udev (requires systemd), use built-in device detection
+        meson setup --prefix=/usr --buildtype=release \
+            -Dglamor=true \
+            -Dxorg=true \
+            -Dxephyr=false \
+            -Dxnest=false \
+            -Dxvfb=false \
+            -Dudev=false \
+            -Dudev_kms=false \
+            -Dhal=false \
+            -Dsystemd_logind=false \
+            -Ddri2=true \
+            -Ddri3=true \
+            -Dglx=true \
+            -Dlibunwind=false \
+            -Dsuid_wrapper=false \
+            -Ddefault_font_path=/usr/share/fonts/X11 \
+            ..
+
+        ninja -j${NPROC}
+        ninja install
+        cd /sources && rm -rf xorg-server-[0-9]*/
+    "
+    ok "Xorg server built with glamor support"
+
+    # Create Xorg config for modesetting driver
+    run_in_chroot "
+        mkdir -p /etc/X11/xorg.conf.d
+
+        # Modesetting driver config (uses glamor for acceleration)
+        cat > /etc/X11/xorg.conf.d/20-modesetting.conf << 'XCONF'
+Section \"Device\"
+    Identifier  \"Modesetting Graphics\"
+    Driver      \"modesetting\"
+    Option      \"AccelMethod\" \"glamor\"
+    Option      \"DRI\" \"3\"
+EndSection
+XCONF
+
+        # Input device config using evdev
+        cat > /etc/X11/xorg.conf.d/10-evdev.conf << 'XCONF'
+Section \"InputClass\"
+    Identifier \"evdev keyboard catchall\"
+    MatchIsKeyboard \"on\"
+    MatchDevicePath \"/dev/input/event*\"
+    Driver \"evdev\"
+EndSection
+
+Section \"InputClass\"
+    Identifier \"evdev pointer catchall\"
+    MatchIsPointer \"on\"
+    MatchDevicePath \"/dev/input/event*\"
+    Driver \"evdev\"
+EndSection
+XCONF
+    "
+    ok "Xorg configuration created"
+
+    # evdev input driver
+    download_pkg "xf86-input-evdev" "https://www.x.org/releases/individual/driver/xf86-input-evdev-2.10.6.tar.bz2"
+    run_in_chroot "
+        cd /sources
+        rm -rf xf86-input-evdev-[0-9]*/
+        tar xf xf86-input-evdev-*.tar.bz2
+        cd xf86-input-evdev-[0-9]*/
+        ./configure --prefix=/usr
+        make -j${NPROC}
+        make install
+        cd /sources && rm -rf xf86-input-evdev-[0-9]*/
+    "
+    ok "xf86-input-evdev built"
+
+    log "========== X11 and Mesa Complete =========="
+    log "Modesetting driver with glamor acceleration enabled"
+    log "VirtIO GPU driver available for VM graphics"
 
     stage_end "Desktop"
     mark_stage_done "desktop"
