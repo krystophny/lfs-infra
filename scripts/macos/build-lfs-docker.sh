@@ -292,6 +292,9 @@ pacstrap -c -G -M "${LFS}" --noconfirm \
     curl wget htop ripgrep fd \
     ntfs-3g exfatprogs \
     mesa vulkan-icd-loader \
+    xf86-video-amdgpu xf86-video-intel xf86-video-nouveau \
+    xf86-video-qxl xf86-video-vesa xf86-video-fbdev \
+    libva-mesa-driver mesa-vdpau \
     linux-headers dkms
 
 # lfs-infra will be copied to user's home later
