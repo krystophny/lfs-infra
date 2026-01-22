@@ -32,6 +32,8 @@ Commands:
     mount       Mount disk image for building
     umount      Unmount disk image
     chroot      Enter chroot environment
+    snapshot    Create a btrfs snapshot (e.g., snapshot pre-desktop)
+    rollback    Rollback to a snapshot (e.g., rollback pre-desktop)
     status      Show current status
 
 Options:
@@ -42,12 +44,17 @@ Options:
 
 Partition layout (GPT):
     1: EFI System Partition (512MB, FAT32)
-    2: Root filesystem (rest, ext4)
+    2: Root filesystem (rest, btrfs with subvolumes)
+
+Btrfs subvolumes:
+    @           Root filesystem
+    @snapshots  Snapshot storage (for rollback)
 EOF
     exit 0
 }
 
 COMMAND=""
+SNAPSHOT_NAME=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--disk) DISK_FILE="$2"; shift 2 ;;
@@ -55,6 +62,11 @@ while [[ $# -gt 0 ]]; do
         -m|--mount) MOUNT_POINT="$2"; shift 2 ;;
         -h|--help) usage ;;
         create|mount|umount|chroot|status) COMMAND="$1"; shift ;;
+        snapshot|rollback)
+            COMMAND="$1"
+            [[ $# -ge 2 ]] && SNAPSHOT_NAME="$2" && shift
+            shift
+            ;;
         *) die "Unknown option: $1" ;;
     esac
 done
@@ -95,7 +107,7 @@ create_disk() {
     parted -s "${DISK_FILE}" set 1 esp on
 
     # Create root partition (rest)
-    parted -s "${DISK_FILE}" mkpart root ext4 513MiB 100%
+    parted -s "${DISK_FILE}" mkpart root btrfs 513MiB 100%
 
     # Setup loop device
     log "Setting up loop device..."
@@ -107,16 +119,30 @@ create_disk() {
     log "Formatting EFI partition (FAT32)..."
     mkfs.fat -F32 "${loop}p1"
 
-    log "Formatting root partition (ext4)..."
-    mkfs.ext4 -L lfs-root "${loop}p2"
+    log "Formatting root partition (btrfs)..."
+    mkfs.btrfs -L lfs-root "${loop}p2"
+
+    # Create btrfs subvolumes
+    log "Creating btrfs subvolumes..."
+    local tmp_mount="/tmp/lfs-btrfs-setup"
+    mkdir -p "${tmp_mount}"
+    mount "${loop}p2" "${tmp_mount}"
+
+    btrfs subvolume create "${tmp_mount}/@"
+    btrfs subvolume create "${tmp_mount}/@snapshots"
+
+    umount "${tmp_mount}"
+    rmdir "${tmp_mount}"
 
     # Detach loop device
     losetup -d "${loop}"
 
-    ok "Disk created successfully"
+    ok "Disk created successfully with btrfs subvolumes"
     echo ""
     echo "Partition layout:"
     parted -s "${DISK_FILE}" print
+    echo ""
+    echo "Btrfs subvolumes: @, @snapshots"
 }
 
 # Mount disk image
@@ -139,12 +165,16 @@ mount_disk() {
     # Create mount point
     mkdir -p "${MOUNT_POINT}"
 
-    # Mount root partition
-    mount "${loop}p2" "${MOUNT_POINT}"
+    # Mount root subvolume with compression
+    mount -o subvol=@,compress=zstd:3 "${loop}p2" "${MOUNT_POINT}"
 
     # Create and mount EFI partition
     mkdir -p "${MOUNT_POINT}/boot/efi"
     mount "${loop}p1" "${MOUNT_POINT}/boot/efi"
+
+    # Mount snapshots subvolume
+    mkdir -p "${MOUNT_POINT}/.snapshots"
+    mount -o subvol=@snapshots,compress=zstd:3 "${loop}p2" "${MOUNT_POINT}/.snapshots"
 
     # Create essential directories
     mkdir -p "${MOUNT_POINT}"/{sources,tools,boot,etc,var,usr,lib,bin,sbin}
@@ -178,13 +208,18 @@ umount_disk() {
     local loop
     loop=$(get_loop)
 
+    if mountpoint -q "${MOUNT_POINT}/.snapshots" 2>/dev/null; then
+        log "Unmounting snapshots subvolume..."
+        umount "${MOUNT_POINT}/.snapshots"
+    fi
+
     if mountpoint -q "${MOUNT_POINT}/boot/efi" 2>/dev/null; then
         log "Unmounting EFI partition..."
         umount "${MOUNT_POINT}/boot/efi"
     fi
 
     if mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
-        log "Unmounting root partition..."
+        log "Unmounting root subvolume..."
         umount "${MOUNT_POINT}"
     fi
 
@@ -231,6 +266,77 @@ enter_chroot() {
     ok "Exited chroot"
 }
 
+# Create snapshot
+create_snapshot() {
+    check_root
+
+    [[ -z "${SNAPSHOT_NAME}" ]] && die "Snapshot name required. Usage: $0 snapshot NAME"
+
+    mountpoint -q "${MOUNT_POINT}" || die "Disk not mounted. Run: $0 mount"
+    mountpoint -q "${MOUNT_POINT}/.snapshots" || die "Snapshots not mounted"
+
+    local snapshot_path="${MOUNT_POINT}/.snapshots/${SNAPSHOT_NAME}"
+
+    if [[ -d "${snapshot_path}" ]]; then
+        die "Snapshot '${SNAPSHOT_NAME}' already exists"
+    fi
+
+    log "Creating snapshot: ${SNAPSHOT_NAME}..."
+    btrfs subvolume snapshot -r "${MOUNT_POINT}" "${snapshot_path}"
+
+    ok "Snapshot created: ${snapshot_path}"
+    echo ""
+    echo "Available snapshots:"
+    ls -la "${MOUNT_POINT}/.snapshots/"
+}
+
+# Rollback to snapshot
+rollback_snapshot() {
+    check_root
+
+    [[ -z "${SNAPSHOT_NAME}" ]] && die "Snapshot name required. Usage: $0 rollback NAME"
+
+    mountpoint -q "${MOUNT_POINT}" || die "Disk not mounted. Run: $0 mount"
+
+    local snapshot_path="${MOUNT_POINT}/.snapshots/${SNAPSHOT_NAME}"
+
+    if [[ ! -d "${snapshot_path}" ]]; then
+        die "Snapshot '${SNAPSHOT_NAME}' not found"
+    fi
+
+    log "Rolling back to snapshot: ${SNAPSHOT_NAME}..."
+
+    # Get loop device
+    local loop
+    loop=$(get_loop)
+
+    # Unmount current root (keep snapshots mounted)
+    umount "${MOUNT_POINT}/boot/efi" 2>/dev/null || true
+    umount "${MOUNT_POINT}" 2>/dev/null || true
+
+    # Mount the raw partition temporarily
+    local tmp_mount="/tmp/lfs-btrfs-rollback"
+    mkdir -p "${tmp_mount}"
+    mount "${loop}p2" "${tmp_mount}"
+
+    # Delete current @ and recreate from snapshot
+    log "Deleting current root subvolume..."
+    btrfs subvolume delete "${tmp_mount}/@"
+
+    log "Creating new root from snapshot..."
+    btrfs subvolume snapshot "${tmp_mount}/@snapshots/${SNAPSHOT_NAME}" "${tmp_mount}/@"
+
+    umount "${tmp_mount}"
+    rmdir "${tmp_mount}"
+
+    # Remount
+    mount -o subvol=@,compress=zstd:3 "${loop}p2" "${MOUNT_POINT}"
+    mount "${loop}p1" "${MOUNT_POINT}/boot/efi"
+    mount -o subvol=@snapshots,compress=zstd:3 "${loop}p2" "${MOUNT_POINT}/.snapshots"
+
+    ok "Rolled back to snapshot: ${SNAPSHOT_NAME}"
+}
+
 # Show status
 show_status() {
     echo "Disk image: ${DISK_FILE}"
@@ -257,6 +363,12 @@ show_status() {
     if mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
         echo "  Status: Mounted"
         df -h "${MOUNT_POINT}"
+
+        echo ""
+        echo "Snapshots:"
+        if [[ -d "${MOUNT_POINT}/.snapshots" ]]; then
+            ls -1 "${MOUNT_POINT}/.snapshots/" 2>/dev/null || echo "  (none)"
+        fi
     else
         echo "  Status: Not mounted"
     fi
@@ -268,5 +380,7 @@ case "${COMMAND}" in
     mount) mount_disk ;;
     umount) umount_disk ;;
     chroot) enter_chroot ;;
+    snapshot) create_snapshot ;;
+    rollback) rollback_snapshot ;;
     status) show_status ;;
 esac

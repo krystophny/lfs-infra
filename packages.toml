@@ -1,6 +1,32 @@
 # LFS Infrastructure - Package Definitions
 # All packages use bleeding edge versions
 # Set use_git = true to build from git HEAD instead of release tarball
+#
+# Build System Schema:
+# ====================
+# build_system = "autotools" | "meson" | "cmake" | "make" | "custom"
+#   Default: "autotools" (./configure && make && make install)
+#
+# configure_flags = "--disable-foo --enable-bar"
+#   Extra flags appended to ./configure (autotools only)
+#
+# meson_flags = "-Dfoo=false -Dbar=true"
+#   Extra flags for meson setup (meson only)
+#
+# cmake_flags = "-DFOO=OFF -DBAR=ON"
+#   Extra flags for cmake (cmake only)
+#
+# build_commands = ["cmd1", "cmd2", ...]
+#   Full custom build commands (overrides build_system)
+#   Variables: ${srcdir}, ${pkgdir}, ${version}, ${NPROC}
+#
+# provides = ["/usr/lib/libfoo.so", "/usr/bin/foo"]
+#   Files to check for idempotency (skip build if all exist)
+#
+# safe_flags = true
+#   Use IEEE-compliant flags (no -ffast-math)
+#
+# Standard autotools packages need no extra fields - defaults work.
 
 [settings]
 lfs_version = "12.4+"
@@ -362,6 +388,50 @@ url = "https://github.com/openssl/openssl/releases/download/openssl-${version}/o
 git_url = "https://github.com/openssl/openssl.git"
 use_git = false
 stage = 4
+safe_flags = true
+provides = ["/usr/lib/libssl.so", "/usr/lib/libcrypto.so"]
+
+[packages.nettle]
+version = "3.10.1"
+description = "Low-level cryptographic library"
+url = "https://ftp.gnu.org/gnu/nettle/nettle-${version}.tar.gz"
+git_url = "https://git.lysator.liu.se/nettle/nettle.git"
+use_git = false
+stage = 4
+configure_flags = "--disable-static"
+provides = ["/usr/lib/libnettle.so", "/usr/lib/libhogweed.so"]
+depends = ["gmp"]
+
+[packages.libtasn1]
+version = "4.20.0"
+description = "ASN.1 library"
+url = "https://ftp.gnu.org/gnu/libtasn1/libtasn1-${version}.tar.gz"
+git_url = "https://gitlab.com/gnutls/libtasn1.git"
+use_git = false
+stage = 4
+configure_flags = "--disable-static"
+provides = ["/usr/lib/libtasn1.so"]
+
+[packages.libunistring]
+version = "1.3"
+description = "Unicode string library"
+url = "https://ftp.gnu.org/gnu/libunistring/libunistring-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/libunistring.git"
+use_git = false
+stage = 4
+configure_flags = "--disable-static"
+provides = ["/usr/lib/libunistring.so"]
+
+[packages.gnutls]
+version = "3.8.9"
+description = "TLS library"
+url = "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-${version}.tar.xz"
+git_url = "https://gitlab.com/gnutls/gnutls.git"
+use_git = false
+stage = 4
+configure_flags = "--disable-static --without-p11-kit --with-default-trust-store-file=/etc/ssl/certs/ca-certificates.crt --disable-doc --disable-tests --disable-libdane"
+provides = ["/usr/lib/libgnutls.so"]
+depends = ["nettle", "libtasn1", "libunistring", "gmp"]
 
 [packages.libffi]
 version = "3.4.7"
@@ -418,6 +488,9 @@ url = "https://github.com/ninja-build/ninja/archive/refs/tags/v${version}.tar.gz
 git_url = "https://github.com/ninja-build/ninja.git"
 use_git = false
 stage = 4
+build_system = "custom"
+build_commands = ["python3 configure.py --bootstrap", "install -m755 ninja /usr/bin/"]
+provides = ["/usr/bin/ninja"]
 
 [packages.meson]
 version = "1.10.1"
@@ -426,6 +499,10 @@ url = "https://github.com/mesonbuild/meson/releases/download/${version}/meson-${
 git_url = "https://github.com/mesonbuild/meson.git"
 use_git = false
 stage = 4
+build_system = "custom"
+build_commands = ["pip3 install --root=/ --prefix=/usr --no-deps ."]
+provides = ["/usr/bin/meson"]
+depends = ["python", "ninja"]
 
 # =============================================================================
 # STAGE 5: Kernel and Bootloader
@@ -439,6 +516,9 @@ git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 use_git = false
 checksum_url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc"
 stage = 5
+build_system = "custom"
+build_commands = ["make mrproper", "make defconfig", "make -j${NPROC}", "make modules_install", "cp arch/x86/boot/bzImage /boot/vmlinuz-${version}", "cp System.map /boot/System.map-${version}"]
+provides = ["/boot/vmlinuz-${version}"]
 
 [packages.grub]
 version = "2.14"
@@ -475,6 +555,8 @@ url = "https://ftp.gnu.org/gnu/gmp/gmp-${version}.tar.xz"
 git_url = "https://gmplib.org/repo/gmp/"
 use_git = false
 stage = 1
+configure_flags = "--enable-cxx --disable-assembly"
+provides = ["/usr/lib/libgmp.so"]
 
 [packages.mpfr]
 version = "4.2.2"
@@ -511,6 +593,9 @@ url = "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${ve
 git_url = "https://github.com/Kitware/CMake.git"
 use_git = false
 stage = 4
+build_system = "custom"
+build_commands = ["./bootstrap --prefix=/usr --parallel=${NPROC}", "make -j${NPROC}", "make install"]
+provides = ["/usr/bin/cmake"]
 
 # =============================================================================
 # STAGE 6: Init System (runit for fast boot)
@@ -1015,6 +1100,9 @@ url = "https://download.gnome.org/sources/glib/2.84/glib-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/glib.git"
 use_git = false
 stage = 9
+build_system = "meson"
+meson_flags = "-Dman-pages=disabled -Ddtrace=disabled -Dsystemtap=disabled -Dgtk_doc=false"
+provides = ["/usr/lib/libglib-2.0.so"]
 
 [packages.atk]
 version = "2.38.0"
@@ -1031,6 +1119,8 @@ url = "https://download.gnome.org/sources/pango/1.56/pango-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/pango.git"
 use_git = false
 stage = 9
+build_system = "meson"
+provides = ["/usr/lib/libpango-1.0.so"]
 
 [packages.cairo]
 version = "1.18.4"
@@ -1039,6 +1129,9 @@ url = "https://cairographics.org/releases/cairo-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/cairo/cairo.git"
 use_git = false
 stage = 9
+build_system = "meson"
+meson_flags = "-Dgtk_doc=false -Dtests=disabled"
+provides = ["/usr/lib/libcairo.so"]
 
 [packages.gdk-pixbuf]
 version = "2.44.4"
@@ -1047,6 +1140,9 @@ url = "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-${version}.
 git_url = "https://gitlab.gnome.org/GNOME/gdk-pixbuf.git"
 use_git = false
 stage = 9
+build_system = "meson"
+meson_flags = "-Dman=false -Dgtk_doc=false"
+provides = ["/usr/lib/libgdk_pixbuf-2.0.so"]
 
 [packages.harfbuzz]
 version = "12.3.1"
@@ -1071,6 +1167,9 @@ url = "https://download.gnome.org/sources/gtk+/3.24/gtk+-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/gtk.git"
 use_git = false
 stage = 9
+build_system = "meson"
+meson_flags = "-Dman=false -Dgtk_doc=false -Dintrospection=false -Ddemos=false -Dexamples=false -Dtests=false"
+provides = ["/usr/lib/libgtk-3.so"]
 
 [packages.dbus]
 version = "1.16.2"
@@ -1325,6 +1424,10 @@ url = "https://download.gnome.org/sources/vte/0.74/vte-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/vte.git"
 use_git = false
 stage = 10
+build_system = "meson"
+meson_flags = "-Dvapi=false -Dgtk4=false -Dicu=false -D_systemd=false -Ddocs=false -Dgir=false -Dglade=false"
+provides = ["/usr/lib/libvte-2.91.so"]
+depends = ["gnutls", "gtk3", "pcre2"]
 
 [packages.xfce4-terminal]
 version = "1.1.3"

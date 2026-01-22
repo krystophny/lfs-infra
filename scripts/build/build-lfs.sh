@@ -185,6 +185,184 @@ get_pkg_url() {
     ' "${PACKAGES_FILE}" | sed "s/\${version}/${version}/g"
 }
 
+# Get build system (autotools, meson, cmake, make, custom)
+get_pkg_build_system() {
+    local pkg="$1"
+    local result
+    result=$(awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^build_system/ { gsub(/.*= *"|".*/, ""); print }
+    ' "${PACKAGES_FILE}")
+    echo "${result:-autotools}"
+}
+
+# Get configure flags
+get_pkg_configure_flags() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^configure_flags/ { gsub(/.*= *"|".*/, ""); print }
+    ' "${PACKAGES_FILE}"
+}
+
+# Get meson flags
+get_pkg_meson_flags() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^meson_flags/ { gsub(/.*= *"|".*/, ""); print }
+    ' "${PACKAGES_FILE}"
+}
+
+# Get cmake flags
+get_pkg_cmake_flags() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^cmake_flags/ { gsub(/.*= *"|".*/, ""); print }
+    ' "${PACKAGES_FILE}"
+}
+
+# Get custom build commands (returns newline-separated list)
+get_pkg_build_commands() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^build_commands/ {
+            gsub(/^build_commands *= *\[/, "")
+            gsub(/\]$/, "")
+            gsub(/, *"/, "\n")
+            gsub(/"/, "")
+            print
+        }
+    ' "${PACKAGES_FILE}"
+}
+
+# Get provides list (files to check for idempotency)
+get_pkg_provides() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^provides/ {
+            gsub(/^provides *= *\[/, "")
+            gsub(/\]$/, "")
+            gsub(/, *"/, "\n")
+            gsub(/"/, "")
+            print
+        }
+    ' "${PACKAGES_FILE}"
+}
+
+# Check if package needs safe flags (no fast-math)
+get_pkg_safe_flags() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^safe_flags *= *true/ { print "true" }
+    ' "${PACKAGES_FILE}"
+}
+
+# Check if package is already installed (idempotency check)
+is_pkg_installed() {
+    local pkg="$1"
+    local provides
+    provides=$(get_pkg_provides "${pkg}")
+
+    [[ -z "${provides}" ]] && return 1
+
+    local version
+    version=$(get_pkg_version "${pkg}")
+
+    while IFS= read -r file; do
+        [[ -z "${file}" ]] && continue
+        # Expand version variable
+        file="${file//\$\{version\}/${version}}"
+        [[ ! -e "${LFS}${file}" ]] && return 1
+    done <<< "${provides}"
+
+    return 0
+}
+
+# Generic build function - reads build config from packages.toml
+build_pkg() {
+    local pkg="$1"
+    local destdir="${2:-${LFS}}"
+
+    # Idempotency check
+    if is_pkg_installed "${pkg}"; then
+        log "Package already installed: ${pkg}"
+        return 0
+    fi
+
+    local version build_system configure_flags meson_flags cmake_flags build_commands safe_flags
+    version=$(get_pkg_version "${pkg}")
+    build_system=$(get_pkg_build_system "${pkg}")
+    configure_flags=$(get_pkg_configure_flags "${pkg}")
+    meson_flags=$(get_pkg_meson_flags "${pkg}")
+    cmake_flags=$(get_pkg_cmake_flags "${pkg}")
+    build_commands=$(get_pkg_build_commands "${pkg}")
+    safe_flags=$(get_pkg_safe_flags "${pkg}")
+
+    log "Building ${pkg}-${version} (${build_system})..."
+
+    # Set up build flags
+    local cflags="-O3 -march=native -mtune=native -pipe"
+    if [[ "${safe_flags}" != "true" ]]; then
+        cflags+=" -ffast-math"
+    fi
+    export CFLAGS="${cflags}"
+    export CXXFLAGS="${cflags}"
+
+    # Custom build commands override everything
+    if [[ -n "${build_commands}" ]]; then
+        while IFS= read -r cmd; do
+            [[ -z "${cmd}" ]] && continue
+            # Expand variables
+            cmd="${cmd//\$\{version\}/${version}}"
+            cmd="${cmd//\$\{NPROC\}/${NPROC}}"
+            log "  Running: ${cmd}"
+            eval "${cmd}" || die "Build command failed: ${cmd}"
+        done <<< "${build_commands}"
+        ok "Built ${pkg} (custom)"
+        return 0
+    fi
+
+    # Build based on build system
+    case "${build_system}" in
+        autotools)
+            ./configure --prefix=/usr ${configure_flags}
+            make -j"${NPROC}"
+            make DESTDIR="${destdir}" install
+            ;;
+        meson)
+            meson setup build --prefix=/usr ${meson_flags}
+            ninja -C build
+            DESTDIR="${destdir}" ninja -C build install
+            ;;
+        cmake)
+            cmake -B build -DCMAKE_INSTALL_PREFIX=/usr ${cmake_flags}
+            cmake --build build -j"${NPROC}"
+            DESTDIR="${destdir}" cmake --install build
+            ;;
+        make)
+            make -j"${NPROC}"
+            make DESTDIR="${destdir}" PREFIX=/usr install
+            ;;
+        *)
+            die "Unknown build system: ${build_system}"
+            ;;
+    esac
+
+    ok "Built ${pkg} (${build_system})"
+}
+
 # Download a package
 download_pkg() {
     local pkg="$1"
