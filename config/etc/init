@@ -1,6 +1,5 @@
 #!/bin/bash
 # LFS Init Script - Minimal init for XFCE desktop
-# This script handles system initialization and starts the desktop environment
 
 # Mount essential filesystems
 mount -t proc proc /proc
@@ -21,7 +20,7 @@ mount -o remount,rw /
 
 echo "lfs" > /proc/sys/kernel/hostname
 
-# Boot message to serial console
+# Boot message
 {
     echo ""
     echo "=============================================="
@@ -31,6 +30,14 @@ echo "lfs" > /proc/sys/kernel/hostname
     echo "Boot time: $(cut -d' ' -f1 /proc/uptime) seconds"
     echo ""
 } > /dev/ttyS0 2>&1
+
+# Start udevd for device management (required for X input)
+echo "Starting udev..." > /dev/ttyS0
+/sbin/udevd --daemon
+udevadm trigger --action=add --type=subsystems
+udevadm trigger --action=add --type=devices
+udevadm settle
+echo "udev ready" > /dev/ttyS0
 
 # Environment setup
 export HOME=/root
@@ -52,12 +59,11 @@ echo "D-Bus ready" > /dev/ttyS0
 # Start X server
 echo "Starting X server..." > /dev/ttyS0
 cd /root
-# Clean stale X locks from previous boot
 rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
 mkdir -p /tmp/.X11-unix
 /usr/bin/Xorg :0 vt1 -keeptty 2>/var/log/Xorg.0.log &
 
-# Wait for X server to be ready
+# Wait for X server
 for i in $(seq 1 30); do
     [ -e /tmp/.X11-unix/X0 ] && break
     sleep 0.2
@@ -70,9 +76,7 @@ env DISPLAY=:0 HOME=/root XDG_RUNTIME_DIR=/run/user/0 \
     DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
     /usr/bin/startxfce4 2>/var/log/xfce.log &
 
-# Wait and log status
 sleep 3
 echo "Desktop ready - XFCE running" > /dev/ttyS0
 
-# Drop to shell on serial console
 exec /bin/bash </dev/ttyS0 >/dev/ttyS0 2>&1

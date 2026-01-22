@@ -161,9 +161,10 @@ build_qemu_cmd() {
         -netdev user,id=net0,hostfwd=tcp::2222-:22
         -device virtio-net-pci,netdev=net0
 
-        # Input
-        -device virtio-keyboard-pci
-        -device virtio-mouse-pci
+        # Input - use USB tablet for absolute positioning (no mouse jumping)
+        -device usb-ehci
+        -device usb-kbd
+        -device usb-tablet
 
         # Audio
         -audiodev sdl,id=audio0

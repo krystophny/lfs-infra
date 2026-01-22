@@ -14,5 +14,6 @@
     <property name="borderless_maximize" type="bool" value="true"/>
     <property name="cycle_preview" type="bool" value="true"/>
     <property name="scroll_workspaces" type="bool" value="true"/>
+    <property name="use_compositing" type="bool" value="false"/>
   </property>
 </channel>
