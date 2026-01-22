@@ -286,6 +286,38 @@ git_url = "https://github.com/util-linux/util-linux.git"
 use_git = false
 stage = 3
 
+[packages.acl]
+version = "2.3.2"
+description = "Access Control Lists"
+url = "https://download.savannah.gnu.org/releases/acl/acl-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/acl.git"
+use_git = false
+stage = 3
+
+[packages.attr]
+version = "2.5.2"
+description = "Extended filesystem attributes"
+url = "https://download.savannah.gnu.org/releases/attr/attr-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/attr.git"
+use_git = false
+stage = 3
+
+[packages.shadow]
+version = "4.17.4"
+description = "Password and shadow file utilities"
+url = "https://github.com/shadow-maint/shadow/releases/download/${version}/shadow-${version}.tar.xz"
+git_url = "https://github.com/shadow-maint/shadow.git"
+use_git = false
+stage = 3
+
+[packages.iana-etc]
+version = "20250117"
+description = "IANA /etc files (protocols, services)"
+url = "https://github.com/Mic92/iana-etc/releases/download/${version}/iana-etc-${version}.tar.gz"
+git_url = "https://github.com/Mic92/iana-etc.git"
+use_git = false
+stage = 3
+
 # =============================================================================
 # STAGE 4: System Configuration & Security
 # =============================================================================
@@ -373,6 +405,30 @@ url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.tar.xz"
 git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 use_git = false
 checksum_url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc"
+stage = 5
+
+[packages.grub]
+version = "2.14"
+description = "GRand Unified Bootloader"
+url = "https://ftp.gnu.org/gnu/grub/grub-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/grub.git"
+use_git = false
+stage = 5
+
+[packages.efibootmgr]
+version = "18"
+description = "EFI Boot Manager utility"
+url = "https://github.com/rhboot/efibootmgr/releases/download/${version}/efibootmgr-${version}.tar.bz2"
+git_url = "https://github.com/rhboot/efibootmgr.git"
+use_git = false
+stage = 5
+
+[packages.efivar]
+version = "39"
+description = "EFI variable manipulation library"
+url = "https://github.com/rhboot/efivar/releases/download/${version}/efivar-${version}.tar.bz2"
+git_url = "https://github.com/rhboot/efivar.git"
+use_git = false
 stage = 5
 
 # =============================================================================
