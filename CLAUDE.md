@@ -100,9 +100,8 @@ build_commands = [
 
 ## Filesystem
 
-- **btrfs** with lzo compression
-- Subvolumes: `@` (root), `@home`, `@snapshots`
-- Automatic `fresh-install` snapshot created
+- **ext4** with noatime
+- Simple, fast, stable
 
 ## Key Commands
 

@@ -222,7 +222,7 @@ EFI_PART="${PART_PREFIX}1"
 sleep 2  # Wait for partitions to appear
 
 # Format
-header "Formatting (btrfs)"
+header "Formatting (ext4)"
 
 log "Formatting EFI partition (FAT32)..."
 mkfs.fat -F32 -n EFI "${EFI_PART}"
@@ -232,29 +232,19 @@ if [[ -n "${SWAP_PART}" ]]; then
     mkswap -L swap "${SWAP_PART}"
 fi
 
-log "Formatting root partition (btrfs)..."
-mkfs.btrfs -f -L lfs-root "${ROOT_PART}"
+log "Formatting root partition (ext4)..."
+mkfs.ext4 -L lfs-root "${ROOT_PART}"
 
-# Create btrfs subvolumes
-log "Creating btrfs subvolumes..."
-mkdir -p "${MOUNT_POINT}"
-mount "${ROOT_PART}" "${MOUNT_POINT}"
-btrfs subvolume create "${MOUNT_POINT}/@"
-btrfs subvolume create "${MOUNT_POINT}/@home"
-btrfs subvolume create "${MOUNT_POINT}/@snapshots"
-umount "${MOUNT_POINT}"
-
-# Mount with subvolumes and compression
+# Mount filesystems
 log "Mounting filesystems..."
-mount -o subvol=@,compress=lzo,noatime "${ROOT_PART}" "${MOUNT_POINT}"
-mkdir -p "${MOUNT_POINT}/home" "${MOUNT_POINT}/.snapshots" "${MOUNT_POINT}/boot/efi"
-mount -o subvol=@home,compress=lzo,noatime "${ROOT_PART}" "${MOUNT_POINT}/home"
-mount -o subvol=@snapshots,compress=lzo,noatime "${ROOT_PART}" "${MOUNT_POINT}/.snapshots"
+mkdir -p "${MOUNT_POINT}"
+mount -o noatime "${ROOT_PART}" "${MOUNT_POINT}"
+mkdir -p "${MOUNT_POINT}/boot/efi"
 mount "${EFI_PART}" "${MOUNT_POINT}/boot/efi"
 
 [[ -n "${SWAP_PART}" ]] && swapon "${SWAP_PART}"
 
-ok "Filesystem ready (btrfs with lzo compression)"
+ok "Filesystem ready (ext4)"
 
 # ============================================================================
 # Step 3: Create Directory Structure
@@ -286,11 +276,9 @@ ROOT_UUID=$(blkid -s UUID -o value "${ROOT_PART}")
 EFI_UUID=$(blkid -s UUID -o value "${EFI_PART}")
 
 cat > "${MOUNT_POINT}/etc/fstab" << EOF
-# /etc/fstab - LFS (btrfs with lzo compression)
-UUID=${ROOT_UUID}  /            btrfs  subvol=@,compress=lzo,noatime  0 1
-UUID=${ROOT_UUID}  /home        btrfs  subvol=@home,compress=lzo,noatime  0 2
-UUID=${ROOT_UUID}  /.snapshots  btrfs  subvol=@snapshots,compress=lzo,noatime  0 2
-UUID=${EFI_UUID}   /boot/efi    vfat   umask=0077  0 2
+# /etc/fstab - LFS (ext4)
+UUID=${ROOT_UUID}  /            ext4   noatime      0 1
+UUID=${EFI_UUID}   /boot/efi    vfat   umask=0077   0 2
 EOF
 
 if [[ -n "${SWAP_PART}" ]]; then
@@ -443,10 +431,6 @@ ok "System configured"
 # ============================================================================
 header "Installation Complete!"
 
-# Create snapshot of fresh install
-log "Creating snapshot of fresh install..."
-btrfs subvolume snapshot -r "${MOUNT_POINT}" "${MOUNT_POINT}/.snapshots/fresh-install"
-
 # Unmount
 log "Unmounting filesystems..."
 sync
@@ -455,11 +439,6 @@ umount -R "${MOUNT_POINT}" || umount -l "${MOUNT_POINT}"
 
 echo ""
 ok "LFS installed to ${DEVICE}"
-echo ""
-echo "Btrfs subvolumes:"
-echo "  @           - Root filesystem"
-echo "  @home       - Home directories"
-echo "  @snapshots  - Snapshots (fresh-install created)"
 echo ""
 echo "Next steps:"
 echo "  1. Remove the USB drive"

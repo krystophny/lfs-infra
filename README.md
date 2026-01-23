@@ -41,8 +41,7 @@ sudo ./install.sh --yes /dev/nvme0n1
 ## Features
 
 - **Bleeding-edge packages**: GCC 16, Linux 6.18, glibc 2.42
-- **Btrfs with snapshots**: Automatic `fresh-install` snapshot, easy rollback
-- **LZO compression**: Fast transparent filesystem compression
+- **Ext4 filesystem**: Fast, stable, proven
 - **Performance optimized**: `-O3 -march=native -mtune=native` by default
 - **Minimal package manager**: `pk` - 120 lines of shell, zero dependencies
 
@@ -74,29 +73,6 @@ lfs-infra/
 │       └── download-sources.sh
 └── version-checker/
     └── check-versions.sh   # Check for package updates
-```
-
-## Btrfs Subvolumes
-
-| Subvolume | Mount Point | Purpose |
-|-----------|-------------|---------|
-| @ | / | Root filesystem |
-| @home | /home | User home directories |
-| @snapshots | /.snapshots | Snapshot storage |
-
-### Snapshot Management
-
-```bash
-# Create snapshot
-sudo btrfs subvolume snapshot -r / /.snapshots/my-snapshot
-
-# List snapshots
-sudo btrfs subvolume list /.snapshots
-
-# Rollback (boot from live USB)
-sudo mount /dev/nvme0n1p3 /mnt
-sudo btrfs subvolume delete /mnt/@
-sudo btrfs subvolume snapshot /mnt/@snapshots/my-snapshot /mnt/@
 ```
 
 ## Configuration
