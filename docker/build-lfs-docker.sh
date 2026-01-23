@@ -304,7 +304,7 @@ cd /lfs-infra
 export LFS_USERNAME LFS_PASSWORD
 
 # Only download packages for stages 1-5 (minimal USB system)
-./scripts/build/build-lfs.sh download 1 2 3 4 5
+./scripts/build/build-lfs.sh download 5
 ./scripts/build/build-lfs.sh toolchain
 ./scripts/build/build-lfs.sh temptools
 ./scripts/build/build-lfs.sh chroot-prep
