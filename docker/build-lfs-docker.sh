@@ -558,7 +558,7 @@ docker run --rm \
     --privileged \
     --name "${CONTAINER_NAME}" \
     -v "${OUTPUT_DIR}:/output" \
-    -v "${OUTPUT_DIR}/lfs-infra:/lfs-infra:ro" \
+    -v "${OUTPUT_DIR}/lfs-infra:/lfs-infra" \
     -v "${CACHE_DIR}:/cache" \
     lfs-builder \
     bash /output/build-inside-docker.sh
