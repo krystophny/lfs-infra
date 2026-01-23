@@ -106,7 +106,7 @@ stage = 1
 provides = ["${LFS}/usr/lib/libstdc++.so"]
 build_commands = [
     "mkdir -p build && cd build && ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${LFS} install",
-    "rm -v ${LFS}/usr/lib/lib{stdc++{,exp,fs},supc++}.la"
+    "rm -fv ${LFS}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
 ]
 
 # GCC Pass 2 - Full cross compiler (built in chroot after temp tools)

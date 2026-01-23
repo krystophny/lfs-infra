@@ -229,6 +229,17 @@ log() { echo -e "\033[0;34m[BUILD]\033[0m \$*"; }
 ok() { echo -e "\033[0;32m[OK]\033[0m \$*"; }
 die() { echo -e "\033[0;31m[FATAL]\033[0m \$*"; exit 1; }
 
+# Cache build artifacts on exit (even on failure) for resume capability
+cache_on_exit() {
+    log "Saving cache for resume..."
+    cp -n "\${LFS}/sources/"*.tar.* /cache/sources/ 2>/dev/null || true
+    [[ -d "\${LFS}/tools/bin" ]] && cp -a "\${LFS}/tools/"* /cache/tools/ 2>/dev/null || true
+    mkdir -p /cache/pkg
+    cp -n "\${LFS}/pkg/"*.pkg.tar.xz /cache/pkg/ 2>/dev/null || true
+    log "Cache saved"
+}
+trap cache_on_exit EXIT
+
 [[ -z "\${LFS}" || "\${LFS}" == "/" ]] && die "Invalid LFS"
 
 IMAGE_FILE="/output/lfs-minimal.img"
