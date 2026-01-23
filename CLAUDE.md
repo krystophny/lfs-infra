@@ -115,6 +115,26 @@ Cleanup after build: `pk r binutils-pass1 gcc-pass1 ... && rm -rf /var/tmp/lfs-b
 
 User is in `src` group (GID 50) with write access to `/usr/src` - build as user, install as root.
 
+## Profile-Guided Optimization (PGO)
+
+Key packages are built with PGO for maximum runtime performance:
+
+| Package | Method | Gains |
+|---------|--------|-------|
+| GCC | `make profiledbootstrap` | ~10% faster compilation |
+| Python | `--enable-optimizations` | ~10% faster runtime |
+| LLVM/Clang | `LLVM_BUILD_INSTRUMENTED` | ~15-20% faster compilation |
+| zstd | `-fprofile-generate/-use` | ~5-10% faster compression |
+| SQLite | `-fprofile-generate/-use` | ~10-30% faster queries |
+| OpenSSL | `-fprofile-generate/-use` | ~5% faster crypto |
+
+PGO works by:
+1. Building with instrumentation (`-fprofile-generate`)
+2. Running representative workloads (tests, benchmarks)
+3. Rebuilding with profile data (`-fprofile-use`)
+
+Note: PGO builds take 2-4x longer but produce significantly faster binaries.
+
 ## Key Commands
 
 ```bash

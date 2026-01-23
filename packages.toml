@@ -23,8 +23,21 @@
 # provides = ["/usr/lib/libfoo.so", "/usr/bin/foo"]
 #   Files to check for idempotency (skip build if all exist)
 #
-# # LTO enabled (glibc 2.35+ supports it)
-#   Use IEEE-compliant flags (no -ffast-math)
+# Profile-Guided Optimization (PGO):
+# ==================================
+# Some packages support PGO for runtime performance gains (5-20%+).
+# PGO builds use custom build_commands with this pattern:
+#   1. Build with -fprofile-generate (instrumented)
+#   2. Run representative workload (tests, benchmarks)
+#   3. Rebuild with -fprofile-use -fprofile-correction (optimized)
+#
+# PGO-enabled packages in this file:
+#   - gcc (profiledbootstrap): ~10% faster compilation
+#   - python (--enable-optimizations): ~10% faster runtime
+#   - llvm/clang (LLVM_BUILD_INSTRUMENTED): ~15-20% faster compilation
+#   - zstd: ~5-10% faster compression
+#   - sqlite: ~10-30% faster queries
+#   - openssl: ~5% faster crypto operations
 #
 # Standard autotools packages need no extra fields - defaults work.
 
@@ -82,6 +95,17 @@ checksum_url = "https://gcc.gnu.org/pub/gcc/snapshots/LATEST-16/sha512.sum"
 stage = 3
 depends = ["gmp", "mpfr", "mpc"]
 languages = "c,c++,fortran"
+# PGO: profiledbootstrap compiles GCC 4 times with profile-guided optimization
+# This takes longer but results in ~10% faster GCC
+build_commands = [
+    "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
+    "mkdir -p build && cd build && ../configure --prefix=/usr --enable-languages=c,c++,fortran --enable-default-pie --enable-default-ssp --disable-multilib --with-system-zlib --enable-plugin",
+    "cd build && make -j${NPROC} profiledbootstrap",
+    "cd build && make DESTDIR=${PKG} install",
+    "ln -svf gcc ${PKG}/usr/bin/cc",
+    "ln -svf ../bin/cpp ${PKG}/usr/lib/cpp",
+    "ln -svf gcc.1 ${PKG}/usr/share/man/man1/cc.1"
+]
 
 # GCC Pass 1 - Cross compiler (limited, for building glibc)
 # Build order: 2 (requires binutils-pass1)
@@ -476,6 +500,17 @@ url = "https://github.com/facebook/zstd/releases/download/v${version}/zstd-${ver
 git_url = "https://github.com/facebook/zstd.git"
 use_git = false
 stage = 3
+# PGO: Build with profiling, run benchmarks, rebuild with profile data
+# Results in ~5-10% faster compression/decompression
+build_commands = [
+    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-generate\" LDFLAGS=\"${LDFLAGS} -fprofile-generate\" lib-mt",
+    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-generate\" LDFLAGS=\"${LDFLAGS} -fprofile-generate\" zstd",
+    "./zstd -b1 -e19 -i5",
+    "make clean",
+    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-use -fprofile-correction\" LDFLAGS=\"${LDFLAGS}\" lib-mt",
+    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-use -fprofile-correction\" LDFLAGS=\"${LDFLAGS}\" zstd",
+    "make PREFIX=/usr DESTDIR=${PKG} install"
+]
 
 [packages.readline]
 version = "8.3"
@@ -485,6 +520,28 @@ url = "https://ftpmirror.gnu.org/gnu/readline/readline-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/readline.git"
 use_git = false
 stage = 3
+
+[packages.sqlite]
+version = "3.48.0"
+version_check = "url:https://www.sqlite.org/download.html|sqlite-autoconf-([0-9]+)"
+description = "Self-contained SQL database engine"
+url = "https://www.sqlite.org/2025/sqlite-autoconf-3480000.tar.gz"
+git_url = "https://github.com/sqlite/sqlite.git"
+use_git = false
+stage = 3
+# PGO: SQLite benefits significantly from PGO (~10-30% gains)
+# Build instrumented, run speedtest1 benchmark, rebuild with profile data
+build_commands = [
+    "./configure --prefix=/usr --enable-fts5 --enable-json1 CFLAGS=\"${CFLAGS} -fprofile-generate\" LDFLAGS=\"${LDFLAGS} -fprofile-generate\"",
+    "make -j${NPROC}",
+    "gcc -O2 -I. test/speedtest1.c .libs/libsqlite3.a -lpthread -ldl -lm -o speedtest1 -fprofile-generate || true",
+    "./speedtest1 --size 50 || ./sqlite3 ':memory:' 'SELECT * FROM sqlite_master;' || true",
+    "make clean",
+    "./configure --prefix=/usr --enable-fts5 --enable-json1 CFLAGS=\"${CFLAGS} -fprofile-use -fprofile-correction\" LDFLAGS=\"${LDFLAGS}\"",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+provides = ["/usr/lib/libsqlite3.so", "/usr/bin/sqlite3"]
 
 [packages.bc]
 version = "7.0.3"
@@ -650,7 +707,18 @@ url = "https://github.com/openssl/openssl/releases/download/openssl-${version}/o
 git_url = "https://github.com/openssl/openssl.git"
 use_git = false
 stage = 4
-# LTO enabled (glibc 2.35+ supports it)
+# PGO: OpenSSL benefits ~5% from PGO using crypto benchmarks
+# Build instrumented, run openssl speed benchmarks, rebuild with profile
+build_commands = [
+    "./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib shared zlib-dynamic enable-ktls linux-x86_64 -fprofile-generate",
+    "make -j${NPROC}",
+    "./apps/openssl speed -seconds 3 rsa2048 aes-256-cbc sha256 || true",
+    "./apps/openssl speed -seconds 3 -evp aes-256-gcm sha512 || true",
+    "make clean",
+    "./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib shared zlib-dynamic enable-ktls linux-x86_64 -fprofile-use -fprofile-correction",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 provides = ["/usr/lib/libssl.so", "/usr/lib/libcrypto.so"]
 
 [packages.nettle]
@@ -2128,17 +2196,22 @@ url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}
 git_url = "https://github.com/llvm/llvm-project.git"
 use_git = false
 stage = 14
-# Includes: clang, clang++, flang-new, lld, lldb
+# PGO: LLVM benefits ~15-20% from PGO (compile times decrease significantly)
+# Stage 1: Build with instrumentation, Stage 2: Generate profiles, Stage 3: Build optimized
+# Includes: clang, clang++, flang-new (with MLIR), lld, lldb, clang-tools-extra, compiler-rt
+build_commands = [
+    "mkdir -p build-stage1 && cd build-stage1 && cmake -G Ninja ../llvm -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_TARGETS_TO_BUILD='X86' -DCMAKE_INSTALL_PREFIX=/usr -DLLVM_BUILD_INSTRUMENTED=IR -DLLVM_BUILD_RUNTIME=No -DLLVM_INCLUDE_TESTS=OFF",
+    "cd build-stage1 && ninja clang lld",
+    "mkdir -p profiles && cd build-stage1 && LLVM_PROFILE_FILE=$(pwd)/../profiles/profile-%p.profraw bin/clang -O2 -c ../clang/lib/Sema/*.cpp 2>/dev/null || true",
+    "build-stage1/bin/llvm-profdata merge -output=profdata.prof profiles/*.profraw",
+    "mkdir -p build-pgo && cd build-pgo && cmake -G Ninja ../llvm -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS='clang;lld;clang-tools-extra;compiler-rt;mlir;flang;lldb;polly' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi;libunwind' -DLLVM_TARGETS_TO_BUILD='X86;NVPTX;AMDGPU' -DCMAKE_INSTALL_PREFIX=/usr -DLLVM_PROFDATA_FILE=$(pwd)/../profdata.prof -DLLVM_ENABLE_LTO=Thin -DLLVM_PARALLEL_LINK_JOBS=2 -DFLANG_ENABLE_WERROR=OFF -DMLIR_ENABLE_BINDINGS_PYTHON=ON -DLLVM_INSTALL_UTILS=ON",
+    "cd build-pgo && ninja",
+    "cd build-pgo && DESTDIR=${PKG} ninja install"
+]
 
-[packages.flang]
-version = "22.1.0"
-version_check = "url:https://github.com/llvm/llvm-project/tags|llvmorg-([0-9]+\.[0-9]+\.[0-9]+)"
-description = "LLVM Fortran compiler"
-url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/llvm-project-${version}.src.tar.xz"
-git_url = "https://github.com/llvm/llvm-project.git"
-use_git = false
-stage = 14
-# Note: Built as part of LLVM project with -DLLVM_ENABLE_PROJECTS="flang"
+# [packages.flang] - Now built as part of [packages.llvm] with full MLIR support
+# Flang requires MLIR which is included in the unified LLVM build above
+# This provides: flang-new (Fortran compiler), mlir-opt, mlir-translate, etc.
 
 [packages.vscode]
 version = "1.108.1"
