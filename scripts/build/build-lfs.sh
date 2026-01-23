@@ -74,7 +74,10 @@ get_pkg_url() {
     version=$(get_pkg_version "${pkg}")
     version_mm=$(echo "${version}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
     url=$(get_pkg_field "${pkg}" "url")
-    echo "${url}" | sed -e "s/\${version}/${version}/g" -e "s/\${version_mm}/${version_mm}/g"
+    # Use bash string replacement instead of sed to avoid escaping issues
+    url="${url//\$\{version\}/${version}}"
+    url="${url//\$\{version_mm\}/${version_mm}}"
+    echo "${url}"
 }
 
 get_pkg_build_commands() {
