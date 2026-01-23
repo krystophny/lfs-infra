@@ -229,16 +229,7 @@ log() { echo -e "\033[0;34m[BUILD]\033[0m \$*"; }
 ok() { echo -e "\033[0;32m[OK]\033[0m \$*"; }
 die() { echo -e "\033[0;31m[FATAL]\033[0m \$*"; exit 1; }
 
-# Cache build artifacts on exit (even on failure) for resume capability
-cache_on_exit() {
-    log "Saving cache for resume..."
-    cp -n "\${LFS}/sources/"*.tar.* /cache/sources/ 2>/dev/null || true
-    [[ -d "\${LFS}/tools/bin" ]] && cp -a "\${LFS}/tools/"* /cache/tools/ 2>/dev/null || true
-    mkdir -p /cache/pkg
-    cp -n "\${LFS}/pkg/"*.pkg.tar.xz /cache/pkg/ 2>/dev/null || true
-    log "Cache saved"
-}
-trap cache_on_exit EXIT
+# All caches are now symlinked - no trap needed, writes go directly to host
 
 [[ -z "\${LFS}" || "\${LFS}" == "/" ]] && die "Invalid LFS"
 
@@ -297,19 +288,12 @@ ln -sf /cache/sources "\${LFS}/sources"
 # Use cache directory directly for toolchain (Stage 1 persists across builds)
 log "Setting up toolchain cache..."
 mkdir -p /cache/tools
-mkdir -p "\${LFS}/tools"
-# Copy existing cached tools, then symlink for new builds
-if [[ -d /cache/tools/bin ]]; then
-    log "Restoring cached toolchain..."
-    cp -a /cache/tools/* "\${LFS}/tools/" 2>/dev/null || true
-fi
+ln -sf /cache/tools "\${LFS}/tools"
 
-# Restore cached binary packages
-if ls /cache/pkg/*.pkg.tar.xz &>/dev/null 2>&1; then
-    log "Using cached binary packages..."
-    mkdir -p "\${LFS}/pkg"
-    cp -n /cache/pkg/*.pkg.tar.xz "\${LFS}/pkg/" 2>/dev/null || true
-fi
+# Use cache directory directly for binary packages (persist across builds)
+log "Setting up package cache..."
+mkdir -p /cache/pkg
+ln -sf /cache/pkg "\${LFS}/pkg"
 
 log "=========================================="
 log "Building Minimal LFS (stages 1-5 only)"
