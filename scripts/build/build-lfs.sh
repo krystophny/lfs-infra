@@ -18,6 +18,19 @@ export NPROC="$(nproc)"
 export MAKEFLAGS="-j${NPROC}"
 export FORCE_UNSAFE_CONFIGURE=1
 
+# Optimization flags for Zen 3 (used by packages that respect environment)
+export CFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe -flto=${NPROC} -fuse-linker-plugin"
+export CXXFLAGS="${CFLAGS}"
+export FFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe"
+export FCFLAGS="${FFLAGS}"
+export LDFLAGS="-Wl,-O2 -Wl,--as-needed -flto=${NPROC} -fuse-linker-plugin"
+
+# Safe flags (no LTO, for packages that break with LTO like glibc)
+export CFLAGS_SAFE="-O3 -march=znver3 -mtune=znver3 -pipe"
+export CXXFLAGS_SAFE="${CFLAGS_SAFE}"
+export FFLAGS_SAFE="${CFLAGS_SAFE}"
+export LDFLAGS_SAFE="-Wl,-O2 -Wl,--as-needed"
+
 # Cross-compilation variables (standard names for packages.toml)
 # TARGET: target triplet for cross-compilation
 # SYSROOT: where target system files go (headers, libraries)
