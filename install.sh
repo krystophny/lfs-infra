@@ -426,6 +426,16 @@ fi
 
 ok "System configured"
 
+# Weekly TRIM for SSD longevity
+log "Setting up weekly TRIM..."
+mkdir -p "${MOUNT_POINT}/etc/cron.weekly"
+cat > "${MOUNT_POINT}/etc/cron.weekly/fstrim" << 'EOF'
+#!/bin/sh
+fstrim -av
+EOF
+chmod +x "${MOUNT_POINT}/etc/cron.weekly/fstrim"
+ok "Weekly TRIM configured"
+
 # ============================================================================
 # Done
 # ============================================================================
