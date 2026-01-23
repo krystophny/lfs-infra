@@ -491,6 +491,82 @@ chmod +x "${MOUNT_POINT}/etc/cron.weekly/fstrim"
 ok "Weekly TRIM configured"
 
 # ============================================================================
+# Step 10: Desktop Environment Setup
+# ============================================================================
+header "Desktop Environment Setup"
+
+# Copy runit init scripts
+log "Setting up runit init system..."
+mkdir -p "${MOUNT_POINT}/etc/runit"
+cp "${SCRIPT_DIR}/config/runit/1" "${MOUNT_POINT}/etc/runit/"
+cp "${SCRIPT_DIR}/config/runit/2" "${MOUNT_POINT}/etc/runit/"
+cp "${SCRIPT_DIR}/config/runit/3" "${MOUNT_POINT}/etc/runit/"
+chmod +x "${MOUNT_POINT}/etc/runit/"[123]
+
+# Create runsvdir structure
+mkdir -p "${MOUNT_POINT}/etc/runit/runsvdir/default"
+mkdir -p "${MOUNT_POINT}/etc/sv"
+ln -sf /etc/runit/runsvdir/default "${MOUNT_POINT}/etc/runit/runsvdir/current"
+
+# Copy service definitions
+for svc in dbus iwd sshd cronie; do
+    if [[ -d "${SCRIPT_DIR}/config/runit/sv/${svc}" ]]; then
+        cp -r "${SCRIPT_DIR}/config/runit/sv/${svc}" "${MOUNT_POINT}/etc/sv/"
+        chmod +x "${MOUNT_POINT}/etc/sv/${svc}/run"
+        ln -sf "/etc/sv/${svc}" "${MOUNT_POINT}/etc/runit/runsvdir/default/"
+    fi
+done
+
+# Create agetty-tty1 service with auto-login for user
+mkdir -p "${MOUNT_POINT}/etc/sv/agetty-tty1"
+cat > "${MOUNT_POINT}/etc/sv/agetty-tty1/run" << EOF
+#!/bin/sh
+# Auto-login ${LFS_USERNAME} on tty1, X starts via .bash_profile
+exec agetty -a ${LFS_USERNAME} -J tty1 linux
+EOF
+chmod +x "${MOUNT_POINT}/etc/sv/agetty-tty1/run"
+ln -sf /etc/sv/agetty-tty1 "${MOUNT_POINT}/etc/runit/runsvdir/default/"
+
+ok "Runit init configured"
+
+# Set up user desktop environment
+log "Setting up XFCE4 with Chicago95 theme..."
+USER_HOME="${MOUNT_POINT}/home/${LFS_USERNAME}"
+
+# Create .bash_profile for auto-starting X
+cat > "${USER_HOME}/.bash_profile" << 'EOF'
+# Auto-start X on tty1
+if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    exec startxfce4
+fi
+EOF
+
+# Copy XFCE4 configuration
+mkdir -p "${USER_HOME}/.config/xfce4/xfconf/xfce-perchannel-xml"
+if [[ -d "${SCRIPT_DIR}/config/user/xfce4" ]]; then
+    cp -r "${SCRIPT_DIR}/config/user/xfce4/"* "${USER_HOME}/.config/xfce4/"
+fi
+
+# Copy autostart entries
+if [[ -d "${SCRIPT_DIR}/config/user/autostart" ]]; then
+    mkdir -p "${USER_HOME}/.config/autostart"
+    cp -r "${SCRIPT_DIR}/config/user/autostart/"* "${USER_HOME}/.config/autostart/"
+fi
+
+# Fix ownership
+chown -R 1000:1000 "${USER_HOME}"
+
+ok "Desktop configured (XFCE4 + Chicago95, auto-login on tty1)"
+
+# Copy Xorg config
+if [[ -d "${SCRIPT_DIR}/config/xorg" ]]; then
+    mkdir -p "${MOUNT_POINT}/etc/X11/xorg.conf.d"
+    cp "${SCRIPT_DIR}/config/xorg/"* "${MOUNT_POINT}/etc/X11/xorg.conf.d/"
+fi
+
+ok "Xorg configured"
+
+# ============================================================================
 # Done
 # ============================================================================
 header "Installation Complete!"
