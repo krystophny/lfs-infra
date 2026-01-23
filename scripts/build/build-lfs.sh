@@ -1,6 +1,6 @@
 #!/bin/bash
-# LFS Master Build Script - fay based
-# Builds packages directly from packages.toml using fay package manager
+# LFS Master Build Script
+# Builds packages directly from packages.toml using pk package manager
 
 set -euo pipefail
 
@@ -40,7 +40,7 @@ SOURCES_DIR="${SOURCES}"
 PKG_CACHE="${LFS}/pkg"
 BUILD_DIR="${LFS}/build"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
-FAY_DIR="${ROOT_DIR}/fay"
+PK_SCRIPT="${ROOT_DIR}/pk"
 
 # Colors
 RED='\033[0;31m'
@@ -163,13 +163,13 @@ check_dependencies() {
 }
 
 # ============================================================
-# fay integration
+# pk integration
 # ============================================================
 
-# Check if package is installed (via fay database)
+# Check if package is installed (via pk database)
 pkg_installed() {
     local pkg="$1"
-    [[ -d "${LFS}/var/lib/fay/${pkg}" ]]
+    [[ -d "${LFS}/var/lib/pk/${pkg}" ]]
 }
 
 # Check if package file exists in cache
@@ -178,15 +178,15 @@ pkg_cached() {
     [[ -f "${PKG_CACHE}/${pkg}-${version}.pkg.tar.xz" ]]
 }
 
-# Install package with fay
+# Install package with pk
 pkg_install() {
     local pkg="$1" version="$2"
     local pkg_file="${PKG_CACHE}/${pkg}-${version}.pkg.tar.xz"
 
     [[ -f "${pkg_file}" ]] || die "Package file not found: ${pkg_file}"
 
-    log "Installing ${pkg} with fay..."
-    FAY_ROOT="${LFS}" fay i "${pkg_file}" || die "fay install failed for ${pkg}"
+    log "Installing ${pkg} with pk..."
+    PK_ROOT="${LFS}" "${PK_SCRIPT}" i "${pkg_file}" || die "pk install failed for ${pkg}"
     ok "Installed ${pkg}"
 }
 
@@ -252,7 +252,7 @@ build_package() {
     ok "Built ${pkg}-${version}.pkg.tar.xz"
 }
 
-# Build and install a package (all stages use fay)
+# Build and install a package (all stages use pk)
 build_and_install() {
     local pkg="$1"
     local version=$(get_pkg_version "${pkg}")
@@ -281,7 +281,7 @@ build_and_install() {
 }
 
 # ============================================================
-# Bootstrap fay
+# Bootstrap pk
 # ============================================================
 
 # Ensure sys/sdt.h is available for libstdcxx cross-compilation
@@ -333,41 +333,24 @@ EOF
     ok "Created sys/sdt.h stub"
 }
 
-bootstrap_fay() {
-    stage_start "Bootstrapping fay (Fast Archive Yielder)"
+bootstrap_pk() {
+    stage_start "Setting up pk package manager"
 
-    # Check if fay already built
-    if [[ -x "${LFS}/tools/bin/fay" ]] || command -v fay &>/dev/null; then
-        ok "fay already available"
-        return 0
-    fi
+    # pk is a shell script, just needs to be available and database initialized
+    [[ -x "${PK_SCRIPT}" ]] || die "pk not found at ${PK_SCRIPT}"
 
-    # Need host gfortran and libarchive-dev to build fay
-    if ! command -v gfortran &>/dev/null; then
-        die "gfortran required to build fay (install: apt install gfortran)"
-    fi
+    # Install pk to LFS tools for use inside chroot later
+    mkdir -p "${LFS}/tools/bin"
+    cp -f "${PK_SCRIPT}" "${LFS}/tools/bin/pk"
+    chmod 755 "${LFS}/tools/bin/pk"
 
-    log "Building fay..."
-    cd "${FAY_DIR}"
-
-    # Build fay with static libarchive
-    make clean 2>/dev/null || true
-    make bootstrap || die "fay build failed"
-
-    # Install to host (for building packages) and LFS tools
-    mkdir -p "${LFS}/tools/bin" /usr/local/bin
-    cp -f fay "${LFS}/tools/bin/"
-    cp -f fay /usr/local/bin/
-    chmod 755 "${LFS}/tools/bin/fay" /usr/local/bin/fay
-
-    # Initialize fay database
-    mkdir -p "${LFS}/var/lib/fay"
+    # Initialize pk database
+    mkdir -p "${LFS}/var/lib/pk"
 
     # Create package cache
     mkdir -p "${PKG_CACHE}"
 
-    make clean
-    ok "fay bootstrapped"
+    ok "pk ready"
 }
 
 # ============================================================
@@ -430,7 +413,7 @@ main() {
     shift || true
     local extra_args=("$@")
 
-    log "LFS Build Started (fay-based)"
+    log "LFS Build Started (pk-based)"
     log "Target: ${target}"
     log "LFS: ${LFS}"
     log "CPUs: ${NPROC}"
@@ -445,11 +428,11 @@ main() {
             download_sources "${max_stage}"
             ;;
         bootstrap)
-            bootstrap_fay
+            bootstrap_pk
             ;;
         minimal)
             download_sources 5
-            bootstrap_fay
+            bootstrap_pk
             setup_sdt_header
             build_stage 1 "Cross-Toolchain"
             build_stage 2 "Temporary Tools"
@@ -459,7 +442,7 @@ main() {
             ;;
         all)
             download_sources
-            bootstrap_fay
+            bootstrap_pk
             setup_sdt_header
             build_stage 1 "Cross-Toolchain"
             build_stage 2 "Temporary Tools"

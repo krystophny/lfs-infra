@@ -1,163 +1,118 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## Project Overview
 
-LFS-infra is an infrastructure repository for Linux From Scratch (LFS) with bleeding-edge packages, aggressive performance optimizations, btrfs snapshots, and fully automated builds.
+LFS-infra is an automated Linux From Scratch build system with bleeding-edge packages (GCC 16, Linux 6.18, glibc 2.42), btrfs snapshots, and aggressive performance optimizations.
 
-Uses **fay** (Fast Archive Yielder) - a minimal Fortran package manager for .pkg.tar.xz files.
+**Primary workflow**: Boot from Fedora Rawhide live USB, run `./install.sh /dev/nvme0n1` to install LFS on target device.
 
-All builds run **sandboxed in Docker** for safety - no risk to the host system.
+Uses **pk** - a minimal POSIX shell package manager (120 lines, zero dependencies).
 
 ## Architecture
 
 ```
 lfs-infra/
-├── packages.toml           # Master package list with versions, URLs, and build commands
-├── fay/                    # Fast Archive Yielder package manager (Fortran)
-│   ├── fay.f90             # Single-file package manager
-│   └── Makefile            # Builds fay with static libarchive
+├── install.sh              # Main installation script (run this!)
+├── pk                      # Package manager (shell script)
+├── packages.toml           # Package definitions
+├── .env.example            # Configuration template
 ├── config/
-│   ├── lfs.conf            # LFS build configuration
-│   ├── etc/                # System configuration files (init, fstab, etc.)
-│   └── user/               # User config (XFCE, themes, etc.)
-├── docker/
-│   └── build-lfs-docker.sh # Main USB build script (runs in Docker)
+│   ├── lfs.conf            # Build configuration
+│   ├── build.conf          # Optimization flags
+│   ├── etc/                # System config templates
+│   ├── iwd/                # WiFi configuration
+│   ├── kernel/             # Kernel configs
+│   └── runit/              # Init system
 ├── scripts/
-│   ├── lib/safety.sh       # Safety library
 │   ├── build/
-│   │   └── build-lfs.sh    # Master build orchestrator (fay-based)
-│   └── vm/
-│       ├── setup-disk.sh   # Create disk with btrfs + snapshots
-│       └── run-vm.sh       # Run LFS in QEMU/KVM
-└── version-checker/check-versions.sh
+│   │   ├── build-lfs.sh    # Build orchestrator
+│   │   └── download-sources.sh
+│   └── lib/
+│       └── safety.sh       # Safety library
+└── version-checker/
+    └── check-versions.sh   # Version checker
 ```
 
-## fay - Fast Archive Yielder
-
-Minimal package manager written in Fortran with iso_c_binding to libarchive:
+## Quick Start
 
 ```bash
-fay i <pkg.tar.xz>    # Install package
-fay r <pkgname>       # Remove package
-fay l                 # List installed
-fay q <pkgname>       # Query package info
-fay f <pkgname>       # List package files
-fay v                 # Version
-```
+# From Fedora Rawhide live USB
+sudo ./install.sh /dev/nvme0n1
 
-Database: `/var/lib/fay/<pkgname>/` with `info` and `files`
-
-Build fay:
-```bash
-cd fay
-make bootstrap                    # Minimal (zlib only)
-make full                         # Full (all compression)
-LFS_GENERIC_BUILD=1 make          # Portable USB build
-```
-
-## Optimization Flags
-
-**USB Build** (`LFS_GENERIC_BUILD=1`):
-- `-O3 -march=x86-64-v2 -mtune=generic`
-- Portable, boots on any x86-64-v2+ CPU
-
-**Final Install** (default):
-- `-O3 -march=native -mtune=native`
-- Maximum performance for target hardware
-
-## Quick Start (USB Creation via Docker)
-
-```bash
-# 1. Configure (optional - can be done interactively)
+# Or with .env for unattended install
 cp .env.example .env
-# Edit .env with username, password, WiFi settings
-
-# 2. Build USB image (runs in Docker, outputs to output/)
-./docker/build-lfs-docker.sh --build-only
-
-# 3. Write to USB drive
-sudo dd if=output/lfs-minimal.img of=/dev/sdX bs=4M status=progress conv=fsync
-
-# 4. Boot from USB, then install full LFS to target machine:
-sudo lfs-install /dev/nvme0n1
+# Edit .env
+sudo ./install.sh --yes /dev/nvme0n1
 ```
 
-## Quick Start (VM Build)
+## pk - Package Manager
 
 ```bash
-# 1. Create disk image with btrfs
-sudo ./scripts/vm/setup-disk.sh create
-
-# 2. Mount the disk
-sudo ./scripts/vm/setup-disk.sh mount
-export LFS=/mnt/lfs
-
-# 3. Run full automatic build
-sudo ./scripts/build/build-lfs.sh all
-
-# 4. Create snapshot and test in VM
-sudo ./scripts/vm/setup-disk.sh snapshot pre-boot
-./scripts/vm/run-vm.sh kernel
-
-# 5. If something breaks, rollback
-sudo ./scripts/vm/setup-disk.sh rollback pre-boot
+pk i <pkg.tar.xz>    # Install package
+pk r <pkgname>       # Remove package
+pk l                 # List installed
+pk q <pkgname>       # Query package info
+pk f <pkgname>       # List package files
 ```
 
-## Environment Variables (.env)
+Database: `/var/lib/pk/<pkgname>/` with `info` and `files`
 
-```bash
-LFS_BUILD_DIR=/var/tmp/ert        # Build directory
-LFS_GENERIC_BUILD=1               # Use portable flags for USB
-LFS_USERNAME=lfs                  # USB system username
-LFS_PASSWORD=                     # User password
-WIFI_SSID=                        # WiFi network (optional)
-WIFI_PASSWORD=                    # WiFi password
-LAN_MODE=1                        # 1=DHCP, 2=Static
-```
+## Environment Variables
 
-## Package Definition Schema (packages.toml)
+From `.env` or command line:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| LFS_DEVICE | (required) | Target device |
+| LFS_MOUNT | /mnt/lfs | Mount point |
+| LFS_USERNAME | (prompt) | Username |
+| LFS_PASSWORD | (prompt) | Password |
+| LFS_HOSTNAME | lfs | Hostname |
+| LFS_SWAP_SIZE | 16G | Swap size (0 to disable) |
+| WIFI_SSID | - | WiFi network |
+| WIFI_PASSWORD | - | WiFi password |
+| LAN_IP | - | Static IP |
+| LAN_INTERFACE | eth0 | LAN interface |
+
+## Package Definition (packages.toml)
 
 ```toml
 [packages.example]
 version = "1.0.0"
-description = "Example package"
 url = "https://example.com/pkg-${version}.tar.xz"
 stage = 4
-
-# Custom build commands
 build_commands = [
     "./configure --prefix=/usr",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
-
-# Files to check for idempotency
-provides = ["/usr/lib/libexample.so", "/usr/bin/example"]
 ```
 
 ## Build Stages
 
-1. **Stage 1**: Cross-toolchain (binutils, gcc, glibc, linux-headers) - direct install
+1. **Stage 1**: Cross-toolchain (binutils, gcc, glibc, linux-headers)
 2. **Stage 2**: Temporary tools (bash, coreutils, make, etc.)
 3. **Stage 3**: Basic system (zlib, readline, perl, python)
-4. **Stage 4**: System config (openssl, gnutls, meson, ninja, cmake)
+4. **Stage 4**: System packages (openssl, meson, cmake)
 5. **Stage 5**: Kernel and bootloader
 
-Stage 1 installs directly (no packaging). Stages 2+ use fay for .pkg.tar.xz management.
+## Filesystem
 
-## Key Variables
+- **btrfs** with zstd compression
+- Subvolumes: `@` (root), `@home`, `@snapshots`
+- Automatic `fresh-install` snapshot created
 
-- `LFS=/var/tmp/ert` - Default LFS build directory
-- `LFS_TGT=$(uname -m)-lfs-linux-gnu` - Target triplet
-- `NPROC=$(nproc)` - Auto-detected CPU cores
-- `PKG` - Package install directory (for DESTDIR)
-- `FAY_ROOT` - Root prefix for fay database
+## Key Commands
 
-## Idempotent Builds
+```bash
+# Check for package updates
+./version-checker/check-versions.sh -r    # Compare with Fedora Rawhide
 
-- Stage 1: checks `provides` files exist
-- Stage 2+: checks `/var/lib/fay/<pkg>/` exists
-- Re-running `build-lfs.sh` only builds missing packages
-- Use btrfs snapshots for safe experimentation
+# Build specific package
+./scripts/build/build-lfs.sh <package>
+
+# Build all
+./scripts/build/build-lfs.sh all
+```
