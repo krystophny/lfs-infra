@@ -487,6 +487,14 @@ EOF
     ok "Static LAN configured: ${LAN_INTERFACE} = ${LAN_IP}"
 fi
 
+# Shell profile and optimization flags
+log "Setting up shell profile with optimization flags..."
+cp "${SCRIPT_DIR}/config/etc/profile" "${MOUNT_POINT}/etc/profile"
+mkdir -p "${MOUNT_POINT}/etc/profile.d"
+cp "${SCRIPT_DIR}/config/etc/profile.d/"*.sh "${MOUNT_POINT}/etc/profile.d/"
+chmod 644 "${MOUNT_POINT}/etc/profile" "${MOUNT_POINT}/etc/profile.d/"*.sh
+ok "Shell profile configured (Zen 3 optimizations enabled system-wide)"
+
 ok "System configured"
 
 # Weekly TRIM for SSD longevity

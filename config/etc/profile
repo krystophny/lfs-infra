@@ -1,0 +1,16 @@
+# /etc/profile - System-wide shell initialization
+# Executed for login shells
+
+# Set default PATH
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+
+# Default umask
+umask 022
+
+# Source profile.d scripts
+if [ -d /etc/profile.d ]; then
+    for script in /etc/profile.d/*.sh; do
+        [ -r "$script" ] && . "$script"
+    done
+    unset script
+fi
