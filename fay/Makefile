@@ -6,11 +6,12 @@ FC := gfortran
 CC := gcc
 
 # LFS_GENERIC_BUILD=1 for USB (portable), else native optimization
+# Note: -static removed - needs libgfortran-static which isn't always available
 ifeq ($(LFS_GENERIC_BUILD),1)
-    FFLAGS ?= -O3 -march=x86-64-v2 -mtune=generic -flto -static
+    FFLAGS ?= -O3 -march=x86-64-v2 -mtune=generic -flto
     CFLAGS ?= -O3 -march=x86-64-v2 -mtune=generic -flto
 else
-    FFLAGS ?= -O3 -march=native -mtune=native -flto -static
+    FFLAGS ?= -O3 -march=native -mtune=native -flto
     CFLAGS ?= -O3 -march=native -mtune=native -flto
 endif
 
