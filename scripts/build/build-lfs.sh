@@ -465,6 +465,18 @@ main() {
         bootstrap)
             bootstrap_pkgutils
             ;;
+        minimal)
+            # Minimal USB system - only stages 1-5
+            download_sources 5
+            generate_all_pkgfiles
+            bootstrap_pkgutils
+
+            build_stage 1 "Cross-Toolchain"
+            build_stage 2 "Temporary Tools"
+            build_stage 3 "Base System"
+            build_stage 4 "System Config"
+            build_stage 5 "Kernel"
+            ;;
         all)
             download_sources
             generate_all_pkgfiles

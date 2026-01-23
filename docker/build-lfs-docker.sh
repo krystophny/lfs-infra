@@ -303,14 +303,8 @@ log "=========================================="
 cd /lfs-infra
 export LFS_USERNAME LFS_PASSWORD
 
-# Only download packages for stages 1-5 (minimal USB system)
-./scripts/build/build-lfs.sh download 5
-./scripts/build/build-lfs.sh toolchain
-./scripts/build/build-lfs.sh temptools
-./scripts/build/build-lfs.sh chroot-prep
-./scripts/build/build-lfs.sh base
-./scripts/build/build-lfs.sh config
-./scripts/build/build-lfs.sh kernel
+# Build minimal USB system (stages 1-5 only)
+./scripts/build/build-lfs.sh minimal
 
 # Cache sources, tools, and binary packages for future builds
 log "Caching build artifacts..."
