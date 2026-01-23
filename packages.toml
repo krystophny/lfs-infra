@@ -103,7 +103,7 @@ build_commands = [
 # Linux headers - can build in parallel with gcc-pass1
 # Build order: 3 (no gcc dependency, but conventionally after)
 [packages.linux-headers]
-version = "6.18.6"
+version = "6.18.7"
 version_check = "kernel:"
 description = "Linux kernel headers"
 source_pkg = "linux"
@@ -776,7 +776,7 @@ depends = ["python", "ninja"]
 # =============================================================================
 
 [packages.linux]
-version = "6.18.6"
+version = "6.18.7"
 version_check = "kernel:"
 description = "Linux kernel"
 url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${version}.tar.xz"
@@ -879,7 +879,7 @@ build_commands = ["./bootstrap --prefix=/usr --parallel=${NPROC}", "make -j${NPR
 provides = ["/usr/bin/cmake"]
 
 [packages.sudo]
-version = "1.9.16p2"
+version = "1.9.17p2"
 version_check = "url:https://www.sudo.ws/releases/stable/|sudo-([0-9]+\.[0-9]+[p0-9]*)\.tar"
 description = "Execute commands as another user"
 url = "https://www.sudo.ws/dist/sudo-${version}.tar.gz"
@@ -1262,7 +1262,7 @@ use_git = false
 stage = 8
 
 [packages.xterm]
-version = "397"
+version = "406"
 version_check = "url:https://invisible-island.net/xterm/xterm.log.html|xterm-([0-9]+)"
 description = "Standard X terminal emulator"
 url = "https://invisible-mirror.net/archives/xterm/xterm-${version}.tgz"
@@ -1433,7 +1433,7 @@ use_git = false
 stage = 8
 
 [packages.xkeyboard-config]
-version = "2.43"
+version = "2.46"
 version_check = "xorg:data/xkeyboard-config"
 description = "X keyboard configuration database"
 url = "https://www.x.org/releases/individual/data/xkeyboard-config/xkeyboard-config-${version}.tar.xz"
@@ -1807,10 +1807,10 @@ use_git = false
 stage = 11
 
 [packages.vte]
-version = "0.82"
+version = "0.82.3"
 version_check = "gnome:vte"
 description = "Virtual Terminal Emulator widget library"
-url = "https://download.gnome.org/sources/vte/0.74/vte-${version}.tar.xz"
+url = "https://download.gnome.org/sources/vte/${version_mm}/vte-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/vte.git"
 use_git = false
 stage = 10
@@ -2221,7 +2221,7 @@ use_git = false
 stage = 16
 
 [packages.opus]
-version = "1.5.3"
+version = "1.6.1"
 version_check = "github:xiph/opus"
 description = "Audio codec for streaming"
 url = "https://downloads.xiph.org/releases/opus/opus-${version}.tar.gz"
@@ -2357,7 +2357,7 @@ stage = 18
 # =============================================================================
 
 [packages.linux-firmware]
-version = "20250106"
+version = "20260110"
 version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/|linux-firmware-([0-9]+)\.tar"
 description = "Linux kernel firmware files"
 url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
