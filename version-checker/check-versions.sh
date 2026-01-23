@@ -1,7 +1,24 @@
 #!/bin/bash
 # LFS Package Version Checker
-# Uses Repology API (repology.org) as the single source of truth
-# Repology aggregates version info from 300+ repositories
+# Uses direct source checks with fallback to Repology
+# version_check formats:
+#   gnu:<project>         - GNU FTP mirror
+#   kernel:               - kernel.org
+#   gcc-snapshot:         - GCC development snapshots
+#   github:<owner/repo>   - GitHub releases
+#   url:<url>|<regex>     - Direct URL scraping with regex
+#   xorg:<path>           - X.org releases
+#   gnome:<project>       - GNOME releases
+#   xfce:<path>           - XFCE releases
+#   freedesktop:<path>    - freedesktop.org GitLab
+#   savannah:<project>    - GNU Savannah
+#   cpan:<module>         - CPAN (Perl)
+#   python:               - Python.org
+#   tukaani:<project>     - Tukaani (xz)
+#   zlib:                 - zlib.net
+#   sourceware:<project>  - sourceware.org
+#   alsa:<component>      - ALSA releases
+#   kernelorg:<path>      - kernel.org subdirs
 
 set -euo pipefail
 
@@ -19,7 +36,6 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Parse command line
 VERBOSE=0
 CHECK_ALL=0
 PACKAGE_FILTER=""
@@ -29,13 +45,11 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS] [PACKAGE...]
 
-Check LFS package versions against upstream releases via Repology API.
-
-Repology (repology.org) aggregates version information from 300+ repositories
-including Arch, Fedora, Debian, Alpine, Gentoo, FreeBSD, and many more.
+Check LFS package versions against upstream releases.
+Uses direct source checks with Repology fallback.
 
 Options:
-    -a, --all       Check all packages (default: only show outdated)
+    -a, --all       Show all packages (default: only outdated)
     -v, --verbose   Verbose output
     -u, --update    Update packages.toml with new versions
     -c, --clear     Clear version cache
@@ -64,81 +78,44 @@ done
 
 mkdir -p "${CACHE_DIR}"
 
-# Parallel job control
-MAX_PARALLEL=${MAX_PARALLEL:-16}
-FETCH_PIDS=()
+log() { [[ ${VERBOSE} -eq 1 ]] && echo -e "${CYAN}[DEBUG]${NC} $*" >&2; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $*" >&2; }
+error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
-log() {
-    [[ ${VERBOSE} -eq 1 ]] && echo -e "${CYAN}[DEBUG]${NC} $*" >&2
+# Fetch with retries and timeout
+fetch_url() {
+    local url="$1"
+    local retries=3
+    local timeout=15
+
+    for ((i=1; i<=retries; i++)); do
+        local result
+        if result=$(curl -fsSL --connect-timeout "${timeout}" -A "lfs-version-checker/2.0" "${url}" 2>/dev/null); then
+            echo "${result}"
+            return 0
+        fi
+        log "Retry ${i}/${retries} for ${url}"
+        sleep 1
+    done
+    return 1
 }
 
-warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*" >&2
+# Filter unstable versions
+filter_stable() {
+    grep -viE '(rc|alpha|beta|pre|dev|snapshot|git|svn|cvs|test|nightly|exp|trunk)' | \
+    grep -vE '^9999$|^0\.0\.' | \
+    grep -E '^[0-9]' || true
 }
 
-error() {
-    echo -e "${RED}[ERROR]${NC} $*" >&2
+# Sort versions and get latest
+latest_version() {
+    sort -V | tail -1
 }
 
-# Parse TOML file and extract package info
-# Returns: pkg_name=version|repology_name
-parse_packages() {
-    local current_pkg=""
-    local current_version=""
-    local repology_name=""
-    local in_packages=0
-
-    while IFS= read -r line; do
-        # Skip comments and empty lines
-        [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
-
-        # Package section header
-        if [[ "${line}" =~ ^\[packages\.([a-zA-Z0-9_-]+)\] ]]; then
-            # Output previous package if we have one
-            if [[ -n "${current_pkg}" && -n "${current_version}" ]]; then
-                echo "${current_pkg}=${current_version}|${repology_name:-${current_pkg}}"
-            fi
-            current_pkg="${BASH_REMATCH[1]}"
-            current_version=""
-            repology_name=""
-            in_packages=1
-            continue
-        fi
-
-        # End of packages section
-        if [[ "${line}" =~ ^\[[^p] ]] && [[ ${in_packages} -eq 1 ]]; then
-            if [[ -n "${current_pkg}" && -n "${current_version}" ]]; then
-                echo "${current_pkg}=${current_version}|${repology_name:-${current_pkg}}"
-            fi
-            in_packages=0
-            current_pkg=""
-            current_version=""
-            repology_name=""
-            continue
-        fi
-
-        # Extract version
-        if [[ -n "${current_pkg}" && "${line}" =~ ^version[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
-            current_version="${BASH_REMATCH[1]}"
-        fi
-
-        # Extract repology name override
-        if [[ -n "${current_pkg}" && "${line}" =~ ^repology[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
-            repology_name="${BASH_REMATCH[1]}"
-        fi
-    done < "${PACKAGES_FILE}"
-
-    # Output last package
-    if [[ -n "${current_pkg}" && -n "${current_version}" ]]; then
-        echo "${current_pkg}=${current_version}|${repology_name:-${current_pkg}}"
-    fi
-}
-
-# Get cached version
-get_cached_version() {
-    local pkg="$1"
-    local cache_file="${CACHE_DIR}/${pkg}.version"
-
+# Cache functions
+get_cached() {
+    local key="$1"
+    local cache_file="${CACHE_DIR}/${key//\//_}.version"
     if [[ -f "${cache_file}" ]]; then
         local age=$(($(date +%s) - $(stat -c %Y "${cache_file}" 2>/dev/null || echo 0)))
         if [[ ${age} -lt ${CACHE_TTL} ]]; then
@@ -149,361 +126,453 @@ get_cached_version() {
     return 1
 }
 
-cache_version() {
+set_cache() {
+    local key="$1"
+    local value="$2"
+    echo "${value}" > "${CACHE_DIR}/${key//\//_}.version"
+}
+
+# ============================================================
+# Direct version check handlers
+# ============================================================
+
+check_gnu() {
+    local project="$1"
+    log "Checking GNU: ${project}"
+
+    local url="https://ftpmirror.gnu.org/gnu/${project}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    # Extract version from tarball names
+    echo "${html}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_kernel() {
+    log "Checking kernel.org"
+
+    local json
+    json=$(fetch_url "https://www.kernel.org/releases.json") || return 1
+
+    # Get latest stable (not RC)
+    echo "${json}" | jq -r '.releases[] | select(.moniker == "stable") | .version' 2>/dev/null | head -1
+}
+
+check_gcc_snapshot() {
+    log "Checking GCC snapshots"
+
+    local html
+    html=$(fetch_url "https://gcc.gnu.org/pub/gcc/snapshots/LATEST-16/") || return 1
+
+    # Extract snapshot version like 16-20260118
+    echo "${html}" | grep -oP 'gcc-\K16-[0-9]+' | latest_version
+}
+
+check_github() {
+    local repo="$1"
+    log "Checking GitHub: ${repo}"
+
+    local json
+    json=$(fetch_url "https://api.github.com/repos/${repo}/releases/latest") || {
+        # Try tags if no releases
+        json=$(fetch_url "https://api.github.com/repos/${repo}/tags") || return 1
+        echo "${json}" | jq -r '.[0].name' 2>/dev/null | sed 's/^[vV]//' | filter_stable | head -1
+        return
+    }
+
+    echo "${json}" | jq -r '.tag_name // empty' 2>/dev/null | sed 's/^[vV]//' | filter_stable
+}
+
+check_url_regex() {
+    local url="$1"
+    local regex="$2"
+    log "Checking URL: ${url} with pattern: ${regex}"
+
+    [[ "${regex}" == "skip" ]] && return 1
+
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    # Handle different regex formats
+    if [[ "${regex}" =~ \([0-9] ]]; then
+        # Regex with capture groups - extract version parts
+        echo "${html}" | grep -oP "${regex}" | \
+            sed -E 's/.*\(([0-9]+)\).*\(([0-9]+)\).*/\1.\2/' | \
+            filter_stable | latest_version
+    else
+        # Simple pattern - extract directly
+        echo "${html}" | grep -oE "${regex}" | \
+            grep -oE '[0-9]+(\.[0-9]+)+' | \
+            filter_stable | latest_version
+    fi
+}
+
+check_xorg() {
+    local path="$1"
+    log "Checking X.org: ${path}"
+
+    local url="https://xorg.freedesktop.org/releases/individual/${path}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    local name
+    name=$(basename "${path}")
+    echo "${html}" | grep -oP "${name}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_gnome() {
+    local project="$1"
+    log "Checking GNOME: ${project}"
+
+    local json
+    json=$(fetch_url "https://download.gnome.org/sources/${project}/cache.json") || return 1
+
+    # Get latest stable version (even minor = stable)
+    echo "${json}" | jq -r '.[1] | keys[]' 2>/dev/null | \
+        grep -E '^[0-9]+\.[0-9]*[02468](\.[0-9]+)?$' | \
+        filter_stable | latest_version
+}
+
+check_xfce() {
+    local path="$1"
+    log "Checking XFCE: ${path}"
+
+    local url="https://archive.xfce.org/src/${path}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    # Get version dirs, then latest tarball
+    local latest_dir
+    latest_dir=$(echo "${html}" | grep -oP 'href="\K[0-9]+\.[0-9]+' | latest_version)
+
+    if [[ -n "${latest_dir}" ]]; then
+        html=$(fetch_url "${url}${latest_dir}/") || return 1
+        local name
+        name=$(basename "${path}")
+        echo "${html}" | grep -oP "${name}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    fi
+}
+
+check_freedesktop() {
+    local path="$1"
+    log "Checking freedesktop.org: ${path}"
+
+    local json
+    json=$(fetch_url "https://gitlab.freedesktop.org/api/v4/projects/${path//\//%2F}/releases") || return 1
+
+    echo "${json}" | jq -r '.[0].tag_name // empty' 2>/dev/null | sed 's/^[vV]//' | filter_stable
+}
+
+check_savannah() {
+    local project="$1"
+    log "Checking Savannah: ${project}"
+
+    local url="https://download.savannah.gnu.org/releases/${project}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    echo "${html}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_cpan() {
+    local module="$1"
+    log "Checking CPAN: ${module}"
+
+    local json
+    json=$(fetch_url "https://fastapi.metacpan.org/v1/release/${module}") || return 1
+
+    echo "${json}" | jq -r '.version // empty' 2>/dev/null | filter_stable
+}
+
+check_python() {
+    log "Checking Python.org"
+
+    local html
+    html=$(fetch_url "https://www.python.org/downloads/") || return 1
+
+    echo "${html}" | grep -oP 'Python \K[0-9]+\.[0-9]+\.[0-9]+' | filter_stable | latest_version
+}
+
+check_tukaani() {
+    local project="$1"
+    log "Checking Tukaani: ${project}"
+
+    local url="https://github.com/tukaani-project/${project}/releases"
+    check_github "tukaani-project/${project}"
+}
+
+check_zlib() {
+    log "Checking zlib.net"
+
+    local html
+    html=$(fetch_url "https://zlib.net/") || return 1
+
+    echo "${html}" | grep -oP 'zlib-\K[0-9]+(\.[0-9]+)+' | filter_stable | latest_version
+}
+
+check_sourceware() {
+    local project="$1"
+    log "Checking sourceware: ${project}"
+
+    local url="https://sourceware.org/pub/${project}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    echo "${html}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_alsa() {
+    local component="$1"
+    log "Checking ALSA: ${component}"
+
+    local url="https://www.alsa-project.org/files/pub/${component}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    echo "${html}" | grep -oP "alsa-${component}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_kernelorg() {
+    local path="$1"
+    local name="$2"
+    log "Checking kernel.org: ${path}/${name}"
+
+    local url="https://www.kernel.org/pub/${path}/"
+    local html
+    html=$(fetch_url "${url}") || return 1
+
+    echo "${html}" | grep -oP "${name}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_sourceforge() {
+    local project="$1"
+    log "Checking SourceForge: ${project}"
+
+    local url="https://sourceforge.net/projects/${project}/rss?path=/"
+    local xml
+    xml=$(fetch_url "${url}") || return 1
+
+    echo "${xml}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+}
+
+check_repology() {
     local pkg="$1"
-    local version="$2"
-    echo "${version}" > "${CACHE_DIR}/${pkg}.version"
+    log "Checking Repology: ${pkg}"
+
+    local json
+    json=$(fetch_url "https://repology.org/api/v1/project/${pkg}") || return 1
+
+    echo "${json}" | jq -r '.[] | select(.status == "newest") | .version' 2>/dev/null | \
+        filter_stable | latest_version
 }
 
-# Fetch latest version from Repology API
-# Uses jq for proper JSON parsing, filters out dev/rc/pre versions
-check_repology_version() {
-    local repology_name="$1"
+# ============================================================
+# Main version check dispatcher
+# ============================================================
 
-    log "Checking Repology for ${repology_name}"
+check_version() {
+    local pkg="$1"
+    local version_check="$2"
 
-    local api_url="https://repology.org/api/v1/project/${repology_name}"
-    local response
-    response=$(curl -fsSL -A "lfs-version-checker/1.0" "${api_url}" 2>/dev/null) || return 1
-
-    # Filter pattern for unstable versions (case insensitive)
-    # Matches: rc, alpha, beta, pre, dev, snapshot, git, svn, start, test, nightly
-    # Also matches: 9999 (Gentoo live), date-like versions, versions with hyphens
-    local unstable_pattern='(rc|alpha|beta|pre|dev|snapshot|git|svn|start|test|nightly)|^9999$|^20[0-9]{6}|.*-.*'
-
-    # Use jq to extract versions with status "newest" (upstream latest)
-    # Filter out dev/rc/pre/alpha/beta/snapshot versions
-    local version
-    version=$(echo "${response}" | \
-        jq -r '.[] | select(.status == "newest") | .version' 2>/dev/null | \
-        grep -viE "${unstable_pattern}" | \
-        grep -E '^[0-9]+(\.[0-9]+)+$' | \
-        sort -V | uniq | tail -1)
-
-    # If no stable "newest" found, check all versions for stable ones
-    if [[ -z "${version}" ]]; then
-        version=$(echo "${response}" | \
-            jq -r '.[].version' 2>/dev/null | \
-            grep -viE "${unstable_pattern}" | \
-            grep -E '^[0-9]+(\.[0-9]+)+$' | \
-            sort -V | uniq | tail -1)
+    # Try cache first
+    local cached
+    if cached=$(get_cached "${pkg}"); then
+        echo "${cached}"
+        return 0
     fi
 
-    if [[ -n "${version}" ]]; then
-        echo "${version}"
+    local result=""
+
+    case "${version_check}" in
+        gnu:*)
+            result=$(check_gnu "${version_check#gnu:}") ;;
+        kernel:*)
+            result=$(check_kernel) ;;
+        gcc-snapshot:*)
+            result=$(check_gcc_snapshot) ;;
+        github:*)
+            result=$(check_github "${version_check#github:}") ;;
+        url:*)
+            local spec="${version_check#url:}"
+            local url="${spec%|*}"
+            local regex="${spec#*|}"
+            result=$(check_url_regex "${url}" "${regex}") ;;
+        xorg:*)
+            result=$(check_xorg "${version_check#xorg:}") ;;
+        gnome:*)
+            result=$(check_gnome "${version_check#gnome:}") ;;
+        xfce:*)
+            result=$(check_xfce "${version_check#xfce:}") ;;
+        freedesktop:*)
+            result=$(check_freedesktop "${version_check#freedesktop:}") ;;
+        savannah:*)
+            result=$(check_savannah "${version_check#savannah:}") ;;
+        cpan:*)
+            result=$(check_cpan "${version_check#cpan:}") ;;
+        python:*)
+            result=$(check_python) ;;
+        tukaani:*)
+            result=$(check_tukaani "${version_check#tukaani:}") ;;
+        zlib:*)
+            result=$(check_zlib) ;;
+        sourceware:*)
+            result=$(check_sourceware "${version_check#sourceware:}") ;;
+        alsa:*)
+            result=$(check_alsa "${version_check#alsa:}") ;;
+        kernelorg:*)
+            local spec="${version_check#kernelorg:}"
+            local path="${spec%|*}"
+            local name="${spec#*|}"
+            result=$(check_kernelorg "${path}" "${name}") ;;
+        sourceforge:*)
+            result=$(check_sourceforge "${version_check#sourceforge:}") ;;
+        *)
+            # Fallback to Repology
+            result=$(check_repology "${pkg}") ;;
+    esac
+
+    if [[ -n "${result}" ]]; then
+        set_cache "${pkg}" "${result}"
+        echo "${result}"
         return 0
+    fi
+
+    # Final fallback: Repology
+    if [[ "${version_check}" != repology:* ]]; then
+        log "Falling back to Repology for ${pkg}"
+        result=$(check_repology "${pkg}") || true
+        if [[ -n "${result}" ]]; then
+            set_cache "${pkg}" "${result}"
+            echo "${result}"
+            return 0
+        fi
     fi
 
     return 1
 }
 
-# Fetch latest version from release-monitoring.org (Anitya)
-# Fedora's upstream release monitoring - good for freshly released packages
-check_anitya_version() {
-    local pkg_name="$1"
+# Parse packages from TOML
+parse_packages() {
+    local current_pkg=""
+    local current_version=""
+    local version_check=""
 
-    log "Checking Anitya for ${pkg_name}"
+    while IFS= read -r line; do
+        [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
 
-    # Search for the project
-    local api_url="https://release-monitoring.org/api/v2/projects/?name=${pkg_name}"
-    local response
-    response=$(curl -fsSL -A "lfs-version-checker/1.0" "${api_url}" 2>/dev/null) || return 1
+        if [[ "${line}" =~ ^\[packages\.([a-zA-Z0-9_-]+)\] ]]; then
+            if [[ -n "${current_pkg}" && -n "${current_version}" ]]; then
+                echo "${current_pkg}=${current_version}|${version_check:-repology:${current_pkg}}"
+            fi
+            current_pkg="${BASH_REMATCH[1]}"
+            current_version=""
+            version_check=""
+            continue
+        fi
 
-    # Filter pattern for unstable versions
-    local unstable_pattern='(rc|alpha|beta|pre|dev|snapshot|git|svn|start|test|nightly)|^9999$|^20[0-9]{6}|.*-.*'
+        if [[ -n "${current_pkg}" ]]; then
+            if [[ "${line}" =~ ^version[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                current_version="${BASH_REMATCH[1]}"
+            fi
+            if [[ "${line}" =~ ^version_check[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                version_check="${BASH_REMATCH[1]}"
+            fi
+        fi
+    done < "${PACKAGES_FILE}"
 
-    # Get the stable version, filter out dev/rc versions
-    local version
-    version=$(echo "${response}" | \
-        jq -r '.items[0].stable_version // empty' 2>/dev/null | \
-        grep -viE "${unstable_pattern}" | \
-        grep -E '^[0-9]+(\.[0-9]+)+$' | head -1)
-
-    # If no stable_version, try version field
-    if [[ -z "${version}" ]]; then
-        version=$(echo "${response}" | \
-            jq -r '.items[0].version // empty' 2>/dev/null | \
-            grep -viE "${unstable_pattern}" | \
-            grep -E '^[0-9]+(\.[0-9]+)+$' | head -1)
+    if [[ -n "${current_pkg}" && -n "${current_version}" ]]; then
+        echo "${current_pkg}=${current_version}|${version_check:-repology:${current_pkg}}"
     fi
-
-    if [[ -n "${version}" ]]; then
-        echo "${version}"
-        return 0
-    fi
-
-    return 1
 }
 
-# Direct version checks for proprietary/special packages
-check_nvidia_version() {
-    log "Checking NVIDIA driver version"
-
-    # Check NVIDIA's download page for latest driver
-    local version
-    version=$(curl -fsSL "https://download.nvidia.com/XFree86/Linux-x86_64/latest.txt" 2>/dev/null | \
-        head -1)
-
-    if [[ -n "${version}" ]]; then
-        echo "${version}"
-        return 0
-    fi
-
-    return 1
-}
-
-check_intel_oneapi_version() {
-    log "Checking Intel oneAPI version"
-
-    # Intel oneAPI releases are tracked on GitHub
-    local version
-    version=$(curl -fsSL "https://api.github.com/repos/oneapi-src/oneAPI-samples/releases/latest" 2>/dev/null | \
-        jq -r '.tag_name' 2>/dev/null | sed 's/^v//')
-
-    if [[ -n "${version}" ]]; then
-        echo "${version}"
-        return 0
-    fi
-
-    return 1
-}
-
-check_nvidia_hpc_version() {
-    log "Checking NVIDIA HPC SDK version"
-
-    # NVIDIA HPC SDK version from their downloads page
-    local version
-    version=$(curl -fsSL "https://developer.nvidia.com/hpc-sdk-downloads" 2>/dev/null | \
-        grep -oP 'NVIDIA HPC SDK \K[0-9]+\.[0-9]+' | head -1)
-
-    if [[ -n "${version}" ]]; then
-        echo "${version}"
-        return 0
-    fi
-
-    return 1
-}
-
-# Compare versions (returns 0 if v1 >= v2)
+# Version comparison
 version_ge() {
-    local v1="$1"
-    local v2="$2"
-
-    [[ "$(printf '%s\n%s' "${v1}" "${v2}" | sort -V | head -1)" == "${v2}" ]]
+    [[ "$(printf '%s\n%s' "$1" "$2" | sort -V | head -1)" == "$2" ]]
 }
 
-# Get URL for a package with a given version
+# Get URL template for a package
 get_pkg_url() {
     local pkg="$1"
-    local version="$2"
-    local version_mm="${version%.*}"
-
-    local url
-    url=$(awk -v pkg="[packages.${pkg}]" '
+    awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
         found && /^url *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
-    ' "${PACKAGES_FILE}")
-
-    # Expand version variables
-    url="${url//\$\{version\}/${version}}"
-    url="${url//\$\{version_mm\}/${version_mm}}"
-    echo "${url}"
+    ' "${PACKAGES_FILE}"
 }
 
-# Verify URL is accessible (HEAD request)
+# Verify URL exists
 verify_url() {
-    local url="$1"
-    curl -fsSL --head --connect-timeout 10 "${url}" &>/dev/null
+    curl -fsSL --head --connect-timeout 10 "$1" &>/dev/null
 }
 
-# Update version in TOML file (with URL verification)
+# Update TOML
 update_toml_version() {
     local pkg="$1"
     local new_version="$2"
 
-    # Verify URL works with new version before updating
-    local url
-    url=$(get_pkg_url "${pkg}" "${new_version}")
+    local url_template
+    url_template=$(get_pkg_url "${pkg}")
 
-    if [[ -n "${url}" ]]; then
-        log "Verifying URL: ${url}"
+    if [[ -n "${url_template}" ]]; then
+        local url="${url_template//\$\{version\}/${new_version}}"
+        url="${url//\$\{version_mm\}/${new_version%.*}}"
+        log "Verifying: ${url}"
         if ! verify_url "${url}"; then
-            warn "URL verification failed for ${pkg} ${new_version}: ${url}"
-            warn "Skipping update - version may not be released yet"
+            warn "URL verification failed for ${pkg} ${new_version}"
             return 1
         fi
-        log "URL verified OK"
     fi
 
-    log "Updating ${pkg} to ${new_version} in packages.toml"
     sed -i "/^\[packages\.${pkg}\]/,/^\[/{s/^version = \"[^\"]*\"/version = \"${new_version}\"/}" "${PACKAGES_FILE}"
+    log "Updated ${pkg} to ${new_version}"
 }
 
 # Main
-# Get upstream version with fallback chain:
-# 1. Cache -> 2. Repology -> 3. Anitya -> 4. Special handlers
-get_upstream_version() {
-    local pkg="$1"
-    local repology_name="$2"
-    local upstream=""
-
-    # Try cache first
-    if upstream=$(get_cached_version "${pkg}"); then
-        echo "${upstream}"
-        return 0
-    fi
-
-    # Special handling for proprietary/non-standard packages
-    case "${pkg}" in
-        nvidia-driver|nvidia-*)
-            upstream=$(check_nvidia_version 2>/dev/null) || true
-            ;;
-        nvidia-hpc*|nvhpc*)
-            upstream=$(check_nvidia_hpc_version 2>/dev/null) || true
-            ;;
-        intel-oneapi*|oneapi*)
-            upstream=$(check_intel_oneapi_version 2>/dev/null) || true
-            ;;
-        *)
-            # Try Repology first (most comprehensive)
-            upstream=$(check_repology_version "${repology_name}" 2>/dev/null) || true
-
-            # Fallback to Anitya if Repology failed
-            if [[ -z "${upstream}" ]]; then
-                log "Repology failed, trying Anitya for ${pkg}"
-                upstream=$(check_anitya_version "${pkg}" 2>/dev/null) || true
-            fi
-            ;;
-    esac
-
-    if [[ -n "${upstream}" ]]; then
-        cache_version "${pkg}" "${upstream}"
-        echo "${upstream}"
-        return 0
-    fi
-
-    return 1
-}
-
-# Fetch a single package version in background and store result
-fetch_version_bg() {
-    local pkg="$1"
-    local repology_name="$2"
-    local result_file="${CACHE_DIR}/.fetch_${pkg}"
-
-    # Get version (uses cache if available)
-    local version
-    version=$(get_upstream_version "${pkg}" "${repology_name}" 2>/dev/null) || true
-    echo "${version}" > "${result_file}"
-}
-
-# Fetch all package versions (sequential with caching for reliability)
-fetch_all_versions() {
-    local total=${#PACKAGES_TO_CHECK[@]}
-    local current=0
-
-    echo -e "${CYAN}Fetching versions (${total} packages, cached results reused)...${NC}" >&2
-
-    for entry in "${PACKAGES_TO_CHECK[@]}"; do
-        local pkg="${entry%%=*}"
-        local version_info="${entry#*=}"
-        local repology_name="${version_info#*|}"
-        current=$((current + 1))
-
-        # Check if already cached
-        if get_cached_version "${pkg}" &>/dev/null; then
-            continue
-        fi
-
-        # Fetch and cache
-        local version
-        version=$(get_upstream_version "${pkg}" "${repology_name}" 2>/dev/null) || true
-
-        # Show progress for uncached packages
-        if [[ ${VERBOSE} -eq 1 ]]; then
-            log "Fetched ${pkg}: ${version:-unknown}"
-        fi
-    done
-
-    echo -e "${GREEN}Done.${NC}" >&2
-}
-
-# Global array for packages to check
-declare -a PACKAGES_TO_CHECK=()
-
 main() {
     echo -e "${BLUE}LFS Package Version Checker${NC}"
-    echo -e "Sources: ${CYAN}repology.org${NC} + ${CYAN}release-monitoring.org${NC}"
+    echo -e "Direct source checks with Repology fallback"
     echo "========================================"
     echo ""
 
-    local outdated=0
-    local checked=0
-    local errors=0
+    local outdated=0 checked=0 errors=0
 
-    # Parse packages into global array
-    PACKAGES_TO_CHECK=()
+    declare -a packages=()
     while IFS= read -r line; do
-        [[ -n "${line}" ]] && PACKAGES_TO_CHECK+=("${line}")
+        [[ -n "${line}" ]] && packages+=("${line}")
     done < <(parse_packages)
 
-    # Filter if needed
+    # Filter if specified
     if [[ -n "${PACKAGE_FILTER}" ]]; then
         local -a filtered=()
-        for entry in "${PACKAGES_TO_CHECK[@]}"; do
+        for entry in "${packages[@]}"; do
             local pkg="${entry%%=*}"
             if [[ " ${PACKAGE_FILTER} " =~ " ${pkg} " ]]; then
                 filtered+=("${entry}")
             fi
         done
-        PACKAGES_TO_CHECK=("${filtered[@]}")
+        packages=("${filtered[@]}")
     fi
 
-    # Fetch all versions (sequential with caching)
-    fetch_all_versions
+    printf "%-25s %-15s %-15s %s\n" "PACKAGE" "LOCAL" "UPSTREAM" "STATUS"
+    printf "%-25s %-15s %-15s %s\n" "-------" "-----" "--------" "------"
 
-    # Now display results
-    if [[ ${VERBOSE} -eq 1 ]]; then
-        printf "%-20s %-15s %-15s %-20s %s\n" "PACKAGE" "LOCAL" "UPSTREAM" "REPOLOGY NAME" "STATUS"
-        printf "%-20s %-15s %-15s %-20s %s\n" "-------" "-----" "--------" "-------------" "------"
-    else
-        printf "%-20s %-15s %-15s %s\n" "PACKAGE" "LOCAL" "UPSTREAM" "STATUS"
-        printf "%-20s %-15s %-15s %s\n" "-------" "-----" "--------" "------"
-    fi
-
-    for entry in "${PACKAGES_TO_CHECK[@]}"; do
+    for entry in "${packages[@]}"; do
         local pkg="${entry%%=*}"
-        local version_info="${entry#*=}"
-        local version="${version_info%|*}"
-        local repology_name="${version_info#*|}"
+        local info="${entry#*=}"
+        local version="${info%|*}"
+        local version_check="${info#*|}"
 
         checked=$((checked + 1))
 
-        # Get cached result
         local upstream
-        upstream=$(get_cached_version "${pkg}" 2>/dev/null) || true
-
-        # Also check .fetch file if cache missed
-        if [[ -z "${upstream}" ]] && [[ -f "${CACHE_DIR}/.fetch_${pkg}" ]]; then
-            upstream=$(cat "${CACHE_DIR}/.fetch_${pkg}")
-            rm -f "${CACHE_DIR}/.fetch_${pkg}"
-            [[ -n "${upstream}" ]] && cache_version "${pkg}" "${upstream}"
-        fi
+        upstream=$(check_version "${pkg}" "${version_check}" 2>/dev/null) || true
 
         if [[ -z "${upstream}" ]]; then
-            if [[ ${CHECK_ALL} -eq 1 ]]; then
-                if [[ ${VERBOSE} -eq 1 ]]; then
-                    printf "%-20s %-15s %-15s %-20s %b\n" "${pkg}" "${version}" "?" "${repology_name}" "${YELLOW}unknown${NC}"
-                else
-                    printf "%-20s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}unknown${NC}"
-                fi
-            fi
+            [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}unknown${NC}"
             errors=$((errors + 1))
             continue
         fi
 
-        # Compare versions
         local status
         if version_ge "${version}" "${upstream}"; then
             status="${GREEN}up-to-date${NC}"
@@ -511,28 +580,21 @@ main() {
         else
             status="${RED}outdated${NC}"
             outdated=$((outdated + 1))
-
             if [[ ${UPDATE_TOML} -eq 1 ]]; then
-                update_toml_version "${pkg}" "${upstream}"
-                status="${YELLOW}updated${NC}"
+                if update_toml_version "${pkg}" "${upstream}"; then
+                    status="${YELLOW}updated${NC}"
+                fi
             fi
         fi
 
-        if [[ ${VERBOSE} -eq 1 ]]; then
-            printf "%-20s %-15s %-15s %-20s %b\n" "${pkg}" "${version}" "${upstream}" "${repology_name}" "${status}"
-        else
-            printf "%-20s %-15s %-15s %b\n" "${pkg}" "${version}" "${upstream}" "${status}"
-        fi
-
+        printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${upstream}" "${status}"
     done
 
     echo ""
     echo "========================================"
-    echo "Checked: ${checked} | Outdated: ${outdated} | Not in Repology: ${errors}"
+    echo "Checked: ${checked} | Outdated: ${outdated} | Errors: ${errors}"
 
-    if [[ ${UPDATE_TOML} -eq 1 ]] && [[ ${outdated} -gt 0 ]]; then
-        echo -e "${YELLOW}packages.toml has been updated${NC}"
-    fi
+    [[ ${UPDATE_TOML} -eq 1 ]] && [[ ${outdated} -gt 0 ]] && echo -e "${YELLOW}packages.toml updated${NC}"
 
     return ${outdated}
 }

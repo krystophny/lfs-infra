@@ -58,21 +58,21 @@ build_commands = [
 ]
 
 [packages.gcc]
-version = "15.2.0"
-version_check = "gnu:gcc"
-description = "GNU Compiler Collection"
-url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
+version = "16-20260118"
+version_check = "gcc-snapshot:"
+description = "GNU Compiler Collection (development snapshot)"
+url = "https://gcc.gnu.org/pub/gcc/snapshots/LATEST-16/gcc-${version}.tar.xz"
 git_url = "git://gcc.gnu.org/git/gcc.git"
 use_git = false
-checksum_url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/sha512.sum"
+checksum_url = "https://gcc.gnu.org/pub/gcc/snapshots/LATEST-16/sha512.sum"
 stage = 3
 depends = ["gmp", "mpfr", "mpc"]
 languages = "c,c++,fortran"
 
 # GCC Pass 1 - Cross compiler (limited, for building glibc)
 [packages.gcc-pass1]
-version = "15.2.0"
-version_check = "gnu:gcc"
+version = "16-20260118"
+version_check = "gcc-snapshot:"
 description = "GCC cross-compiler pass 1"
 source_pkg = "gcc"
 stage = 1
@@ -124,14 +124,14 @@ build_commands = [
 
 # libstdc++ - Standard C++ library (built from gcc source, after glibc)
 [packages.libstdcxx]
-version = "15.2.0"
-version_check = "gnu:gcc"
+version = "16-20260118"
+version_check = "gcc-snapshot:"
 description = "GNU Standard C++ Library"
 source_pkg = "gcc"
 stage = 1
 provides = ["${SYSROOT}/usr/lib/libstdc++.so"]
 build_commands = [
-    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${SYSROOT} install",
+    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${SYSROOT} install",
     "rm -fv ${SYSROOT}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
 ]
 
@@ -141,8 +141,8 @@ build_commands = [
 
 # GCC Pass 2 - Full cross compiler
 [packages.gcc-pass2]
-version = "15.2.0"
-version_check = "gnu:gcc"
+version = "16-20260118"
+version_check = "gcc-snapshot:"
 description = "GCC cross-compiler pass 2"
 source_pkg = "gcc"
 stage = 2
