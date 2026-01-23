@@ -131,7 +131,7 @@ source_pkg = "gcc"
 stage = 1
 provides = ["${LFS}/usr/lib/libstdc++.so"]
 build_commands = [
-    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${LFS} install",
+    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${LFS} install",
     "rm -fv ${LFS}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
 ]
 
