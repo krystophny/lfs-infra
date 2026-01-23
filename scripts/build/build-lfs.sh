@@ -1,32 +1,30 @@
 #!/bin/bash
-# LFS Master Build Script
-# Orchestrates the complete LFS build from start to finish
+# LFS Master Build Script - pkgutils based
+# Builds packages using pkgmk/pkgadd with proper caching
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
-# Source safety library first - validates Linux and LFS
+# Source safety library
 source "${ROOT_DIR}/scripts/lib/safety.sh"
 
-# Build configuration
+# Configuration
 export LFS="${LFS:-/mnt/lfs}"
-
-# Run comprehensive safety checks before any build operations
 safety_check
+
 export LFS_TGT="$(uname -m)-lfs-linux-gnu"
-export MAKEFLAGS="-j$(nproc)"
 export NPROC="$(nproc)"
-export FORCE_UNSAFE_CONFIGURE=1  # Required for tar configure as root
+export MAKEFLAGS="-j${NPROC}"
+export FORCE_UNSAFE_CONFIGURE=1
 
 # Paths
 SOURCES_DIR="${LFS}/sources"
-TOOLS_DIR="${LFS}/tools"
-PATCHES_DIR="${ROOT_DIR}/patches"
+PKG_CACHE="${LFS}/pkg"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
-LOG_DIR="/tmp/lfs-build-logs"
-BUILD_STATE="${LFS}/.build-state"
+PKGFILES_DIR="${ROOT_DIR}/packages"
+PKGMK_CONF="${ROOT_DIR}/config/pkgmk.conf"
 
 # Colors
 RED='\033[0;31m'
@@ -36,2203 +34,342 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Timing
-BUILD_START=$(date +%s)
-
 log() { echo -e "${BLUE}[$(date +%H:%M:%S)]${NC} $*"; }
 ok() { echo -e "${GREEN}[OK]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 die() { echo -e "${RED}[FATAL]${NC} $*"; exit 1; }
-
 stage_start() { echo -e "\n${CYAN}========== $* ==========${NC}\n"; }
-stage_end() { ok "Completed: $*"; }
 
-usage() {
-    cat <<EOF
-Usage: $(basename "$0") [OPTIONS] [STAGE]
+# ============================================================
+# Package info helpers (read from packages.toml)
+# ============================================================
 
-Build LFS from scratch. Run as root with LFS disk mounted.
-
-Stages (run in order):
-    all             Run all stages (default)
-    download        Download all source tarballs
-    toolchain       Build cross-compilation toolchain
-    temptools       Build temporary tools
-    chroot-prep     Prepare chroot environment
-    base            Build base system in chroot
-    config          Configure system (fstab, network, etc.)
-    kernel          Build and install kernel
-    bootloader      Install bootloader (GRUB)
-    desktop         Build X11 and XFCE desktop
-
-Options:
-    -c, --continue      Continue from last successful stage
-    -f, --force         Force rebuild even if stage completed
-    -s, --skip STAGE    Skip specific stage
-    -l, --list          List all stages and status
-    -h, --help          Show this help
-
-Environment:
-    LFS=${LFS}
-    LFS_TGT=${LFS_TGT}
-    MAKEFLAGS=${MAKEFLAGS}
-
-Examples:
-    $(basename "$0")                    # Build everything
-    $(basename "$0") -c                 # Continue from last stage
-    $(basename "$0") toolchain          # Build only toolchain
-    $(basename "$0") -s download all    # Skip download, build all
-EOF
-    exit 0
-}
-
-# Parse arguments
-CONTINUE=0
-FORCE=0
-SKIP_STAGES=()
-TARGET_STAGE="all"
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -c|--continue) CONTINUE=1; shift ;;
-        -f|--force) FORCE=1; shift ;;
-        -s|--skip) SKIP_STAGES+=("$2"); shift 2 ;;
-        -l|--list) list_stages; exit 0 ;;
-        -h|--help) usage ;;
-        all|download|toolchain|temptools|chroot-prep|base|config|kernel|bootloader|desktop)
-            TARGET_STAGE="$1"; shift ;;
-        *) die "Unknown option: $1" ;;
-    esac
-done
-
-# State management
-mark_stage_done() {
-    local stage="$1"
-    mkdir -p "$(dirname "${BUILD_STATE}")"
-    echo "${stage}" >> "${BUILD_STATE}"
-    log "Stage '${stage}' marked complete"
-}
-
-is_stage_done() {
-    local stage="$1"
-    [[ -f "${BUILD_STATE}" ]] && grep -q "^${stage}$" "${BUILD_STATE}"
-}
-
-should_run_stage() {
-    local stage="$1"
-
-    # Check if skipped
-    for s in "${SKIP_STAGES[@]:-}"; do
-        [[ "${s}" == "${stage}" ]] && return 1
-    done
-
-    # Force overrides continue
-    [[ ${FORCE} -eq 1 ]] && return 0
-
-    # Continue mode skips completed stages
-    if [[ ${CONTINUE} -eq 1 ]] && is_stage_done "${stage}"; then
-        log "Skipping completed stage: ${stage}"
-        return 1
-    fi
-
-    return 0
-}
-
-list_stages() {
-    echo "Build stages:"
-    local stages=(download toolchain temptools chroot-prep base config kernel bootloader desktop)
-    for s in "${stages[@]}"; do
-        if is_stage_done "${s}"; then
-            echo -e "  ${GREEN}[done]${NC} ${s}"
-        else
-            echo -e "  ${YELLOW}[pending]${NC} ${s}"
-        fi
-    done
-}
-
-# Check prerequisites
-check_prereqs() {
-    log "Checking prerequisites..."
-
-    # Must be root
-    [[ $EUID -eq 0 ]] || die "Must run as root"
-
-    # LFS must be mounted
-    mountpoint -q "${LFS}" || die "LFS not mounted at ${LFS}"
-
-    # Check disk space (need at least 15GB free)
-    local free_space
-    free_space=$(df -BG "${LFS}" | awk 'NR==2 {print $4}' | tr -d 'G')
-    [[ ${free_space} -ge 15 ]] || warn "Low disk space: ${free_space}GB free (need 15GB+)"
-
-    # Create directories
-    mkdir -p "${SOURCES_DIR}" "${LOG_DIR}"
-
-    ok "Prerequisites checked"
-}
-
-# Get package info from TOML
-get_pkg_version() {
-    local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
+get_pkg_field() {
+    local pkg="$1" field="$2"
+    awk -v pkg="[packages.${pkg}]" -v field="${field}" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
-        found && /^version *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
+        found && $0 ~ "^"field" *= *\"" { gsub(/.*= *"|".*/, ""); print; exit }
     ' "${PACKAGES_FILE}"
 }
+
+get_pkg_version() { get_pkg_field "$1" "version"; }
+get_pkg_description() { get_pkg_field "$1" "description"; }
+get_pkg_stage() { get_pkg_field "$1" "stage"; }
+get_pkg_source_pkg() { get_pkg_field "$1" "source_pkg"; }
 
 get_pkg_url() {
     local pkg="$1"
-    local version version_mm
+    local version version_mm url
     version=$(get_pkg_version "${pkg}")
-    # Extract major.minor (e.g., 2.41.3 -> 2.41)
     version_mm=$(echo "${version}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^url/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}" | sed -e "s/\${version}/${version}/g" -e "s/\${version_mm}/${version_mm}/g"
+    url=$(get_pkg_field "${pkg}" "url")
+    echo "${url}" | sed -e "s/\${version}/${version}/g" -e "s/\${version_mm}/${version_mm}/g"
 }
 
-# Get build system (autotools, meson, cmake, make, custom)
-get_pkg_build_system() {
-    local pkg="$1"
-    local result
-    result=$(awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^build_system/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}")
-    echo "${result:-autotools}"
-}
-
-# Get configure flags
-get_pkg_configure_flags() {
-    local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^configure_flags/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}"
-}
-
-# Get meson flags
-get_pkg_meson_flags() {
-    local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^meson_flags/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}"
-}
-
-# Get cmake flags
-get_pkg_cmake_flags() {
-    local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^cmake_flags/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}"
-}
-
-# Get custom build commands (returns newline-separated list)
 get_pkg_build_commands() {
     local pkg="$1"
     awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[packages\./ && found { exit }
         found && /^build_commands/ { in_array=1; next }
-        in_array && /^\]/ { in_array=0; next }
-        in_array {
-            # Extract command from quoted string
-            gsub(/^[[:space:]]*"/, "")
-            gsub(/"[[:space:]]*,?[[:space:]]*$/, "")
-            if (length($0) > 0) print
-        }
+        in_array && /^\]/ { exit }
+        in_array { gsub(/^[[:space:]]*"|"[[:space:]]*,?$/, ""); if (length($0) > 0) print }
     ' "${PACKAGES_FILE}"
 }
 
-# Get provides list (files to check for idempotency)
-get_pkg_provides() {
-    local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[packages\./ && found { exit }
-        found && /^provides/ {
-            # Handle single-line: provides = ["file1", "file2"]
-            if (/\]/) {
-                gsub(/^provides *= *\[/, "")
-                gsub(/\]$/, "")
-                gsub(/, *"/, "\n")
-                gsub(/"/, "")
-                print
-            } else {
-                in_array=1
-            }
-            next
-        }
-        in_array && /^\]/ { in_array=0; next }
-        in_array {
-            gsub(/^[[:space:]]*"/, "")
-            gsub(/"[[:space:]]*,?[[:space:]]*$/, "")
-            if (length($0) > 0) print
-        }
+list_packages_by_stage() {
+    local stage="$1"
+    awk -v stage="${stage}" '
+        /^\[packages\./ { pkg=$0; gsub(/^\[packages\.|]$/, "", pkg) }
+        /^stage *= *'${stage}'/ { print pkg }
     ' "${PACKAGES_FILE}"
 }
 
-# Check if package needs safe flags (no fast-math)
-get_pkg_safe_flags() {
+# ============================================================
+# pkgutils integration
+# ============================================================
+
+# Check if package is installed
+pkg_installed() {
     local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^safe_flags *= *true/ { print "true" }
-    ' "${PACKAGES_FILE}"
+    [[ -f "${LFS}/var/lib/pkg/db" ]] && grep -q "^${pkg}$" "${LFS}/var/lib/pkg/db"
 }
 
-# Get source package (for packages that use another package's source)
-get_pkg_source_pkg() {
-    local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^source_pkg/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}"
+# Check if package file exists in cache
+pkg_cached() {
+    local pkg="$1" version="$2"
+    [[ -f "${PKG_CACHE}/${pkg}#${version}-1.pkg.tar.xz" ]]
 }
 
-# Get package stage
-get_pkg_stage() {
+# Build package with pkgmk
+pkg_build() {
     local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^stage/ { gsub(/.*= */, ""); print }
-    ' "${PACKAGES_FILE}"
+    local pkgfile_dir="${PKGFILES_DIR}/${pkg}"
+
+    [[ -f "${pkgfile_dir}/Pkgfile" ]] || die "No Pkgfile for ${pkg}"
+
+    log "Building ${pkg}..."
+    cd "${pkgfile_dir}"
+
+    # Use our pkgmk.conf
+    pkgmk -d -cf "${PKGMK_CONF}" || die "pkgmk failed for ${pkg}"
+
+    ok "Built ${pkg}"
 }
 
-# Check if package is already installed (idempotency check)
-is_pkg_installed() {
-    local pkg="$1"
-    local provides
-    provides=$(get_pkg_provides "${pkg}")
+# Install package with pkgadd
+pkg_install() {
+    local pkg="$1" version="$2"
+    local pkg_file="${PKG_CACHE}/${pkg}#${version}-1.pkg.tar.xz"
 
-    [[ -z "${provides}" ]] && return 1
+    [[ -f "${pkg_file}" ]] || die "Package file not found: ${pkg_file}"
 
-    local version
-    version=$(get_pkg_version "${pkg}")
+    log "Installing ${pkg}..."
 
-    while IFS= read -r file; do
-        [[ -z "${file}" ]] && continue
-        # Expand version variable
-        file="${file//\$\{version\}/${version}}"
-        [[ ! -e "${LFS}${file}" ]] && return 1
-    done <<< "${provides}"
-
-    return 0
-}
-
-# Generic build function - reads build config from packages.toml
-# Usage: build_pkg <package_name> [build_dir]
-build_pkg() {
-    local pkg="$1"
-    local build_dir="${2:-${LFS}/build}"
-
-    # Get source package (for packages like gcc-pass1 that use gcc source)
-    local source_pkg
-    source_pkg=$(get_pkg_source_pkg "${pkg}")
-    local actual_source="${source_pkg:-${pkg}}"
-
-    # Idempotency check - expand provides with current environment vars
-    local provides_raw version
-    version=$(get_pkg_version "${actual_source}")
-    provides_raw=$(get_pkg_provides "${pkg}")
-
-    if [[ -n "${provides_raw}" ]]; then
-        local all_exist=true
-        while IFS= read -r file; do
-            [[ -z "${file}" ]] && continue
-            # Expand all variables
-            file=$(eval echo "${file}")
-            if [[ ! -e "${file}" ]]; then
-                all_exist=false
-                break
-            fi
-        done <<< "${provides_raw}"
-        if [[ "${all_exist}" == "true" ]]; then
-            log "Package already installed: ${pkg}"
-            return 0
-        fi
-    fi
-
-    local build_system configure_flags meson_flags cmake_flags build_commands safe_flags
-    build_system=$(get_pkg_build_system "${pkg}")
-    configure_flags=$(get_pkg_configure_flags "${pkg}")
-    meson_flags=$(get_pkg_meson_flags "${pkg}")
-    cmake_flags=$(get_pkg_cmake_flags "${pkg}")
-    build_commands=$(get_pkg_build_commands "${pkg}")
-    safe_flags=$(get_pkg_safe_flags "${pkg}")
-
-    log "Building ${pkg} (${actual_source}-${version})..."
-
-    # Extract source
-    mkdir -p "${build_dir}"
-    extract_pkg "${actual_source}" "${build_dir}"
-
-    # Find and enter source directory
-    local src_dir
-    src_dir=$(find "${build_dir}" -maxdepth 1 -type d -name "${actual_source}-*" | head -1)
-    [[ -z "${src_dir}" ]] && src_dir=$(find "${build_dir}" -maxdepth 1 -type d -name "${actual_source}*" | head -1)
-    [[ -z "${src_dir}" ]] && die "Could not find source directory for ${actual_source}"
-
-    pushd "${src_dir}" > /dev/null
-
-    # Set up build flags
-    # LFS_GENERIC_BUILD=1 uses portable flags (for USB installer)
-    # Otherwise uses native optimization (for final system install)
-    local arch_flags
-    if [[ "${LFS_GENERIC_BUILD:-0}" == "1" ]]; then
-        arch_flags="-march=x86-64 -mtune=generic"
+    if pkg_installed "${pkg}"; then
+        pkgadd -u -r "${LFS}" "${pkg_file}" || die "pkgadd -u failed for ${pkg}"
     else
-        arch_flags="-march=native -mtune=native"
+        pkgadd -r "${LFS}" "${pkg_file}" || die "pkgadd failed for ${pkg}"
     fi
 
-    if [[ "${safe_flags}" != "true" ]]; then
-        export CFLAGS="-O3 ${arch_flags} -pipe -ffast-math"
-        export CXXFLAGS="${CFLAGS}"
-    else
-        export CFLAGS="-O3 ${arch_flags} -pipe"
-        export CXXFLAGS="${CFLAGS}"
-    fi
-
-    # Custom build commands override everything
-    if [[ -n "${build_commands}" ]]; then
-        while IFS= read -r cmd; do
-            [[ -z "${cmd}" ]] && continue
-            log "  $ ${cmd}"
-            # eval handles variable expansion and command execution
-            eval "${cmd}" || die "Build command failed: ${cmd}"
-        done <<< "${build_commands}"
-        ok "Built ${pkg}"
-    else
-        # Build based on build system
-        case "${build_system}" in
-            autotools)
-                ./configure --prefix=/usr ${configure_flags}
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" install
-                ;;
-            meson)
-                meson setup build --prefix=/usr ${meson_flags}
-                ninja -C build
-                DESTDIR="${LFS}" ninja -C build install
-                ;;
-            cmake)
-                cmake -B build -DCMAKE_INSTALL_PREFIX=/usr ${cmake_flags}
-                cmake --build build -j"${NPROC}"
-                DESTDIR="${LFS}" cmake --install build
-                ;;
-            make)
-                make -j"${NPROC}"
-                make DESTDIR="${LFS}" PREFIX=/usr install
-                ;;
-            *)
-                die "Unknown build system: ${build_system}"
-                ;;
-        esac
-        ok "Built ${pkg} (${build_system})"
-    fi
-
-    # Cleanup
-    popd > /dev/null
-    rm -rf "${src_dir}"
+    ok "Installed ${pkg}"
 }
 
-# GNU mirror list for fallback
-GNU_MIRRORS=(
-    "https://ftpmirror.gnu.org"
-    "https://mirrors.kernel.org/gnu"
-    "https://ftp.gnu.org/gnu"
-    "https://mirror.csclub.uwaterloo.ca/gnu"
-)
-
-# Get mirror URLs for a package
-get_mirror_urls() {
-    local url="$1"
-    local urls=("${url}")
-
-    # If it's a GNU URL, add mirror alternatives
-    if [[ "${url}" =~ (ftp\.gnu\.org|ftpmirror\.gnu\.org)/gnu/([^/]+)/ ]]; then
-        local gnu_path="${BASH_REMATCH[2]}"
-        local filename
-        filename=$(basename "${url}")
-        for mirror in "${GNU_MIRRORS[@]}"; do
-            local mirror_url="${mirror}/${gnu_path}/${filename}"
-            if [[ "${mirror_url}" != "${url}" ]]; then
-                urls+=("${mirror_url}")
-            fi
-        done
-    fi
-
-    printf '%s\n' "${urls[@]}"
-}
-
-# Download a package (URL from packages.toml or explicit)
-# Features: mirror fallback, retry with backoff, resume partial downloads, timeout protection
-download_pkg() {
+# Build and install a package
+build_and_install() {
     local pkg="$1"
-    local url="${2:-}"
+    local version=$(get_pkg_version "${pkg}")
 
-    # If no explicit URL, get from packages.toml
-    if [[ -z "${url}" ]]; then
-        url=$(get_pkg_url "${pkg}")
-    fi
-
-    [[ -z "${url}" ]] && { warn "No URL for ${pkg}"; return 0; }
-
-    local filename
-    filename=$(basename "${url}")
-    local target="${SOURCES_DIR}/${filename}"
-    local partial="${target}.partial"
-
-    # Check if already downloaded and valid
-    if [[ -f "${target}" ]]; then
-        log "Already downloaded: ${filename}"
+    if pkg_installed "${pkg}"; then
+        log "Already installed: ${pkg}"
         return 0
     fi
 
-    log "Downloading: ${pkg} -> ${filename}"
+    if ! pkg_cached "${pkg}" "${version}"; then
+        pkg_build "${pkg}"
+    else
+        log "Using cached: ${pkg}"
+    fi
 
-    # Get all mirror URLs
-    local -a mirror_urls
-    mapfile -t mirror_urls < <(get_mirror_urls "${url}")
+    pkg_install "${pkg}" "${version}"
+}
 
-    # Download settings
-    local connect_timeout=30
-    local max_time=600  # 10 minutes max per attempt
-    local speed_limit=1000  # Abort if slower than 1KB/s
-    local speed_time=30  # for more than 30 seconds
+# ============================================================
+# Bootstrap (build pkgutils without pkgutils)
+# ============================================================
 
-    # Try each mirror
-    for try_url in "${mirror_urls[@]}"; do
-        log "  Trying: ${try_url}"
-        rm -f "${partial}"  # Start fresh for each mirror
+bootstrap_pkgutils() {
+    stage_start "Bootstrapping pkgutils"
 
-        # Single attempt per mirror with curl's built-in retry
-        if curl -fSL \
-            --connect-timeout ${connect_timeout} \
-            --max-time ${max_time} \
-            --speed-limit ${speed_limit} \
-            --speed-time ${speed_time} \
-            --retry 2 \
-            --retry-delay 3 \
-            --retry-all-errors \
-            -o "${partial}" "${try_url}"; then
-            mv "${partial}" "${target}"
-            ok "Downloaded: ${filename}"
-            return 0
+    local version=$(get_pkg_version "pkgutils")
+    local url=$(get_pkg_url "pkgutils")
+    local tarball="${SOURCES_DIR}/pkgutils-${version}.tar.gz"
+    local build_dir="${LFS}/build/pkgutils-${version}"
+
+    # Download if needed
+    if [[ ! -f "${tarball}" ]]; then
+        log "Downloading pkgutils..."
+        curl -fL "${url}" -o "${tarball}" || die "Download failed"
+    fi
+
+    # Build
+    log "Building pkgutils..."
+    rm -rf "${build_dir}"
+    mkdir -p "${build_dir}"
+    tar -xf "${tarball}" -C "${LFS}/build"
+    cd "${build_dir}"
+
+    make DESTDIR="${LFS}" PREFIX=/usr install || die "pkgutils build failed"
+
+    # Initialize package database
+    mkdir -p "${LFS}/var/lib/pkg"
+    touch "${LFS}/var/lib/pkg/db"
+
+    # Create package cache directory
+    mkdir -p "${PKG_CACHE}"
+
+    ok "pkgutils bootstrapped"
+}
+
+# ============================================================
+# Generate Pkgfiles from packages.toml
+# ============================================================
+
+generate_pkgfile() {
+    local pkg="$1"
+    local version=$(get_pkg_version "${pkg}")
+    local description=$(get_pkg_description "${pkg}")
+    local url=$(get_pkg_url "${pkg}")
+    local build_commands=$(get_pkg_build_commands "${pkg}")
+    local source_pkg=$(get_pkg_source_pkg "${pkg}")
+
+    [[ -z "${version}" ]] && return 1
+
+    local pkg_dir="${PKGFILES_DIR}/${pkg}"
+    mkdir -p "${pkg_dir}"
+
+    # Use source package URL if specified
+    if [[ -n "${source_pkg}" ]]; then
+        url=$(get_pkg_url "${source_pkg}")
+    fi
+
+    cat > "${pkg_dir}/Pkgfile" << EOF
+# Description: ${description}
+# Maintainer: LFS-infra
+
+name=${pkg}
+version=${version}
+release=1
+source=(${url})
+
+build() {
+    cd \$(ls -d */ | head -1)
+
+EOF
+
+    if [[ -n "${build_commands}" ]]; then
+        # Use custom build commands
+        echo "${build_commands}" | while IFS= read -r cmd; do
+            # Expand variables
+            cmd="${cmd//\$\{LFS\}/${LFS}}"
+            cmd="${cmd//\$\{LFS_TGT\}/${LFS_TGT}}"
+            cmd="${cmd//\$\{NPROC\}/${NPROC}}"
+            cmd="${cmd//\$\{version\}/${version}}"
+            # Change DESTDIR to $PKG for pkgutils
+            cmd="${cmd//DESTDIR=\${LFS}/DESTDIR=\$PKG}"
+            cmd="${cmd//DESTDIR=\"\${LFS}\"/DESTDIR=\$PKG}"
+            echo "    ${cmd}"
+        done >> "${pkg_dir}/Pkgfile"
+    else
+        # Default autotools build
+        cat >> "${pkg_dir}/Pkgfile" << 'EOF'
+    ./configure --prefix=/usr
+    make -j${NPROC}
+    make DESTDIR=$PKG install
+EOF
+    fi
+
+    echo "}" >> "${pkg_dir}/Pkgfile"
+}
+
+generate_all_pkgfiles() {
+    stage_start "Generating Pkgfiles"
+
+    local count=0
+    for pkg in $(awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}' "${PACKAGES_FILE}"); do
+        if generate_pkgfile "${pkg}" 2>/dev/null; then
+            count=$((count + 1))
         fi
-
-        warn "  Mirror failed: ${try_url}"
-        sleep 2
     done
 
-    # Clean up partial file on total failure
-    rm -f "${partial}"
-    die "Failed to download ${pkg} from all mirrors"
+    ok "Generated ${count} Pkgfiles"
 }
 
-# Apply patches for a package
-apply_patches() {
-    local pkg="$1"
-    local src_dir="$2"
-    local patch_dir="${PATCHES_DIR}/${pkg}"
+# ============================================================
+# Download sources
+# ============================================================
 
-    [[ -d "${patch_dir}" ]] || return 0
-
-    log "Applying patches for ${pkg}..."
-    for patch in "${patch_dir}"/*.patch; do
-        [[ -f "${patch}" ]] || continue
-        log "  Applying: $(basename "${patch}")"
-        patch -d "${src_dir}" -p1 < "${patch}" || die "Patch failed: ${patch}"
-    done
-}
-
-# Extract package source
-extract_pkg() {
-    local pkg="$1"
-    local dest="$2"
-    local url
-    url=$(get_pkg_url "${pkg}")
-    local filename
-    filename=$(basename "${url}")
-    local archive="${SOURCES_DIR}/${filename}"
-
-    [[ -f "${archive}" ]] || die "Archive not found: ${archive}"
-
-    log "Extracting: ${filename}"
-    mkdir -p "${dest}"
-
-    case "${filename}" in
-        *.tar.xz|*.txz)  tar -xf "${archive}" -C "${dest}" ;;
-        *.tar.gz|*.tgz)  tar -xzf "${archive}" -C "${dest}" ;;
-        *.tar.bz2|*.tbz) tar -xjf "${archive}" -C "${dest}" ;;
-        *.tar.zst)       tar --zstd -xf "${archive}" -C "${dest}" ;;
-        *)               die "Unknown archive format: ${filename}" ;;
-    esac
-
-    # Apply patches
-    local src_dir
-    src_dir=$(find "${dest}" -maxdepth 1 -type d -name "${pkg}*" | head -1)
-    [[ -n "${src_dir}" ]] && apply_patches "${pkg}" "${src_dir}"
-}
-
-# ============================================================================
-# STAGE: Download all sources
-# ============================================================================
-stage_download() {
+download_sources() {
     stage_start "Downloading Sources"
 
-    # Core packages for each stage
-    local stage1_pkgs=(binutils gcc linux glibc)
-    local stage2_pkgs=(m4 ncurses bash coreutils diffutils file findutils gawk grep gzip make patch sed tar xz)
-    local stage3_pkgs=(gettext bison perl python texinfo util-linux)
+    mkdir -p "${SOURCES_DIR}"
 
-    # Download all
-    local all_pkgs=(
-        "${stage1_pkgs[@]}"
-        "${stage2_pkgs[@]}"
-        "${stage3_pkgs[@]}"
-        # Additional dependencies
-        gmp mpfr mpc isl zlib bzip2 zstd readline bc flex expat
-        openssl libffi pkgconf acl attr autoconf automake libtool
-        # Build tools
-        ninja meson cmake
-    )
+    for pkg in $(awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}' "${PACKAGES_FILE}"); do
+        local url=$(get_pkg_url "${pkg}")
+        [[ -z "${url}" ]] && continue
 
-    local failed=0
-    for pkg in "${all_pkgs[@]}"; do
-        download_pkg "${pkg}" || ((failed++))
-    done
+        local filename=$(basename "${url}")
+        local target="${SOURCES_DIR}/${filename}"
 
-    [[ ${failed} -eq 0 ]] || warn "${failed} packages failed to download"
-
-    stage_end "Download"
-    mark_stage_done "download"
-}
-
-# ============================================================================
-# STAGE: Build cross-compilation toolchain
-# ============================================================================
-stage_toolchain() {
-    stage_start "Building Cross-Compilation Toolchain"
-
-    local build_dir="${LFS}/build"
-    mkdir -p "${build_dir}"
-
-    # Build cross-toolchain packages in order using packages.toml definitions
-    # Order: binutils -> gcc-pass1 -> linux-headers -> glibc -> libstdcxx
-    build_pkg binutils "${build_dir}"
-    build_pkg gcc-pass1 "${build_dir}"
-    build_pkg linux-headers "${build_dir}"
-    build_pkg glibc "${build_dir}"
-    build_pkg libstdcxx "${build_dir}"
-
-    stage_end "Toolchain"
-    mark_stage_done "toolchain"
-}
-
-# ============================================================================
-# STAGE: Build temporary tools
-# ============================================================================
-stage_temptools() {
-    stage_start "Building Temporary Tools"
-
-    local build_dir="${LFS}/build"
-    mkdir -p "${build_dir}"
-
-    # Set up cross-compilation environment
-    export PATH="${LFS}/tools/bin:${PATH}"
-    export CONFIG_SITE="${LFS}/usr/share/config.site"
-
-    # Create config.site for cross-compilation cache variables
-    mkdir -p "$(dirname "${CONFIG_SITE}")"
-    cat > "${CONFIG_SITE}" << "EOF"
-# config.site for LFS cross-compilation
-ac_cv_func_mmap_fixed_mapped=yes
-ac_cv_func_strcoll_works=yes
-bash_cv_func_sigsetjmp=present
-bash_cv_getcwd_malloc=yes
-bash_cv_job_control_missing=present
-bash_cv_printf_a_format=yes
-bash_cv_sys_named_pipes=present
-bash_cv_ulimit_maxfds=yes
-bash_cv_under_sys_siglist=yes
-bash_cv_unusable_rtsigs=no
-gt_cv_int_divbyzero_sigfpe=yes
-EOF
-
-    # Build temporary tools using packages.toml definitions
-    local temp_tools=(
-        m4 ncurses bash coreutils diffutils file findutils
-        gawk grep gzip make patch sed tar xz
-        binutils-pass2 gcc-pass2
-    )
-
-    for pkg in "${temp_tools[@]}"; do
-        build_pkg "${pkg}" "${build_dir}"
-    done
-
-    stage_end "Temporary Tools"
-    mark_stage_done "temptools"
-}
-
-# ============================================================================
-# STAGE: Prepare chroot environment
-# ============================================================================
-stage_chroot_prep() {
-    stage_start "Preparing Chroot Environment"
-
-    # Change ownership to root
-    chown -R root:root "${LFS}"/{usr,var,etc,tools}
-
-    # Create essential directory symlinks (modern LFS structure)
-    # /lib -> usr/lib, /lib64 -> usr/lib, /bin -> usr/bin, /sbin -> usr/sbin
-    for dir in lib bin sbin; do
-        if [[ -d "${LFS}/${dir}" ]] && [[ ! -L "${LFS}/${dir}" ]]; then
-            rm -rf "${LFS}/${dir}"
+        if [[ -f "${target}" ]]; then
+            log "Already downloaded: ${filename}"
+        else
+            log "Downloading: ${filename}"
+            curl -fL "${url}" -o "${target}.partial" && mv "${target}.partial" "${target}" || warn "Failed: ${filename}"
         fi
     done
-    [[ -L "${LFS}/lib" ]] || ln -sv /usr/lib "${LFS}/lib"
-    [[ -L "${LFS}/bin" ]] || ln -sv usr/bin "${LFS}/bin"
-    [[ -L "${LFS}/sbin" ]] || ln -sv usr/sbin "${LFS}/sbin"
 
-    case $(uname -m) in
-        x86_64)
-            if [[ -d "${LFS}/lib64" ]] && [[ ! -L "${LFS}/lib64" ]]; then
-                rm -rf "${LFS}/lib64"
-            fi
-            [[ -L "${LFS}/lib64" ]] || ln -sv /usr/lib "${LFS}/lib64"
-            ;;
-    esac
-
-    # Ensure /usr/bin/sh exists
-    [[ -e "${LFS}/usr/bin/sh" ]] || ln -sv bash "${LFS}/usr/bin/sh"
-
-    # Create directories
-    mkdir -pv "${LFS}"/{dev,proc,sys,run,tmp}
-    chmod 1777 "${LFS}/tmp"
-
-    # Create device nodes
-    if [[ ! -c "${LFS}/dev/console" ]]; then
-        mknod -m 600 "${LFS}/dev/console" c 5 1
-    fi
-    if [[ ! -c "${LFS}/dev/null" ]]; then
-        mknod -m 666 "${LFS}/dev/null" c 1 3
-    fi
-
-    # Mount virtual filesystems
-    mount -v --bind /dev "${LFS}/dev"
-    mount -vt devpts devpts -o gid=5,mode=0620 "${LFS}/dev/pts"
-    mount -vt proc proc "${LFS}/proc"
-    mount -vt sysfs sysfs "${LFS}/sys"
-    mount -vt tmpfs tmpfs "${LFS}/run"
-
-    # Create essential files
-    cat > "${LFS}/etc/passwd" << "EOF"
-root:x:0:0:root:/root:/bin/bash
-bin:x:1:1:bin:/dev/null:/usr/bin/false
-daemon:x:6:6:Daemon User:/dev/null:/usr/bin/false
-messagebus:x:18:18:D-Bus Message Daemon User:/run/dbus:/usr/bin/false
-uuidd:x:80:80:UUID Generation Daemon User:/dev/null:/usr/bin/false
-nobody:x:65534:65534:Unprivileged User:/dev/null:/usr/bin/false
-EOF
-
-    cat > "${LFS}/etc/group" << "EOF"
-root:x:0:
-bin:x:1:daemon
-sys:x:2:
-kmem:x:3:
-tape:x:4:
-tty:x:5:
-daemon:x:6:
-floppy:x:7:
-disk:x:8:
-lp:x:9:
-dialout:x:10:
-audio:x:11:
-video:x:12:
-utmp:x:13:
-cdrom:x:15:
-adm:x:16:
-messagebus:x:18:
-input:x:24:
-mail:x:34:
-kvm:x:61:
-uuidd:x:80:
-wheel:x:97:
-users:x:999:
-nogroup:x:65534:
-EOF
-
-    # Touch log files
-    mkdir -p "${LFS}/var/log"
-    touch "${LFS}/var/log"/{btmp,lastlog,faillog,wtmp}
-    chgrp -v 13 "${LFS}/var/log/lastlog"
-    chmod -v 664 "${LFS}/var/log/lastlog"
-    chmod -v 600 "${LFS}/var/log/btmp"
-
-    stage_end "Chroot Preparation"
-    mark_stage_done "chroot-prep"
+    ok "Downloads complete"
 }
 
-# ============================================================================
-# STAGE: Build base system (in chroot)
-# ============================================================================
-stage_base() {
-    stage_start "Building Base System"
+# ============================================================
+# Build stages
+# ============================================================
 
-    # This stage should be run inside chroot
-    # Create a script to run inside chroot
-    cat > "${LFS}/build-base.sh" << 'CHROOT_SCRIPT'
-#!/bin/bash
-set -e
+build_stage() {
+    local stage="$1"
+    local stage_name="$2"
 
-export MAKEFLAGS="-j$(nproc)"
+    stage_start "Building Stage ${stage}: ${stage_name}"
 
-# Build zlib first (required for linker)
-cd /sources
-rm -rf zlib-[0-9]*/
-tar xf zlib-*.tar.xz
-cd zlib-[0-9]*/
-./configure --prefix=/usr
-make -j$(nproc)
-make install
-rm -f /usr/lib/libz.a
-cd /sources && rm -rf zlib-[0-9]*/
-
-# Build gettext
-cd /sources
-rm -rf gettext-[0-9]*/
-tar xf gettext-*.tar.xz
-cd gettext-[0-9]*/
-./configure --disable-shared
-make -j$(nproc)
-cp -v gettext-tools/src/{msgfmt,msgmerge,xgettext} /usr/bin
-cd /sources && rm -rf gettext-[0-9]*/
-
-# Build bison
-rm -rf bison-[0-9]*/
-tar xf bison-*.tar.xz
-cd bison-[0-9]*/
-./configure --prefix=/usr --docdir=/usr/share/doc/bison
-make -j$(nproc)
-make install
-cd /sources && rm -rf bison-[0-9]*/
-
-# Build perl
-rm -rf perl-[0-9]*/
-tar xf perl-*.tar.xz
-cd perl-[0-9]*/
-sh Configure -des \
-    -D prefix=/usr \
-    -D vendorprefix=/usr \
-    -D useshrplib \
-    -D privlib=/usr/lib/perl5/core_perl \
-    -D archlib=/usr/lib/perl5/core_perl \
-    -D sitelib=/usr/lib/perl5/site_perl \
-    -D sitearch=/usr/lib/perl5/site_perl \
-    -D vendorlib=/usr/lib/perl5/vendor_perl \
-    -D vendorarch=/usr/lib/perl5/vendor_perl
-make -j$(nproc)
-make install
-cd /sources && rm -rf perl-[0-9]*/
-
-# Build Python
-rm -rf Python-[0-9]*/
-tar xf Python-*.tar.xz
-cd Python-[0-9]*/
-./configure --prefix=/usr --enable-shared --without-ensurepip
-make -j$(nproc)
-make install
-cd /sources && rm -rf Python-[0-9]*/
-
-# Build texinfo
-rm -rf texinfo-[0-9]*/
-tar xf texinfo-*.tar.xz
-cd texinfo-[0-9]*/
-./configure --prefix=/usr
-make -j$(nproc)
-make install
-cd /sources && rm -rf texinfo-[0-9]*/
-
-# Build util-linux
-rm -rf util-linux-[0-9]*/
-tar xf util-linux-*.tar.xz
-cd util-linux-[0-9]*/
-mkdir -pv /var/lib/hwclock
-./configure \
-    --libdir=/usr/lib \
-    --runstatedir=/run \
-    --disable-chfn-chsh \
-    --disable-login \
-    --disable-nologin \
-    --disable-su \
-    --disable-setpriv \
-    --disable-runuser \
-    --disable-pylibmount \
-    --disable-static \
-    --disable-liblastlog2 \
-    --without-python \
-    ADJTIME_PATH=/var/lib/hwclock/adjtime \
-    --docdir=/usr/share/doc/util-linux
-make -j$(nproc)
-make install
-cd /sources && rm -rf util-linux-[0-9]*/
-
-echo "Base system build complete"
-CHROOT_SCRIPT
-
-    chmod +x "${LFS}/build-base.sh"
-
-    # Enter chroot and run the script
-    chroot "${LFS}" /usr/bin/env -i \
-        HOME=/root \
-        TERM="${TERM}" \
-        PS1='(lfs chroot) \u:\w\$ ' \
-        PATH=/usr/bin:/usr/sbin \
-        MAKEFLAGS="-j$(nproc)" \
-        /bin/bash /build-base.sh
-
-    rm "${LFS}/build-base.sh"
-
-    stage_end "Base System"
-    mark_stage_done "base"
-}
-
-# ============================================================================
-# STAGE: System configuration
-# ============================================================================
-stage_config() {
-    stage_start "Configuring System"
-
-    # Copy configuration files
-    cp -v "${ROOT_DIR}/config/etc/fstab" "${LFS}/etc/"
-    cp -v "${ROOT_DIR}/config/etc/hosts" "${LFS}/etc/"
-    cp -v "${ROOT_DIR}/config/etc/passwd" "${LFS}/etc/"
-    cp -v "${ROOT_DIR}/config/etc/group" "${LFS}/etc/"
-
-    # Create user home directory
-    mkdir -p "${LFS}/home/${LFS_USERNAME}"
-    chown 1000:1000 "${LFS}/home/${LFS_USERNAME}"
-
-    # Hash the user password
-    local password_hash
-    password_hash=$(openssl passwd -6 "${LFS_PASSWORD}")
-
-    # Create shadow file with locked root (only sudo access via user)
-    cat > "${LFS}/etc/shadow" << EOF
-root:!:19000:0:99999:7:::
-bin:!:19000:0:99999:7:::
-daemon:!:19000:0:99999:7:::
-nobody:!:19000:0:99999:7:::
-${LFS_USERNAME}:${password_hash}:19000:0:99999:7:::
-EOF
-    chmod 600 "${LFS}/etc/shadow"
-
-    # Update passwd and group files with configured username
-    sed -i "s/ert:/${LFS_USERNAME}:/g" "${LFS}/etc/passwd"
-    sed -i "s/:ert/:${LFS_USERNAME}/g" "${LFS}/etc/group"
-
-    # Configure sudo for wheel group
-    mkdir -p "${LFS}/etc/sudoers.d"
-    cat > "${LFS}/etc/sudoers.d/wheel" << "EOF"
-%wheel ALL=(ALL:ALL) ALL
-EOF
-    chmod 440 "${LFS}/etc/sudoers.d/wheel"
-
-    # Create hostname
-    echo "lfs" > "${LFS}/etc/hostname"
-
-    # Create /etc/os-release
-    cat > "${LFS}/etc/os-release" << EOF
-NAME="LFS"
-VERSION="12.2"
-ID=lfs
-PRETTY_NAME="Linux From Scratch 12.2"
-VERSION_CODENAME="bleeding-edge"
-HOME_URL="https://www.linuxfromscratch.org"
-EOF
-
-    # Network configuration
-    mkdir -p "${LFS}/etc/network"
-    cat > "${LFS}/etc/network/interfaces" << EOF
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet dhcp
-EOF
-
-    # Copy runit services
-    if [[ -d "${ROOT_DIR}/config/runit" ]]; then
-        cp -av "${ROOT_DIR}/config/runit"/* "${LFS}/etc/runit/" 2>/dev/null || true
-    fi
-
-    # Install init script for XFCE desktop
-    if [[ -f "${ROOT_DIR}/config/etc/init" ]]; then
-        install -m 755 "${ROOT_DIR}/config/etc/init" "${LFS}/sbin/init"
-        log "Installed init script with XFCE desktop support"
-    fi
-
-    stage_end "Configuration"
-    mark_stage_done "config"
-}
-
-# ============================================================================
-# STAGE: Build kernel
-# ============================================================================
-stage_kernel() {
-    stage_start "Building Linux Kernel"
-
-    local build_dir="${LFS}/build"
-    mkdir -p "${build_dir}"
-
-    extract_pkg linux "${build_dir}"
-    pushd "${build_dir}/linux-"* > /dev/null
-
-    make mrproper
-
-    # Use default config as base, enable virtio for VM
-    make defconfig
-
-    # Enable additional options for VM and desktop
-    scripts/config --enable CONFIG_DRM_VIRTIO_GPU
-    scripts/config --enable CONFIG_VIRTIO_PCI
-    scripts/config --enable CONFIG_VIRTIO_BLK
-    scripts/config --enable CONFIG_VIRTIO_NET
-    scripts/config --enable CONFIG_VIRTIO_CONSOLE
-    scripts/config --enable CONFIG_HW_RANDOM_VIRTIO
-    scripts/config --enable CONFIG_DRM_FBDEV_EMULATION
-    scripts/config --enable CONFIG_FRAMEBUFFER_CONSOLE
-    scripts/config --enable CONFIG_EFI
-    scripts/config --enable CONFIG_EFI_STUB
-
-    make -j"${NPROC}"
-    make INSTALL_MOD_PATH="${LFS}" modules_install
-
-    # Install kernel
-    cp -v arch/x86/boot/bzImage "${LFS}/boot/vmlinuz-lfs"
-    cp -v System.map "${LFS}/boot/System.map-lfs"
-    cp -v .config "${LFS}/boot/config-lfs"
-
-    popd > /dev/null
-    rm -rf "${build_dir}/linux-"*
-
-    stage_end "Kernel"
-    mark_stage_done "kernel"
-}
-
-# ============================================================================
-# STAGE: Install bootloader
-# ============================================================================
-stage_bootloader() {
-    stage_start "Installing Bootloader (GRUB)"
-
-    # Enter chroot to install GRUB
-    chroot "${LFS}" /usr/bin/env -i \
-        HOME=/root \
-        TERM="${TERM}" \
-        PATH=/usr/bin:/usr/sbin \
-        /bin/bash -c '
-        # Install GRUB for EFI
-        grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LFS --removable 2>/dev/null || \
-        grub-install --target=i386-pc /dev/loop0 2>/dev/null || \
-        echo "GRUB install may need manual configuration"
-
-        # Generate GRUB config
-        cat > /boot/grub/grub.cfg << "EOF"
-set default=0
-set timeout=5
-
-menuentry "LFS - Linux From Scratch" {
-    linux /boot/vmlinuz-lfs root=/dev/vda2 ro quiet
-    # initrd /boot/initramfs-lfs.img
-}
-
-menuentry "LFS - Linux From Scratch (verbose)" {
-    linux /boot/vmlinuz-lfs root=/dev/vda2 ro
-}
-EOF
-        '
-
-    stage_end "Bootloader"
-    mark_stage_done "bootloader"
-}
-
-# ============================================================================
-# STAGE: Build desktop
-# ============================================================================
-
-# Helper to run commands in chroot
-run_in_chroot() {
-    chroot "${LFS}" /usr/bin/env -i \
-        HOME=/root \
-        TERM="${TERM}" \
-        PS1='(lfs chroot) \u:\w\$ ' \
-        PATH=/usr/bin:/usr/sbin \
-        MAKEFLAGS="-j${NPROC}" \
-        /bin/bash -c "$1"
-}
-
-# Helper to build a package in chroot with meson
-build_meson_pkg() {
-    local name="$1"
-    local tarball="$2"
-    local opts="${3:-}"
-
-    log "Building ${name} (meson)"
-    run_in_chroot "
-        cd /sources
-        rm -rf ${name}-[0-9]*/
-        tar xf ${tarball}
-        cd ${name}-[0-9]*/
-        mkdir -p build
-        cd build
-        meson setup --prefix=/usr --buildtype=release ${opts} ..
-        ninja -j${NPROC}
-        ninja install
-        cd /sources
-        rm -rf ${name}-[0-9]*/
-    "
-}
-
-# Helper to build a package in chroot with autotools
-build_autotools_pkg() {
-    local name="$1"
-    local tarball="$2"
-    local opts="${3:-}"
-
-    log "Building ${name} (autotools)"
-    run_in_chroot "
-        cd /sources
-        rm -rf ${name}-[0-9]*/
-        tar xf ${tarball}
-        cd ${name}-[0-9]*/
-        ./configure --prefix=/usr ${opts}
-        make -j${NPROC}
-        make install
-        cd /sources
-        rm -rf ${name}-[0-9]*/
-    "
-}
-
-# Helper to build a package in chroot with cmake
-build_cmake_pkg() {
-    local name="$1"
-    local tarball="$2"
-    local opts="${3:-}"
-
-    log "Building ${name} (cmake)"
-    run_in_chroot "
-        cd /sources
-        rm -rf ${name}-[0-9]*/
-        tar xf ${tarball}
-        cd ${name}-[0-9]*/
-        mkdir -p build
-        cd build
-        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release ${opts} ..
-        make -j${NPROC}
-        make install
-        cd /sources
-        rm -rf ${name}-[0-9]*/
-    "
-}
-
-stage_desktop() {
-    stage_start "Building Desktop Environment"
-
-    log "This stage builds X11, Mesa, XFCE, and applications"
-    log "This is a large undertaking - expect several hours"
-
-    # Ensure chroot mounts are set up
-    if ! mountpoint -q "${LFS}/proc"; then
-        mount -vt proc proc "${LFS}/proc"
-    fi
-    if ! mountpoint -q "${LFS}/sys"; then
-        mount -vt sysfs sysfs "${LFS}/sys"
-    fi
-    if ! mountpoint -q "${LFS}/dev"; then
-        mount -v --bind /dev "${LFS}/dev"
-    fi
-    if ! mountpoint -q "${LFS}/dev/pts"; then
-        mount -vt devpts devpts -o gid=5,mode=0620 "${LFS}/dev/pts"
-    fi
-    if ! mountpoint -q "${LFS}/run"; then
-        mount -vt tmpfs tmpfs "${LFS}/run"
-    fi
-
-    # First, build essential build tools (always build, skip conditionals)
-    log "========== Building Build Tools =========="
-
-    # pkgconf (modern pkg-config replacement, GCC 15 compatible)
-    if [[ ! -x "${LFS}/usr/bin/pkg-config" ]]; then
-        log "Building pkgconf..."
-        download_pkg "pkgconf" "https://distfiles.ariadne.space/pkgconf/pkgconf-2.3.0.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf pkgconf-[0-9]*/
-            tar xf pkgconf-*.tar.xz
-            cd pkgconf-[0-9]*/
-            ./configure --prefix=/usr --disable-static
-            make -j${NPROC}
-            make install
-            ln -svf pkgconf /usr/bin/pkg-config
-            cd /sources && rm -rf pkgconf-[0-9]*/
-        " || die "Failed to build pkgconf"
-        ok "pkgconf (pkg-config) installed"
-    else
-        log "pkg-config already installed"
-    fi
-
-    # Ninja
-    if [[ ! -x "${LFS}/usr/bin/ninja" ]]; then
-        log "Building ninja..."
-        download_pkg "ninja" "https://github.com/ninja-build/ninja/archive/refs/tags/v1.12.1.tar.gz"
-        run_in_chroot "
-            cd /sources
-            rm -rf ninja-[0-9]*/
-            tar xf v1.12.1.tar.gz || tar xf ninja-*.tar.gz
-            cd ninja-[0-9]*/
-            python3 configure.py --bootstrap
-            install -vm755 ninja /usr/bin/
-            cd /sources && rm -rf ninja-[0-9]*/
-        " || die "Failed to build ninja"
-        ok "ninja installed"
-    else
-        log "ninja already installed"
-    fi
-
-    # Meson (install via setup.py since pip may not be available)
-    if [[ ! -x "${LFS}/usr/bin/meson" ]]; then
-        log "Building meson..."
-        download_pkg "meson" "https://github.com/mesonbuild/meson/releases/download/1.6.1/meson-1.6.1.tar.gz"
-        run_in_chroot "
-            cd /sources
-            rm -rf meson-[0-9]*/
-            tar xf meson-*.tar.gz
-            cd meson-[0-9]*/
-            python3 setup.py build
-            python3 setup.py install --prefix=/usr
-            cd /sources && rm -rf meson-[0-9]*/
-        " || die "Failed to build meson"
-        ok "meson installed"
-    else
-        log "meson already installed"
-    fi
-
-    # Autoconf
-    if [[ ! -x "${LFS}/usr/bin/autoconf" ]]; then
-        log "Building autoconf..."
-        download_pkg "autoconf" "https://ftp.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf autoconf-[0-9]*/
-            tar xf autoconf-*.tar.xz
-            cd autoconf-[0-9]*/
-            ./configure --prefix=/usr
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf autoconf-[0-9]*/
-        " || die "Failed to build autoconf"
-        ok "autoconf installed"
-    else
-        log "autoconf already installed"
-    fi
-
-    # Automake
-    if [[ ! -x "${LFS}/usr/bin/automake" ]]; then
-        log "Building automake..."
-        download_pkg "automake" "https://ftp.gnu.org/gnu/automake/automake-1.17.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf automake-[0-9]*/
-            tar xf automake-*.tar.xz
-            cd automake-[0-9]*/
-            ./configure --prefix=/usr
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf automake-[0-9]*/
-        " || die "Failed to build automake"
-        ok "automake installed"
-    else
-        log "automake already installed"
-    fi
-
-    # Libtool
-    if [[ ! -x "${LFS}/usr/bin/libtool" ]]; then
-        log "Building libtool..."
-        download_pkg "libtool" "https://ftp.gnu.org/gnu/libtool/libtool-2.5.4.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf libtool-[0-9]*/
-            tar xf libtool-*.tar.xz
-            cd libtool-[0-9]*/
-            ./configure --prefix=/usr
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf libtool-[0-9]*/
-        " || die "Failed to build libtool"
-        ok "libtool installed"
-    else
-        log "libtool already installed"
-    fi
-
-    ok "Build tools ready"
-
-    # Build essential system libraries
-    log "========== Building System Libraries =========="
-
-    # libmd (required for libbsd)
-    if [[ ! -f "${LFS}/usr/lib/libmd.so" ]]; then
-        log "Building libmd..."
-        download_pkg "libmd" "https://libbsd.freedesktop.org/releases/libmd-1.1.0.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf libmd-[0-9]*/
-            tar xf libmd-*.tar.xz
-            cd libmd-[0-9]*/
-            ./configure --prefix=/usr --disable-static
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf libmd-[0-9]*/
-        " || die "Failed to build libmd"
-        ok "libmd installed"
-    else
-        log "libmd already installed"
-    fi
-
-    # libbsd (BSD portability library, requires libmd)
-    if [[ ! -f "${LFS}/usr/lib/libbsd.so" ]]; then
-        log "Building libbsd..."
-        download_pkg "libbsd" "https://libbsd.freedesktop.org/releases/libbsd-0.12.2.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf libbsd-[0-9]*/
-            tar xf libbsd-*.tar.xz
-            cd libbsd-[0-9]*/
-            ./configure --prefix=/usr --disable-static
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf libbsd-[0-9]*/
-        " || die "Failed to build libbsd"
-        ok "libbsd installed"
-    else
-        log "libbsd already installed"
-    fi
-
-    # libtirpc (Transport-Independent RPC library)
-    if [[ ! -f "${LFS}/usr/lib/libtirpc.so" ]]; then
-        log "Building libtirpc..."
-        download_pkg "libtirpc" "https://downloads.sourceforge.net/libtirpc/libtirpc-1.3.7.tar.bz2"
-        run_in_chroot "
-            cd /sources
-            rm -rf libtirpc-[0-9]*/
-            tar xf libtirpc-*.tar.bz2 || { bunzip2 -k libtirpc-*.tar.bz2 && tar xf libtirpc-*.tar; }
-            cd libtirpc-[0-9]*/
-            # GCC 15 compatibility
-            CFLAGS='-O2 -Wno-error=incompatible-pointer-types -Wno-error=int-conversion' \
-            ./configure --prefix=/usr --sysconfdir=/etc --disable-static --disable-gssapi
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf libtirpc-[0-9]*/
-        " || die "Failed to build libtirpc"
-        ok "libtirpc installed"
-    else
-        log "libtirpc already installed"
-    fi
-
-    # procps-ng (ps, top, pgrep, etc.)
-    if [[ ! -x "${LFS}/usr/bin/pgrep" ]]; then
-        log "Building procps-ng..."
-        download_pkg "procps-ng" "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-4.0.4.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf procps-ng-[0-9]*/
-            tar xf procps-ng-*.tar.xz
-            cd procps-ng-[0-9]*/
-            ./configure --prefix=/usr --disable-static --disable-kill --without-ncurses
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf procps-ng-[0-9]*/
-        " || die "Failed to build procps-ng"
-        ok "procps-ng installed"
-    else
-        log "procps-ng already installed"
-    fi
-
-    # libglvnd (GL Vendor-Neutral Dispatch)
-    if [[ ! -f "${LFS}/usr/lib/libGL.so" ]] || [[ ! -f "${LFS}/usr/lib/pkgconfig/gl.pc" ]]; then
-        log "Building libglvnd..."
-        download_pkg "libglvnd" "https://gitlab.freedesktop.org/glvnd/libglvnd/-/archive/v1.7.0/libglvnd-v1.7.0.tar.gz"
-        run_in_chroot "
-            cd /sources
-            rm -rf libglvnd-*/
-            tar xf libglvnd-*.tar.gz
-            cd libglvnd-*/
-            mkdir -p build && cd build
-            meson setup --prefix=/usr --buildtype=release ..
-            ninja -j${NPROC}
-            ninja install
-            cd /sources && rm -rf libglvnd-*/
-        " || die "Failed to build libglvnd"
-        ok "libglvnd installed"
-    else
-        log "libglvnd already installed"
-    fi
-
-    # libepoxy (OpenGL function pointer management)
-    if [[ ! -f "${LFS}/usr/lib/libepoxy.so" ]]; then
-        log "Building libepoxy..."
-        download_pkg "libepoxy" "https://github.com/anholt/libepoxy/releases/download/1.5.10/libepoxy-1.5.10.tar.xz"
-        run_in_chroot "
-            cd /sources
-            rm -rf libepoxy-[0-9]*/
-            tar xf libepoxy-*.tar.xz
-            cd libepoxy-[0-9]*/
-            mkdir -p build && cd build
-            # Enable both EGL and GLX for glamor support
-            meson setup --prefix=/usr --buildtype=release -Degl=yes -Dglx=yes ..
-            ninja -j${NPROC}
-            ninja install
-            cd /sources && rm -rf libepoxy-[0-9]*/
-        " || die "Failed to build libepoxy"
-        ok "libepoxy installed"
-    else
-        log "libepoxy already installed"
-    fi
-
-    ok "System libraries ready"
-
-    # Build D-Bus (required for XFCE)
-    log "========== Building D-Bus =========="
-    download_pkg "dbus" "https://dbus.freedesktop.org/releases/dbus/dbus-1.16.0.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf dbus-[0-9]*/
-        tar xf dbus-*.tar.xz
-        cd dbus-[0-9]*/
-        ./configure --prefix=/usr \
-            --sysconfdir=/etc \
-            --localstatedir=/var \
-            --runstatedir=/run \
-            --disable-static \
-            --with-system-socket=/run/dbus/system_bus_socket
-        make -j${NPROC}
-        make install
-        # Create machine-id
-        dbus-uuidgen --ensure=/etc/machine-id
-        dbus-uuidgen --ensure=/var/lib/dbus/machine-id
-        cd /sources && rm -rf dbus-[0-9]*/
-    "
-    ok "dbus built"
-
-    # Build X11 Foundation
-    log "========== Building X11 Foundation =========="
-
-    # XML/XSLT libraries needed for many X11 packages
-    download_pkg "expat" "https://github.com/libexpat/libexpat/releases/download/R_2_6_6/expat-2.6.6.tar.xz"
-    download_pkg "libxml2" "https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.6.tar.xz"
-
-    run_in_chroot "
-        # expat
-        cd /sources
-        rm -rf expat-[0-9]*/
-        tar xf expat-*.tar.xz
-        cd expat-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf expat-[0-9]*/
-    "
-    ok "expat built"
-
-    run_in_chroot "
-        # libxml2
-        cd /sources
-        rm -rf libxml2-[0-9]*/
-        tar xf libxml2-*.tar.xz
-        cd libxml2-[0-9]*/
-        ./configure --prefix=/usr --disable-static --with-history --without-python
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libxml2-[0-9]*/
-    "
-    ok "libxml2 built"
-
-    # X11 protocol headers
-    download_pkg "xorgproto" "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2024.1.tar.xz"
-    download_pkg "xcb-proto" "https://xorg.freedesktop.org/archive/individual/proto/xcb-proto-1.17.0.tar.xz"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf xorgproto-[0-9]*/
-        tar xf xorgproto-*.tar.xz
-        cd xorgproto-[0-9]*/
-        mkdir build && cd build
-        meson setup --prefix=/usr ..
-        ninja
-        ninja install
-        cd /sources && rm -rf xorgproto-[0-9]*/
-    "
-    ok "xorgproto built"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf xcb-proto-[0-9]*/
-        tar xf xcb-proto-*.tar.xz
-        cd xcb-proto-[0-9]*/
-        ./configure --prefix=/usr
-        make install
-        cd /sources && rm -rf xcb-proto-[0-9]*/
-    "
-    ok "xcb-proto built"
-
-    # X11 utility macros
-    download_pkg "util-macros" "https://www.x.org/releases/individual/util/util-macros-1.20.2.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf util-macros-[0-9]*/
-        tar xf util-macros-*.tar.xz
-        cd util-macros-[0-9]*/
-        ./configure --prefix=/usr
-        make install
-        cd /sources && rm -rf util-macros-[0-9]*/
-    "
-    ok "util-macros built"
-
-    # libXau, libXdmcp
-    download_pkg "libXau" "https://www.x.org/releases/individual/lib/libXau-1.0.12.tar.xz"
-    download_pkg "libXdmcp" "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf libXau-[0-9]*/
-        tar xf libXau-*.tar.xz
-        cd libXau-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libXau-[0-9]*/
-    "
-    ok "libXau built"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf libXdmcp-[0-9]*/
-        tar xf libXdmcp-*.tar.xz
-        cd libXdmcp-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libXdmcp-[0-9]*/
-    "
-    ok "libXdmcp built"
-
-    # libxcb
-    download_pkg "libxcb" "https://xorg.freedesktop.org/archive/individual/lib/libxcb-1.17.0.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf libxcb-[0-9]*/
-        tar xf libxcb-*.tar.xz
-        cd libxcb-[0-9]*/
-        ./configure --prefix=/usr --disable-static --without-doxygen
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libxcb-[0-9]*/
-    "
-    ok "libxcb built"
-
-    # xtrans
-    download_pkg "xtrans" "https://www.x.org/releases/individual/lib/xtrans-1.5.2.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf xtrans-[0-9]*/
-        tar xf xtrans-*.tar.xz
-        cd xtrans-[0-9]*/
-        ./configure --prefix=/usr
-        make install
-        cd /sources && rm -rf xtrans-[0-9]*/
-    "
-    ok "xtrans built"
-
-    # libX11
-    download_pkg "libX11" "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf libX11-[0-9]*/
-        tar xf libX11-*.tar.xz
-        cd libX11-[0-9]*/
-        ./configure --prefix=/usr --disable-static --without-doc
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libX11-[0-9]*/
-    "
-    ok "libX11 built"
-
-    # X11 extension libraries
-    for lib in libXext libXfixes libXrender libXi libXrandr libXcursor libXinerama libXcomposite libXdamage libXtst; do
-        download_pkg "${lib}" "https://www.x.org/releases/individual/lib/${lib}-*.tar.xz" 2>/dev/null || true
+    for pkg in $(list_packages_by_stage "${stage}"); do
+        build_and_install "${pkg}"
     done
 
-    # Build them
-    download_pkg "libXext" "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz"
-    download_pkg "libXfixes" "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz"
-    download_pkg "libXrender" "https://www.x.org/releases/individual/lib/libXrender-0.9.12.tar.xz"
-
-    for lib in libXext libXfixes libXrender; do
-        run_in_chroot "
-            cd /sources
-            rm -rf ${lib}-[0-9]*/
-            tar xf ${lib}-*.tar.xz
-            cd ${lib}-[0-9]*/
-            ./configure --prefix=/usr --disable-static
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf ${lib}-[0-9]*/
-        "
-        ok "${lib} built"
-    done
-
-    # Font libraries
-    log "========== Building Font Stack =========="
-
-    download_pkg "freetype" "https://downloads.sourceforge.net/freetype/freetype-2.13.3.tar.xz"
-    download_pkg "fontconfig" "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.15.0.tar.xz"
-    download_pkg "libpng" "https://downloads.sourceforge.net/libpng/libpng-1.6.47.tar.xz"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf libpng-[0-9]*/
-        tar xf libpng-*.tar.xz
-        cd libpng-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libpng-[0-9]*/
-    "
-    ok "libpng built"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf freetype-[0-9]*/
-        tar xf freetype-*.tar.xz
-        cd freetype-[0-9]*/
-        ./configure --prefix=/usr --enable-freetype-config --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf freetype-[0-9]*/
-    "
-    ok "freetype built"
-
-    # gperf needed for fontconfig
-    download_pkg "gperf" "https://ftp.gnu.org/gnu/gperf/gperf-3.1.tar.gz"
-    run_in_chroot "
-        cd /sources
-        rm -rf gperf-[0-9]*/
-        tar xf gperf-*.tar.gz
-        cd gperf-[0-9]*/
-        ./configure --prefix=/usr
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf gperf-[0-9]*/
-    "
-
-    run_in_chroot "
-        cd /sources
-        rm -rf fontconfig-[0-9]*/
-        tar xf fontconfig-*.tar.xz
-        cd fontconfig-[0-9]*/
-        ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static --disable-docs
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf fontconfig-[0-9]*/
-    "
-    ok "fontconfig built"
-
-    # Cairo and Pixman
-    log "========== Building Graphics Stack =========="
-
-    download_pkg "pixman" "https://www.cairographics.org/releases/pixman-0.44.2.tar.gz"
-    download_pkg "cairo" "https://cairographics.org/releases/cairo-1.18.2.tar.xz"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf pixman-[0-9]*/
-        tar xf pixman-*.tar.gz
-        cd pixman-[0-9]*/
-        mkdir build && cd build
-        meson setup --prefix=/usr --buildtype=release ..
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf pixman-[0-9]*/
-    "
-    ok "pixman built"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf cairo-[0-9]*/
-        tar xf cairo-*.tar.xz
-        cd cairo-[0-9]*/
-        mkdir build && cd build
-        meson setup --prefix=/usr --buildtype=release -Dtee=enabled ..
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf cairo-[0-9]*/
-    "
-    ok "cairo built"
-
-    # More X11 libraries needed for Mesa and Xorg
-    log "========== Building Additional X11 Libraries =========="
-
-    download_pkg "libXi" "https://www.x.org/releases/individual/lib/libXi-1.8.2.tar.xz"
-    download_pkg "libXrandr" "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz"
-    download_pkg "libXcursor" "https://www.x.org/releases/individual/lib/libXcursor-1.2.3.tar.xz"
-    download_pkg "libXinerama" "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz"
-    download_pkg "libXcomposite" "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz"
-    download_pkg "libXdamage" "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz"
-    download_pkg "libXtst" "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz"
-    download_pkg "libXt" "https://www.x.org/releases/individual/lib/libXt-1.3.1.tar.xz"
-    download_pkg "libXmu" "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz"
-    download_pkg "libXpm" "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz"
-    download_pkg "libXaw" "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz"
-    download_pkg "libxshmfence" "https://www.x.org/releases/individual/lib/libxshmfence-1.3.3.tar.xz"
-    download_pkg "libxkbfile" "https://www.x.org/releases/individual/lib/libxkbfile-1.1.3.tar.xz"
-    download_pkg "libpciaccess" "https://www.x.org/releases/individual/lib/libpciaccess-0.18.1.tar.xz"
-    download_pkg "libxcvt" "https://www.x.org/releases/individual/lib/libxcvt-0.1.3.tar.xz"
-    download_pkg "libfontenc" "https://www.x.org/releases/individual/lib/libfontenc-1.1.8.tar.xz"
-    download_pkg "libXfont2" "https://www.x.org/releases/individual/lib/libXfont2-2.0.7.tar.xz"
-    download_pkg "libICE" "https://www.x.org/releases/individual/lib/libICE-1.1.2.tar.xz"
-    download_pkg "libSM" "https://www.x.org/releases/individual/lib/libSM-1.2.5.tar.xz"
-
-    # Build these X11 libraries
-    for lib in libXi libXrandr libXcursor libXinerama libXcomposite libXdamage libXtst libxshmfence libxkbfile libpciaccess libfontenc libICE; do
-        run_in_chroot "
-            cd /sources
-            rm -rf ${lib}-[0-9]*/
-            tar xf ${lib}-*.tar.xz
-            cd ${lib}-[0-9]*/
-            ./configure --prefix=/usr --disable-static
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf ${lib}-[0-9]*/
-        "
-        ok "${lib} built"
-    done
-
-    # libSM needs libICE first
-    run_in_chroot "
-        cd /sources
-        rm -rf libSM-[0-9]*/
-        tar xf libSM-*.tar.xz
-        cd libSM-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libSM-[0-9]*/
-    "
-    ok "libSM built"
-
-    # libXt needs libICE/libSM
-    run_in_chroot "
-        cd /sources
-        rm -rf libXt-[0-9]*/
-        tar xf libXt-*.tar.xz
-        cd libXt-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libXt-[0-9]*/
-    "
-    ok "libXt built"
-
-    # libXmu needs libXt
-    run_in_chroot "
-        cd /sources
-        rm -rf libXmu-[0-9]*/
-        tar xf libXmu-*.tar.xz
-        cd libXmu-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libXmu-[0-9]*/
-    "
-    ok "libXmu built"
-
-    # libXpm and libXaw
-    for lib in libXpm libXaw; do
-        run_in_chroot "
-            cd /sources
-            rm -rf ${lib}-[0-9]*/
-            tar xf ${lib}-*.tar.xz
-            cd ${lib}-[0-9]*/
-            ./configure --prefix=/usr --disable-static
-            make -j${NPROC}
-            make install
-            cd /sources && rm -rf ${lib}-[0-9]*/
-        "
-        ok "${lib} built"
-    done
-
-    # libxcvt (meson)
-    run_in_chroot "
-        cd /sources
-        rm -rf libxcvt-[0-9]*/
-        tar xf libxcvt-*.tar.xz
-        cd libxcvt-[0-9]*/
-        mkdir build && cd build
-        meson setup --prefix=/usr --buildtype=release ..
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf libxcvt-[0-9]*/
-    "
-    ok "libxcvt built"
-
-    # libXfont2 needs libfontenc and freetype
-    run_in_chroot "
-        cd /sources
-        rm -rf libXfont2-[0-9]*/
-        tar xf libXfont2-*.tar.xz
-        cd libXfont2-[0-9]*/
-        ./configure --prefix=/usr --disable-static
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf libXfont2-[0-9]*/
-    "
-    ok "libXfont2 built"
-
-    # drm library needed for Mesa
-    download_pkg "libdrm" "https://dri.freedesktop.org/libdrm/libdrm-2.4.124.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf libdrm-[0-9]*/
-        tar xf libdrm-*.tar.xz
-        cd libdrm-[0-9]*/
-        mkdir build && cd build
-        meson setup --prefix=/usr --buildtype=release -Dudev=false ..
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf libdrm-[0-9]*/
-    "
-    ok "libdrm built"
-
-    log "========== Building Mesa (with GBM/EGL/glamor) =========="
-
-    # Install mako Python module for Mesa
-    run_in_chroot "
-        pip3 install mako 2>/dev/null || python3 -m pip install mako || {
-            cd /sources
-            curl -LO https://files.pythonhosted.org/packages/source/M/Mako/mako-1.3.8.tar.gz
-            tar xf mako-*.tar.gz
-            cd Mako-[0-9]*/
-            python3 setup.py install
-            cd /sources && rm -rf Mako-[0-9]*/
-        }
-    "
-    ok "mako installed"
-
-    # Download and build Mesa with GBM/EGL/virgl for VM support
-    download_pkg "mesa" "https://archive.mesa3d.org/mesa-24.3.4.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf mesa-[0-9]*/
-        tar xf mesa-*.tar.xz
-        cd mesa-[0-9]*/
-        mkdir build && cd build
-
-        # Build Mesa with GBM, EGL, GLX for glamor acceleration
-        # softpipe = CPU fallback, virgl = VM GPU passthrough
-        meson setup --prefix=/usr --buildtype=release \
-            -Dplatforms=x11 \
-            -Dgallium-drivers=softpipe,virgl \
-            -Degl=enabled \
-            -Dgbm=enabled \
-            -Dglx=dri \
-            -Dgles1=disabled \
-            -Dgles2=disabled \
-            -Dllvm=disabled \
-            -Dvalgrind=disabled \
-            -Dvulkan-drivers= \
-            ..
-
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf mesa-[0-9]*/
-    "
-    ok "Mesa built with GBM/EGL/virgl support"
-
-    log "========== Building Xorg Server (with glamor) =========="
-
-    # xkbcomp and xkeyboard-config needed for keyboard support
-    download_pkg "xkbcomp" "https://www.x.org/releases/individual/app/xkbcomp-1.4.7.tar.xz"
-    download_pkg "xkeyboard-config" "https://www.x.org/releases/individual/data/xkeyboard-config/xkeyboard-config-2.43.tar.xz"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf xkbcomp-[0-9]*/
-        tar xf xkbcomp-*.tar.xz
-        cd xkbcomp-[0-9]*/
-        ./configure --prefix=/usr
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf xkbcomp-[0-9]*/
-    "
-    ok "xkbcomp built"
-
-    run_in_chroot "
-        cd /sources
-        rm -rf xkeyboard-config-[0-9]*/
-        tar xf xkeyboard-config-*.tar.xz
-        cd xkeyboard-config-[0-9]*/
-        mkdir build && cd build
-        meson setup --prefix=/usr --buildtype=release ..
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf xkeyboard-config-[0-9]*/
-    "
-    ok "xkeyboard-config built"
-
-    # font-util needed for fonts
-    download_pkg "font-util" "https://www.x.org/releases/individual/font/font-util-1.4.1.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf font-util-[0-9]*/
-        tar xf font-util-*.tar.xz
-        cd font-util-[0-9]*/
-        ./configure --prefix=/usr
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf font-util-[0-9]*/
-    "
-    ok "font-util built"
-
-    # Xorg server with glamor for modesetting acceleration
-    download_pkg "xorg-server" "https://www.x.org/releases/individual/xserver/xorg-server-21.1.15.tar.xz"
-    run_in_chroot "
-        cd /sources
-        rm -rf xorg-server-[0-9]*/
-        tar xf xorg-server-*.tar.xz
-        cd xorg-server-[0-9]*/
-        mkdir build && cd build
-
-        # Build Xorg with glamor for GPU acceleration via modesetting driver
-        # Disable udev (requires systemd), use built-in device detection
-        meson setup --prefix=/usr --buildtype=release \
-            -Dglamor=true \
-            -Dxorg=true \
-            -Dxephyr=false \
-            -Dxnest=false \
-            -Dxvfb=false \
-            -Dudev=false \
-            -Dudev_kms=false \
-            -Dhal=false \
-            -Dsystemd_logind=false \
-            -Ddri2=true \
-            -Ddri3=true \
-            -Dglx=true \
-            -Dlibunwind=false \
-            -Dsuid_wrapper=false \
-            -Ddefault_font_path=/usr/share/fonts/X11 \
-            ..
-
-        ninja -j${NPROC}
-        ninja install
-        cd /sources && rm -rf xorg-server-[0-9]*/
-    "
-    ok "Xorg server built with glamor support"
-
-    # Create Xorg config for modesetting driver
-    run_in_chroot "
-        mkdir -p /etc/X11/xorg.conf.d
-
-        # Modesetting driver config (uses glamor for acceleration)
-        cat > /etc/X11/xorg.conf.d/20-modesetting.conf << 'XCONF'
-Section \"Device\"
-    Identifier  \"Modesetting Graphics\"
-    Driver      \"modesetting\"
-    Option      \"AccelMethod\" \"glamor\"
-    Option      \"DRI\" \"3\"
-EndSection
-XCONF
-
-        # Input device config using evdev
-        cat > /etc/X11/xorg.conf.d/10-evdev.conf << 'XCONF'
-Section \"InputClass\"
-    Identifier \"evdev keyboard catchall\"
-    MatchIsKeyboard \"on\"
-    MatchDevicePath \"/dev/input/event*\"
-    Driver \"evdev\"
-EndSection
-
-Section \"InputClass\"
-    Identifier \"evdev pointer catchall\"
-    MatchIsPointer \"on\"
-    MatchDevicePath \"/dev/input/event*\"
-    Driver \"evdev\"
-EndSection
-XCONF
-    "
-    ok "Xorg configuration created"
-
-    # evdev input driver
-    download_pkg "xf86-input-evdev" "https://www.x.org/releases/individual/driver/xf86-input-evdev-2.10.6.tar.bz2"
-    run_in_chroot "
-        cd /sources
-        rm -rf xf86-input-evdev-[0-9]*/
-        tar xf xf86-input-evdev-*.tar.bz2
-        cd xf86-input-evdev-[0-9]*/
-        ./configure --prefix=/usr
-        make -j${NPROC}
-        make install
-        cd /sources && rm -rf xf86-input-evdev-[0-9]*/
-    "
-    ok "xf86-input-evdev built"
-
-    log "========== X11 and Mesa Complete =========="
-    log "Modesetting driver with glamor acceleration enabled"
-    log "VirtIO GPU driver available for VM graphics"
-
-    # ========== Fonts ==========
-    log "========== Installing Fonts =========="
-
-    # DejaVu fonts (good Unicode coverage)
-    download_pkg "dejavu-fonts" "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2"
-    run_in_chroot "
-        cd /sources
-        rm -rf dejavu-fonts-ttf-*/
-        tar xf dejavu-fonts-ttf-*.tar.bz2
-        mkdir -p /usr/share/fonts/truetype/dejavu
-        cp dejavu-fonts-ttf-*/ttf/*.ttf /usr/share/fonts/truetype/dejavu/
-        rm -rf dejavu-fonts-ttf-*/
-    "
-    ok "DejaVu fonts installed"
-
-    # Liberation fonts (metric-compatible with Arial, Times, Courier)
-    download_pkg "liberation-fonts" "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz"
-    run_in_chroot "
-        cd /sources
-        rm -rf liberation-fonts-ttf-*/
-        tar xf liberation-fonts-ttf-*.tar.gz
-        mkdir -p /usr/share/fonts/truetype/liberation
-        cp liberation-fonts-ttf-*/Liberation*.ttf /usr/share/fonts/truetype/liberation/
-        rm -rf liberation-fonts-ttf-*/
-    "
-    ok "Liberation fonts installed"
-
-    # Noto fonts (for emoji and broad language support)
-    download_pkg "noto-fonts" "https://github.com/notofonts/notofonts.github.io/releases/download/noto-fonts-2024.11.01/NotoSans-2024.11.01.zip"
-    run_in_chroot "
-        cd /sources
-        rm -rf NotoSans-*/
-        mkdir -p NotoSans-tmp
-        cd NotoSans-tmp
-        unzip -o ../NotoSans-*.zip 2>/dev/null || true
-        mkdir -p /usr/share/fonts/truetype/noto
-        find . -name '*.ttf' -exec cp {} /usr/share/fonts/truetype/noto/ \; 2>/dev/null || true
-        cd /sources
-        rm -rf NotoSans-tmp
-    " || warn "Noto fonts installation had issues"
-    ok "Noto fonts installed"
-
-    # Update font cache
-    run_in_chroot "
-        fc-cache -fv 2>/dev/null || true
-    "
-    ok "Font cache updated"
-
-    # ========== Chicago95 Theme ==========
-    log "========== Installing Chicago95 Theme =========="
-
-    download_pkg "chicago95" "https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.2.tar.gz"
-    run_in_chroot "
-        cd /sources
-        rm -rf Chicago95-*/
-        tar xf v3.0.2.tar.gz || tar xf chicago95*.tar.gz
-        cd Chicago95-*/
-
-        # Install GTK theme
-        mkdir -p /usr/share/themes
-        cp -r Theme/Chicago95 /usr/share/themes/
-
-        # Install icons
-        mkdir -p /usr/share/icons
-        cp -r Icons/Chicago95 /usr/share/icons/
-        cp -r Icons/Chicago95-tux /usr/share/icons/ 2>/dev/null || true
-
-        # Install cursors
-        cp -r Cursors/Chicago95_Cursor_Black /usr/share/icons/ 2>/dev/null || true
-        cp -r Cursors/Chicago95_Cursor_White /usr/share/icons/ 2>/dev/null || true
-        cp -r 'Cursors/Chicago95 Standard Cursors' /usr/share/icons/ 2>/dev/null || true
-
-        # Install fonts (includes MS Sans Serif style fonts)
-        mkdir -p /usr/share/fonts/truetype/chicago95
-        cp -r Fonts/*.ttf /usr/share/fonts/truetype/chicago95/ 2>/dev/null || true
-        cp -r Fonts/bitmap/* /usr/share/fonts/truetype/chicago95/ 2>/dev/null || true
-
-        # Install sounds
-        mkdir -p /usr/share/sounds/Chicago95
-        cp -r sounds/* /usr/share/sounds/Chicago95/ 2>/dev/null || true
-
-        cd /sources
-        rm -rf Chicago95-*/
-    "
-    ok "Chicago95 theme installed"
-
-    # Update font cache again
-    run_in_chroot "
-        fc-cache -fv 2>/dev/null || true
-    "
-
-    # ========== XFCE Configuration ==========
-    log "========== Installing XFCE Configuration =========="
-
-    # Copy XFCE config from repo
-    if [[ -d "${ROOT_DIR}/config/user/xfce4" ]]; then
-        mkdir -p "${LFS}/root/.config"
-        cp -av "${ROOT_DIR}/config/user/xfce4" "${LFS}/root/.config/"
-        chown -R 0:0 "${LFS}/root/.config/xfce4"
-        log "XFCE configuration installed from repo"
-    fi
-
-    # Copy autostart
-    if [[ -d "${ROOT_DIR}/config/user/autostart" ]]; then
-        mkdir -p "${LFS}/root/.config/autostart"
-        cp -av "${ROOT_DIR}/config/user/autostart"/* "${LFS}/root/.config/autostart/"
-        chown -R 0:0 "${LFS}/root/.config/autostart"
-    fi
-
-    # Copy bash_profile
-    if [[ -f "${ROOT_DIR}/config/user/bash_profile" ]]; then
-        cp -v "${ROOT_DIR}/config/user/bash_profile" "${LFS}/root/.bash_profile"
-    fi
-
-    ok "XFCE configuration installed"
-
-    # ========== Input Configuration for VM ==========
-    log "========== Configuring Input for VM =========="
-
-    # VirtIO input devices need special handling
-    run_in_chroot "
-        cat > /etc/X11/xorg.conf.d/10-virtio-input.conf << 'XCONF'
-Section \"InputClass\"
-    Identifier \"virtio keyboard\"
-    MatchProduct \"QEMU Virtio Keyboard\"
-    MatchIsKeyboard \"on\"
-    Driver \"evdev\"
-    Option \"XkbLayout\" \"us\"
-EndSection
-
-Section \"InputClass\"
-    Identifier \"virtio mouse\"
-    MatchProduct \"QEMU Virtio Mouse\"
-    MatchIsPointer \"on\"
-    Driver \"evdev\"
-EndSection
-
-Section \"InputClass\"
-    Identifier \"virtio tablet\"
-    MatchProduct \"QEMU Virtio Tablet\"
-    MatchIsPointer \"on\"
-    Driver \"evdev\"
-    Option \"Mode\" \"Absolute\"
-EndSection
-XCONF
-    "
-    ok "VirtIO input configuration created"
-
-    stage_end "Desktop"
-    mark_stage_done "desktop"
+    ok "Stage ${stage} complete"
 }
 
-# ============================================================================
-# Main execution
-# ============================================================================
-# Configure user credentials for the LFS system
-configure_lfs_user() {
-    # Default to current user if running interactively
-    export LFS_USERNAME="${LFS_USERNAME:-ert}"
-
-    # Only prompt for password if not already set
-    if [[ -z "${LFS_PASSWORD:-}" ]]; then
-        echo ""
-        stage_start "LFS User Configuration"
-        echo "Configure user account for the new LFS system."
-        echo "Username: ${LFS_USERNAME} (set LFS_USERNAME env var to change)"
-        echo ""
-
-        while true; do
-            read -sp "Password for ${LFS_USERNAME} on LFS: " LFS_PASSWORD
-            echo ""
-            read -sp "Confirm password: " LFS_PASSWORD_CONFIRM
-            echo ""
-            if [[ "${LFS_PASSWORD}" == "${LFS_PASSWORD_CONFIRM}" ]]; then
-                break
-            fi
-            warn "Passwords don't match. Try again."
-        done
-
-        [[ -z "${LFS_PASSWORD}" ]] && die "Password cannot be empty"
-        export LFS_PASSWORD
-        ok "User '${LFS_USERNAME}' will be configured with sudo access"
-        echo ""
-    fi
-}
+# ============================================================
+# Main
+# ============================================================
 
 main() {
-    log "LFS Build Started"
-    log "Target: ${TARGET_STAGE}"
-    log "LFS mount: ${LFS}"
+    local target="${1:-all}"
+
+    log "LFS Build Started (pkgutils-based)"
+    log "Target: ${target}"
+    log "LFS: ${LFS}"
     log "CPUs: ${NPROC}"
-    log ""
 
-    check_prereqs
-    configure_lfs_user
+    # Prerequisites
+    [[ $EUID -eq 0 ]] || die "Must run as root"
+    mountpoint -q "${LFS}" || die "LFS not mounted at ${LFS}"
+    mkdir -p "${SOURCES_DIR}" "${PKG_CACHE}"
 
-    case "${TARGET_STAGE}" in
-        all)
-            should_run_stage download && stage_download
-            should_run_stage toolchain && stage_toolchain
-            should_run_stage temptools && stage_temptools
-            should_run_stage chroot-prep && stage_chroot_prep
-            should_run_stage base && stage_base
-            should_run_stage config && stage_config
-            should_run_stage kernel && stage_kernel
-            should_run_stage bootloader && stage_bootloader
-            should_run_stage desktop && stage_desktop
+    case "${target}" in
+        download)
+            download_sources
             ;;
-        download) stage_download ;;
-        toolchain) stage_toolchain ;;
-        temptools) stage_temptools ;;
-        chroot-prep) stage_chroot_prep ;;
-        base) stage_base ;;
-        config) stage_config ;;
-        kernel) stage_kernel ;;
-        bootloader) stage_bootloader ;;
-        desktop) stage_desktop ;;
+        pkgfiles)
+            generate_all_pkgfiles
+            ;;
+        bootstrap)
+            bootstrap_pkgutils
+            ;;
+        all)
+            download_sources
+            generate_all_pkgfiles
+            bootstrap_pkgutils
+
+            # Build all stages in order
+            build_stage 1 "Cross-Toolchain"
+            build_stage 2 "Temporary Tools"
+            build_stage 3 "Base System"
+            build_stage 4 "System Config"
+            build_stage 5 "Kernel"
+            ;;
+        *)
+            # Build specific stage
+            if [[ "${target}" =~ ^[0-9]+$ ]]; then
+                build_stage "${target}" "Stage ${target}"
+            else
+                die "Unknown target: ${target}"
+            fi
+            ;;
     esac
 
-    # Report timing
-    local build_end=$(date +%s)
-    local duration=$((build_end - BUILD_START))
-    local hours=$((duration / 3600))
-    local minutes=$(((duration % 3600) / 60))
-    local seconds=$((duration % 60))
+    local elapsed=$(( $(date +%s) - ${BUILD_START:-$(date +%s)} ))
+    local hours=$((elapsed / 3600))
+    local mins=$(((elapsed % 3600) / 60))
+    local secs=$((elapsed % 60))
 
     echo ""
     echo "=============================================="
     ok "LFS Build Complete!"
-    echo "Total time: ${hours}h ${minutes}m ${seconds}s"
+    echo "Total time: ${hours}h ${mins}m ${secs}s"
     echo "=============================================="
 }
 
+BUILD_START=$(date +%s)
 main "$@"
