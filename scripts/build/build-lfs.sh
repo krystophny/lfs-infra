@@ -14,18 +14,23 @@ source "${ROOT_DIR}/scripts/lib/safety.sh"
 export LFS="${LFS:-/mnt/lfs}"
 safety_check
 
-export LFS_TGT="$(uname -m)-lfs-linux-gnu"
 export NPROC="$(nproc)"
 export MAKEFLAGS="-j${NPROC}"
 export FORCE_UNSAFE_CONFIGURE=1
 
-# Build environment variables (used by packages.toml commands)
-# SYSROOT: where target files go (e.g., headers, libraries)
-# TOOLS: cross-toolchain location
+# Cross-compilation variables (standard names for packages.toml)
+# TARGET: target triplet for cross-compilation
+# SYSROOT: where target system files go (headers, libraries)
+# CROSS_TOOLS: where cross-toolchain binaries install
 # SOURCES: source tarballs location
+export TARGET="$(uname -m)-lfs-linux-gnu"
 export SYSROOT="${LFS}"
-export TOOLS="${LFS}/tools"
+export CROSS_TOOLS="${LFS}/tools"
 export SOURCES="${LFS}/sources"
+
+# Legacy alias for internal use
+export LFS_TGT="${TARGET}"
+export TOOLS="${CROSS_TOOLS}"
 
 # Add cross-tools to PATH so later builds can find cross-assembler, etc.
 export PATH="${TOOLS}/bin:${PATH}"
@@ -77,6 +82,22 @@ get_pkg_version() { get_pkg_field "$1" "version"; }
 get_pkg_description() { get_pkg_field "$1" "description"; }
 get_pkg_stage() { get_pkg_num_field "$1" "stage"; }
 get_pkg_source_pkg() { get_pkg_field "$1" "source_pkg"; }
+get_pkg_build_order() { get_pkg_num_field "$1" "build_order"; }
+
+# Get package dependencies (comma-separated list)
+get_pkg_depends() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^depends *= *\[/ {
+            gsub(/^depends *= *\[|\]$/, "")
+            gsub(/[" ]/, "")
+            print
+            exit
+        }
+    ' "${PACKAGES_FILE}"
+}
 
 get_pkg_url() {
     local pkg="$1"
@@ -100,12 +121,45 @@ get_pkg_build_commands() {
     ' "${PACKAGES_FILE}"
 }
 
+# List packages by stage, sorted by build_order (packages without build_order come last)
 list_packages_by_stage() {
     local stage="$1"
-    awk -v stage="${stage}" '
-        /^\[packages\./ { pkg=$0; gsub(/^\[packages\.|]$/, "", pkg) }
-        /^stage *= *'${stage}'$/ { print pkg }
-    ' "${PACKAGES_FILE}"
+    awk -v target_stage="${stage}" -f <(cat <<'AWKSCRIPT'
+/^\[packages\./ {
+    if (stage_match) print order, pkg
+    pkg = $0
+    sub(/^\[packages\./, "", pkg)
+    sub(/]$/, "", pkg)
+    order = 9999
+    stage_match = 0
+}
+/^stage = / {
+    if ($3 + 0 == target_stage) stage_match = 1
+}
+/^build_order = / {
+    order = $3 + 0
+}
+END {
+    if (pkg && stage_match) print order, pkg
+}
+AWKSCRIPT
+) "${PACKAGES_FILE}" | sort -n | cut -d' ' -f2
+}
+
+# Check if all dependencies are installed
+check_dependencies() {
+    local pkg="$1"
+    local deps=$(get_pkg_depends "${pkg}")
+
+    [[ -z "${deps}" ]] && return 0
+
+    local IFS=','
+    for dep in ${deps}; do
+        if ! pkg_installed "${dep}"; then
+            die "Dependency not met: ${pkg} requires ${dep}"
+        fi
+    done
+    return 0
 }
 
 # ============================================================
@@ -174,10 +228,11 @@ build_package() {
         while IFS= read -r cmd; do
             [[ -z "${cmd}" ]] && continue
             cmd=$(echo "${cmd}" | sed \
+                -e "s|\\\${TARGET}|${TARGET}|g" \
                 -e "s|\\\${SYSROOT}|${SYSROOT}|g" \
+                -e "s|\\\${CROSS_TOOLS}|${CROSS_TOOLS}|g" \
                 -e "s|\\\${TOOLS}|${TOOLS}|g" \
                 -e "s|\\\${SOURCES}|${SOURCES}|g" \
-                -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
                 -e "s|\\\${NPROC}|${NPROC}|g" \
                 -e "s|\\\${version}|${version}|g" \
                 -e "s|\\\${PKG}|${PKG}|g")
@@ -201,16 +256,25 @@ build_package() {
 build_and_install() {
     local pkg="$1"
     local version=$(get_pkg_version "${pkg}")
+    local desc=$(get_pkg_description "${pkg}")
+
+    echo ""
+    log ">>> Package: ${pkg}-${version}"
+    log "    ${desc}"
 
     if pkg_installed "${pkg}"; then
-        log "Already installed: ${pkg}"
+        ok "Already installed: ${pkg}"
         return 0
     fi
 
+    # Check dependencies before building
+    check_dependencies "${pkg}"
+
     if ! pkg_cached "${pkg}" "${version}"; then
+        log "Building ${pkg}..."
         build_package "${pkg}"
     else
-        log "Using cached: ${pkg}"
+        log "Using cached package: ${pkg}"
     fi
 
     pkg_install "${pkg}" "${version}"
