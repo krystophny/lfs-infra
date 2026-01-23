@@ -160,27 +160,60 @@ build_and_install() {
 # ============================================================
 
 bootstrap_pkgutils() {
-    stage_start "Bootstrapping pkgutils"
+    stage_start "Bootstrapping pkgutils and pkgmk"
 
+    # Bootstrap pkgutils (pkgadd/pkgrm/pkginfo)
     local version=$(get_pkg_version "pkgutils")
     local url=$(get_pkg_url "pkgutils")
-    local tarball="${SOURCES_DIR}/pkgutils-${version}.tar.gz"
-    local build_dir="${LFS}/build/pkgutils-${version}"
+    local tarball="${SOURCES_DIR}/pkgutils-v${version}.tar.gz"
 
-    # Download if needed
     if [[ ! -f "${tarball}" ]]; then
         log "Downloading pkgutils..."
         curl -fL "${url}" -o "${tarball}" || die "Download failed"
     fi
 
-    # Build
     log "Building pkgutils..."
-    rm -rf "${build_dir}"
-    mkdir -p "${build_dir}"
+    rm -rf "${LFS}/build/pkgutils-"*
+    mkdir -p "${LFS}/build"
     tar -xf "${tarball}" -C "${LFS}/build"
-    cd "${build_dir}"
 
-    make DESTDIR="${LFS}" PREFIX=/usr install || die "pkgutils build failed"
+    local build_dir=$(ls -d "${LFS}/build/pkgutils-"* 2>/dev/null | head -1)
+    [[ -d "${build_dir}" ]] || die "pkgutils source not found after extraction"
+
+    cd "${build_dir}"
+    make pkgadd LDFLAGS="-larchive" || die "pkgutils build failed"
+
+    # Install to LFS target
+    mkdir -p "${LFS}/usr/sbin" "${LFS}/usr/bin"
+    cp -f pkgadd "${LFS}/usr/sbin/"
+    chmod 755 "${LFS}/usr/sbin/pkgadd"
+    ln -sf pkgadd "${LFS}/usr/sbin/pkgrm"
+    ln -sf ../sbin/pkgadd "${LFS}/usr/bin/pkginfo"
+
+    # Bootstrap pkgmk (build tool - installed to host)
+    local pkgmk_version="5.45"
+    local pkgmk_url="https://github.com/zeppe-lin/pkgmk/archive/refs/tags/v${pkgmk_version}.tar.gz"
+    local pkgmk_tarball="${SOURCES_DIR}/pkgmk-v${pkgmk_version}.tar.gz"
+
+    if [[ ! -f "${pkgmk_tarball}" ]]; then
+        log "Downloading pkgmk..."
+        curl -fL "${pkgmk_url}" -o "${pkgmk_tarball}" || die "pkgmk download failed"
+    fi
+
+    log "Installing pkgmk..."
+    rm -rf "${LFS}/build/pkgmk-"*
+    tar -xf "${pkgmk_tarball}" -C "${LFS}/build"
+
+    local pkgmk_dir=$(ls -d "${LFS}/build/pkgmk-"* 2>/dev/null | head -1)
+    [[ -d "${pkgmk_dir}" ]] || die "pkgmk source not found"
+
+    cd "${pkgmk_dir}"
+    # Install pkgmk to /usr/local/sbin
+    cd src && make PREFIX=/usr/local install
+    cd ..
+    # Copy sample config
+    mkdir -p /usr/local/etc
+    cp -f extra/pkgmk.conf.sample /usr/local/etc/pkgmk.conf
 
     # Initialize package database
     mkdir -p "${LFS}/var/lib/pkg"
@@ -189,7 +222,7 @@ bootstrap_pkgutils() {
     # Create package cache directory
     mkdir -p "${PKG_CACHE}"
 
-    ok "pkgutils bootstrapped"
+    ok "pkgutils and pkgmk bootstrapped"
 }
 
 # ============================================================
@@ -230,17 +263,16 @@ EOF
 
     if [[ -n "${build_commands}" ]]; then
         # Use custom build commands
-        echo "${build_commands}" | while IFS= read -r cmd; do
-            # Expand variables
-            cmd="${cmd//\$\{LFS\}/${LFS}}"
-            cmd="${cmd//\$\{LFS_TGT\}/${LFS_TGT}}"
-            cmd="${cmd//\$\{NPROC\}/${NPROC}}"
-            cmd="${cmd//\$\{version\}/${version}}"
-            # Change DESTDIR to $PKG for pkgutils
-            cmd="${cmd//DESTDIR=\${LFS}/DESTDIR=\$PKG}"
-            cmd="${cmd//DESTDIR=\"\${LFS}\"/DESTDIR=\$PKG}"
+        while IFS= read -r cmd; do
+            [[ -z "${cmd}" ]] && continue
+            # Expand variables using sed (safer than bash parameter expansion)
+            cmd=$(echo "${cmd}" | sed \
+                -e "s|\\\${LFS}|${LFS}|g" \
+                -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
+                -e "s|\\\${NPROC}|${NPROC}|g" \
+                -e "s|\\\${version}|${version}|g")
             echo "    ${cmd}"
-        done >> "${pkg_dir}/Pkgfile"
+        done <<< "${build_commands}" >> "${pkg_dir}/Pkgfile"
     else
         # Default autotools build
         cat >> "${pkg_dir}/Pkgfile" << 'EOF'
@@ -271,11 +303,17 @@ generate_all_pkgfiles() {
 # ============================================================
 
 download_sources() {
-    stage_start "Downloading Sources"
+    local max_stage="${1:-11}"
+    stage_start "Downloading Sources (stages 1-${max_stage})"
 
     mkdir -p "${SOURCES_DIR}"
 
     for pkg in $(awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}' "${PACKAGES_FILE}"); do
+        local stage=$(get_pkg_stage "${pkg}")
+        # Skip packages with stage > max_stage or no stage defined
+        [[ -z "${stage}" ]] && continue
+        [[ "${stage}" -gt "${max_stage}" ]] && continue
+
         local url=$(get_pkg_url "${pkg}")
         [[ -z "${url}" ]] && continue
 
