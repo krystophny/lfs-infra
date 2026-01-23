@@ -7,6 +7,82 @@ program fay
     use, intrinsic :: iso_c_binding
     implicit none
 
+    ! libarchive constants
+    integer(c_int), parameter :: ARCHIVE_OK = 0
+    integer(c_int), parameter :: ARCHIVE_EOF = 1
+    integer(c_int), parameter :: ARCHIVE_WARN = -20
+    integer(c_int), parameter :: ARCHIVE_EXTRACT_TIME = 4
+    integer(c_int), parameter :: ARCHIVE_EXTRACT_PERM = 2
+    integer(c_int), parameter :: ARCHIVE_EXTRACT_ACL = 32
+    integer(c_int), parameter :: ARCHIVE_EXTRACT_FFLAGS = 64
+
+    ! libarchive C bindings
+    interface
+        function archive_read_new() bind(c, name='archive_read_new')
+            import :: c_ptr
+            type(c_ptr) :: archive_read_new
+        end function
+
+        function archive_read_support_filter_all(ar) bind(c, name='archive_read_support_filter_all')
+            import :: c_ptr, c_int
+            type(c_ptr), value :: ar
+            integer(c_int) :: archive_read_support_filter_all
+        end function
+
+        function archive_read_support_format_all(ar) bind(c, name='archive_read_support_format_all')
+            import :: c_ptr, c_int
+            type(c_ptr), value :: ar
+            integer(c_int) :: archive_read_support_format_all
+        end function
+
+        function archive_read_open_filename(ar, fname, blksz) bind(c, name='archive_read_open_filename')
+            import :: c_ptr, c_int, c_char, c_size_t
+            type(c_ptr), value :: ar
+            character(len=1, kind=c_char), intent(in) :: fname(*)
+            integer(c_size_t), value :: blksz
+            integer(c_int) :: archive_read_open_filename
+        end function
+
+        function archive_read_next_header(ar, entry) bind(c, name='archive_read_next_header')
+            import :: c_ptr, c_int
+            type(c_ptr), value :: ar
+            type(c_ptr), intent(out) :: entry
+            integer(c_int) :: archive_read_next_header
+        end function
+
+        function archive_entry_pathname(entry) bind(c, name='archive_entry_pathname')
+            import :: c_ptr
+            type(c_ptr), value :: entry
+            type(c_ptr) :: archive_entry_pathname
+        end function
+
+        function archive_read_extract(ar, entry, flags) bind(c, name='archive_read_extract')
+            import :: c_ptr, c_int
+            type(c_ptr), value :: ar
+            type(c_ptr), value :: entry
+            integer(c_int), value :: flags
+            integer(c_int) :: archive_read_extract
+        end function
+
+        function archive_read_free(ar) bind(c, name='archive_read_free')
+            import :: c_ptr, c_int
+            type(c_ptr), value :: ar
+            integer(c_int) :: archive_read_free
+        end function
+
+        function archive_error_string(ar) bind(c, name='archive_error_string')
+            import :: c_ptr
+            type(c_ptr), value :: ar
+            type(c_ptr) :: archive_error_string
+        end function
+
+        function c_strlen(s) bind(c, name='strlen')
+            import :: c_ptr, c_size_t
+            type(c_ptr), value :: s
+            integer(c_size_t) :: c_strlen
+        end function
+    end interface
+
     character(len=256) :: cmd, arg1, arg2
     integer :: nargs
 
@@ -222,7 +298,7 @@ contains
         character(len=*), intent(in) :: path
         character(len=*), intent(out) :: pkgname, version
         character(len=512) :: basename
-        integer :: i, j, k, last_slash, first_dash, last_dash
+        integer :: i, k, last_slash, first_dash
 
         pkgname = ''
         version = ''
@@ -275,11 +351,13 @@ contains
         character(len=4096) :: fstr
         character(len=1, kind=c_char), pointer :: carr(:)
         integer :: i, n
+        integer(c_size_t) :: slen
 
         fstr = ''
         if (.not. c_associated(cptr)) return
 
-        n = c_strlen(cptr)
+        slen = c_strlen(cptr)
+        n = int(slen)
         if (n <= 0 .or. n > 4096) return
 
         call c_f_pointer(cptr, carr, [n])
@@ -287,80 +365,5 @@ contains
             fstr(i:i) = carr(i)
         end do
     end function
-
-    ! libarchive C bindings
-    integer(c_int), parameter :: ARCHIVE_OK = 0
-    integer(c_int), parameter :: ARCHIVE_EOF = 1
-    integer(c_int), parameter :: ARCHIVE_WARN = -20
-    integer(c_int), parameter :: ARCHIVE_EXTRACT_TIME = 4
-    integer(c_int), parameter :: ARCHIVE_EXTRACT_PERM = 2
-    integer(c_int), parameter :: ARCHIVE_EXTRACT_ACL = 32
-    integer(c_int), parameter :: ARCHIVE_EXTRACT_FFLAGS = 64
-
-    interface
-        function archive_read_new() bind(c, name='archive_read_new')
-            import :: c_ptr
-            type(c_ptr) :: archive_read_new
-        end function
-
-        function archive_read_support_filter_all(ar) bind(c, name='archive_read_support_filter_all')
-            import :: c_ptr, c_int
-            type(c_ptr), value :: ar
-            integer(c_int) :: archive_read_support_filter_all
-        end function
-
-        function archive_read_support_format_all(ar) bind(c, name='archive_read_support_format_all')
-            import :: c_ptr, c_int
-            type(c_ptr), value :: ar
-            integer(c_int) :: archive_read_support_format_all
-        end function
-
-        function archive_read_open_filename(ar, fname, blksz) bind(c, name='archive_read_open_filename')
-            import :: c_ptr, c_int, c_char, c_size_t
-            type(c_ptr), value :: ar
-            character(len=1, kind=c_char), intent(in) :: fname(*)
-            integer(c_size_t), value :: blksz
-            integer(c_int) :: archive_read_open_filename
-        end function
-
-        function archive_read_next_header(ar, entry) bind(c, name='archive_read_next_header')
-            import :: c_ptr, c_int
-            type(c_ptr), value :: ar
-            type(c_ptr), intent(out) :: entry
-            integer(c_int) :: archive_read_next_header
-        end function
-
-        function archive_entry_pathname(entry) bind(c, name='archive_entry_pathname')
-            import :: c_ptr
-            type(c_ptr), value :: entry
-            type(c_ptr) :: archive_entry_pathname
-        end function
-
-        function archive_read_extract(ar, entry, flags) bind(c, name='archive_read_extract')
-            import :: c_ptr, c_int
-            type(c_ptr), value :: ar
-            type(c_ptr), value :: entry
-            integer(c_int), value :: flags
-            integer(c_int) :: archive_read_extract
-        end function
-
-        function archive_read_free(ar) bind(c, name='archive_read_free')
-            import :: c_ptr, c_int
-            type(c_ptr), value :: ar
-            integer(c_int) :: archive_read_free
-        end function
-
-        function archive_error_string(ar) bind(c, name='archive_error_string')
-            import :: c_ptr
-            type(c_ptr), value :: ar
-            type(c_ptr) :: archive_error_string
-        end function
-
-        function c_strlen(s) bind(c, name='strlen')
-            import :: c_ptr, c_size_t
-            type(c_ptr), value :: s
-            integer(c_size_t) :: c_strlen
-        end function
-    end interface
 
 end program fay
