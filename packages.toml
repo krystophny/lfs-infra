@@ -86,36 +86,6 @@ build_commands = [
     "cd .. && cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${LFS}/tools/bin/${LFS_TGT}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
-# libstdc++ - Standard C++ library (built from gcc source, after glibc)
-[packages.libstdcxx]
-version = "15.2.0"
-version_check = "gnu:gcc"
-description = "GNU Standard C++ Library"
-source_pkg = "gcc"
-stage = 1
-provides = ["${LFS}/usr/lib/libstdc++.so"]
-build_commands = [
-    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${LFS} install",
-    "rm -fv ${LFS}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
-]
-
-# GCC Pass 2 - Full cross compiler (built in chroot after temp tools)
-[packages.gcc-pass2]
-version = "15.2.0"
-version_check = "gnu:gcc"
-description = "GCC cross-compiler pass 2"
-source_pkg = "gcc"
-stage = 2
-provides = ["${LFS}/usr/bin/cc"]
-build_commands = [
-    "tar -xf ${LFS}/sources/mpfr-*.tar.xz && mv mpfr-* mpfr",
-    "tar -xf ${LFS}/sources/gmp-*.tar.xz && mv gmp-* gmp",
-    "tar -xf ${LFS}/sources/mpc-*.tar.* && mv mpc-* mpc",
-    "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${LFS_TGT} --target=${LFS_TGT} LDFLAGS_FOR_TARGET=-L${PWD}/${LFS_TGT}/libgcc --prefix=/usr --with-build-sysroot=${LFS} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${LFS} install",
-    "ln -sv gcc ${LFS}/usr/bin/cc"
-]
-
 [packages.linux-headers]
 version = "6.18.6"
 version_check = "kernel:"
@@ -152,9 +122,39 @@ build_commands = [
     "sed '/RTLDLIST=/s@/usr@@g' -i ${LFS}/usr/bin/ldd"
 ]
 
+# libstdc++ - Standard C++ library (built from gcc source, after glibc)
+[packages.libstdcxx]
+version = "15.2.0"
+version_check = "gnu:gcc"
+description = "GNU Standard C++ Library"
+source_pkg = "gcc"
+stage = 1
+provides = ["${LFS}/usr/lib/libstdc++.so"]
+build_commands = [
+    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/15.2.0 && make -j${NPROC} && make DESTDIR=${LFS} install",
+    "rm -fv ${LFS}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
+]
+
 # =============================================================================
 # STAGE 2: Temporary Tools
 # =============================================================================
+
+# GCC Pass 2 - Full cross compiler
+[packages.gcc-pass2]
+version = "15.2.0"
+version_check = "gnu:gcc"
+description = "GCC cross-compiler pass 2"
+source_pkg = "gcc"
+stage = 2
+provides = ["${LFS}/usr/bin/cc"]
+build_commands = [
+    "tar -xf ${LFS}/sources/mpfr-*.tar.xz && mv mpfr-* mpfr",
+    "tar -xf ${LFS}/sources/gmp-*.tar.xz && mv gmp-* gmp",
+    "tar -xf ${LFS}/sources/mpc-*.tar.* && mv mpc-* mpc",
+    "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
+    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${LFS_TGT} --target=${LFS_TGT} LDFLAGS_FOR_TARGET=-L${PWD}/${LFS_TGT}/libgcc --prefix=/usr --with-build-sysroot=${LFS} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${LFS} install",
+    "ln -sv gcc ${LFS}/usr/bin/cc"
+]
 
 [packages.m4]
 version = "1.4.20"
