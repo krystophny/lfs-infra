@@ -2579,6 +2579,21 @@ use_git = false
 stage = 19
 # For Samsung NVMe PM9A1/980PRO management
 
+# Software RAID
+[packages.mdadm]
+version = "4.3"
+version_check = "kernelorg:linux/utils/raid/mdadm|mdadm"
+description = "Linux Software RAID management"
+url = "https://www.kernel.org/pub/linux/utils/raid/mdadm/mdadm-${version}.tar.xz"
+git_url = "https://git.kernel.org/pub/scm/utils/mdadm/mdadm.git"
+use_git = false
+stage = 19
+build_commands = [
+    "make -j${NPROC} CXFLAGS=\"${CFLAGS}\"",
+    "make DESTDIR=${PKG} install"
+]
+provides = ["/usr/sbin/mdadm", "/usr/sbin/mdmon"]
+
 # Sensors and monitoring
 [packages.lm-sensors]
 version = "3.6.2"
