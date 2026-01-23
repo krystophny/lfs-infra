@@ -286,17 +286,21 @@ mount "\${LOOP_ROOT}" "\${LFS}"
 mkdir -p "\${LFS}/boot/efi"
 mount "\${LOOP_EFI}" "\${LFS}/boot/efi"
 
-# Restore cached sources
-if ls /cache/sources/*.tar.* &>/dev/null 2>&1; then
-    log "Using cached sources..."
-    mkdir -p "\${LFS}/sources"
-    cp -n /cache/sources/*.tar.* "\${LFS}/sources/" 2>/dev/null || true
-fi
+# Use cache directory directly for sources (persistent across builds)
+log "Setting up source cache (downloads persist across builds)..."
+mkdir -p /cache/sources
+mkdir -p "\${LFS}/sources"
+# Symlink so downloads go directly to host cache
+rm -rf "\${LFS}/sources"
+ln -sf /cache/sources "\${LFS}/sources"
 
-# Restore cached toolchain
+# Use cache directory directly for toolchain (Stage 1 persists across builds)
+log "Setting up toolchain cache..."
+mkdir -p /cache/tools
+mkdir -p "\${LFS}/tools"
+# Copy existing cached tools, then symlink for new builds
 if [[ -d /cache/tools/bin ]]; then
-    log "Using cached toolchain..."
-    mkdir -p "\${LFS}/tools"
+    log "Restoring cached toolchain..."
     cp -a /cache/tools/* "\${LFS}/tools/" 2>/dev/null || true
 fi
 
