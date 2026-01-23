@@ -15,6 +15,13 @@ export RUSTFLAGS="-C target-cpu=znver3 -C opt-level=3"
 # Go: use x86-64-v3 (AVX2, etc.)
 export GOAMD64="v3"
 
+# Julia: target Zen 3 (znver3 = Zen 3)
+# This affects JIT compilation at runtime
+export JULIA_CPU_TARGET="znver3"
+
+# Node.js/V8: enable AVX2 etc. (detected automatically, but can hint)
+export NODE_OPTIONS="--max-old-space-size=8192"
+
 # Make: use all cores by default
 export MAKEFLAGS="-j$(nproc)"
 
