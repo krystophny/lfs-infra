@@ -33,18 +33,8 @@ lfs_version = "12.4+"
 target_arch = "x86_64"
 
 # =============================================================================
-# STAGE 0: Host Tools (needed to bootstrap)
+# STAGE 0: Bootstrap (fay built from fay/ directory, not listed here)
 # =============================================================================
-
-[packages.pkgutils]
-version = "5.43.1"
-version_check = "github:zeppe-lin/pkgutils"
-description = "CRUX package management utilities"
-git_url = "https://github.com/zeppe-lin/pkgutils.git"
-use_git = false
-url = "https://github.com/zeppe-lin/pkgutils/archive/refs/tags/v${version}.tar.gz"
-checksum_url = ""
-bootstrap = true
 
 # =============================================================================
 # STAGE 1: Cross Toolchain

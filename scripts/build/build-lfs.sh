@@ -1,6 +1,6 @@
 #!/bin/bash
-# LFS Master Build Script - pkgutils based
-# Builds packages using pkgmk/pkgadd with proper caching
+# LFS Master Build Script - fay based
+# Builds packages directly from packages.toml using fay package manager
 
 set -euo pipefail
 
@@ -22,9 +22,9 @@ export FORCE_UNSAFE_CONFIGURE=1
 # Paths
 SOURCES_DIR="${LFS}/sources"
 PKG_CACHE="${LFS}/pkg"
+BUILD_DIR="${LFS}/build"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
-PKGFILES_DIR="${ROOT_DIR}/packages"
-PKGMK_CONF="${ROOT_DIR}/config/pkgmk.conf"
+FAY_DIR="${ROOT_DIR}/fay"
 
 # Colors
 RED='\033[0;31m'
@@ -53,7 +53,6 @@ get_pkg_field() {
     ' "${PACKAGES_FILE}"
 }
 
-# Get numeric field (no quotes)
 get_pkg_num_field() {
     local pkg="$1" field="$2"
     awk -v pkg="[packages.${pkg}]" -v field="${field}" '
@@ -74,7 +73,6 @@ get_pkg_url() {
     version=$(get_pkg_version "${pkg}")
     version_mm=$(echo "${version}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
     url=$(get_pkg_field "${pkg}" "url")
-    # Use bash string replacement instead of sed to avoid escaping issues
     url="${url//\$\{version\}/${version}}"
     url="${url//\$\{version_mm\}/${version_mm}}"
     echo "${url}"
@@ -100,88 +98,137 @@ list_packages_by_stage() {
 }
 
 # ============================================================
-# pkgutils integration
+# fay integration
 # ============================================================
 
-# Check if package is installed
+# Check if package is installed (via fay database)
 pkg_installed() {
     local pkg="$1"
-    [[ -f "${LFS}/var/lib/pkg/db" ]] && grep -q "^${pkg}$" "${LFS}/var/lib/pkg/db"
+    [[ -d "${LFS}/var/lib/fay/${pkg}" ]]
 }
 
 # Check if package file exists in cache
 pkg_cached() {
     local pkg="$1" version="$2"
-    [[ -f "${PKG_CACHE}/${pkg}#${version}-1.pkg.tar.xz" ]]
+    [[ -f "${PKG_CACHE}/${pkg}-${version}.pkg.tar.xz" ]]
 }
 
-# Build package with pkgmk
-pkg_build() {
-    local pkg="$1"
-    local pkgfile_dir="${PKGFILES_DIR}/${pkg}"
-
-    [[ -f "${pkgfile_dir}/Pkgfile" ]] || die "No Pkgfile for ${pkg}"
-
-    log "Building ${pkg}..."
-    cd "${pkgfile_dir}"
-
-    # Use our pkgmk.conf
-    pkgmk -d -cf "${PKGMK_CONF}" || die "pkgmk failed for ${pkg}"
-
-    ok "Built ${pkg}"
-}
-
-# Install package with pkgadd
+# Install package with fay
 pkg_install() {
     local pkg="$1" version="$2"
-    local pkg_file="${PKG_CACHE}/${pkg}#${version}-1.pkg.tar.xz"
+    local pkg_file="${PKG_CACHE}/${pkg}-${version}.pkg.tar.xz"
 
     [[ -f "${pkg_file}" ]] || die "Package file not found: ${pkg_file}"
 
-    log "Installing ${pkg}..."
-
-    if pkg_installed "${pkg}"; then
-        pkgadd -u -r "${LFS}" "${pkg_file}" || die "pkgadd -u failed for ${pkg}"
-    else
-        pkgadd -r "${LFS}" "${pkg_file}" || die "pkgadd failed for ${pkg}"
-    fi
-
+    log "Installing ${pkg} with fay..."
+    FAY_ROOT="${LFS}" fay i "${pkg_file}" || die "fay install failed for ${pkg}"
     ok "Installed ${pkg}"
 }
 
-# Build package directly (for cross-toolchain stage)
+# Build package and create .pkg.tar.xz
+build_package() {
+    local pkg="$1"
+    local version=$(get_pkg_version "${pkg}")
+    local url=$(get_pkg_url "${pkg}")
+    local source_pkg=$(get_pkg_source_pkg "${pkg}")
+    local build_commands=$(get_pkg_build_commands "${pkg}")
+
+    # Use source package URL if specified
+    if [[ -n "${source_pkg}" ]]; then
+        url=$(get_pkg_url "${source_pkg}")
+    fi
+
+    local filename=$(basename "${url}")
+    local tarball="${SOURCES_DIR}/${filename}"
+    local work_dir="${BUILD_DIR}/${pkg}"
+    local pkg_dir="${work_dir}/pkg"
+    local pkg_file="${PKG_CACHE}/${pkg}-${version}.pkg.tar.xz"
+
+    [[ -f "${tarball}" ]] || die "Source not found: ${tarball}"
+
+    log "Building ${pkg}-${version}..."
+
+    rm -rf "${work_dir}"
+    mkdir -p "${work_dir}/src" "${pkg_dir}"
+
+    tar -xf "${tarball}" -C "${work_dir}/src" || die "Extract failed"
+
+    cd "${work_dir}/src"
+    cd "$(ls -d */ | head -1)" 2>/dev/null || true
+
+    export PKG="${pkg_dir}"
+    export DESTDIR="${pkg_dir}"
+
+    if [[ -n "${build_commands}" ]]; then
+        while IFS= read -r cmd; do
+            [[ -z "${cmd}" ]] && continue
+            cmd=$(echo "${cmd}" | sed \
+                -e "s|\\\${LFS}|${LFS}|g" \
+                -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
+                -e "s|\\\${NPROC}|${NPROC}|g" \
+                -e "s|\\\${version}|${version}|g" \
+                -e "s|\\\${PKG}|${PKG}|g")
+            log "  $ ${cmd}"
+            eval "${cmd}" || die "Command failed: ${cmd}"
+        done <<< "${build_commands}"
+    else
+        ./configure --prefix=/usr || die "configure failed"
+        make -j${NPROC} || die "make failed"
+        make DESTDIR="${PKG}" install || die "make install failed"
+    fi
+
+    cd "${pkg_dir}"
+    tar --xz -cf "${pkg_file}" . || die "Package creation failed"
+
+    rm -rf "${work_dir}"
+    ok "Built ${pkg}-${version}.pkg.tar.xz"
+}
+
+# Build package directly (Stage 1 cross-toolchain - no packaging)
 build_direct() {
     local pkg="$1"
-    local pkgfile_dir="${PKGFILES_DIR}/${pkg}"
     local version=$(get_pkg_version "${pkg}")
+    local url=$(get_pkg_url "${pkg}")
+    local source_pkg=$(get_pkg_source_pkg "${pkg}")
+    local build_commands=$(get_pkg_build_commands "${pkg}")
 
-    [[ -f "${pkgfile_dir}/Pkgfile" ]] || die "No Pkgfile for ${pkg}"
+    if [[ -n "${source_pkg}" ]]; then
+        url=$(get_pkg_url "${source_pkg}")
+    fi
+
+    local filename=$(basename "${url}")
+    local tarball="${SOURCES_DIR}/${filename}"
+    local work_dir="${BUILD_DIR}/${pkg}"
+
+    [[ -f "${tarball}" ]] || die "Source not found: ${tarball}"
 
     log "Building ${pkg} (direct install)..."
 
-    # Get source URL and download
-    local url=$(grep "^source=" "${pkgfile_dir}/Pkgfile" | sed 's/source=(\(.*\))/\1/')
-    local filename=$(basename "${url}")
-    local tarball="${SOURCES_DIR}/${filename}"
-
-    # Create work directory
-    local work_dir="${LFS}/build/${pkg}"
     rm -rf "${work_dir}"
     mkdir -p "${work_dir}/src"
 
-    # Extract source
-    tar -xf "${tarball}" -C "${work_dir}/src" || die "Extract failed for ${pkg}"
+    tar -xf "${tarball}" -C "${work_dir}/src" || die "Extract failed"
 
-    # Run build function from Pkgfile
     cd "${work_dir}/src"
-    (
-        # Source the Pkgfile to get build()
-        export PKG="${LFS}"  # Stage 1 installs directly to LFS root
-        source "${pkgfile_dir}/Pkgfile"
-        # Run build
-        set -x
-        build
-    ) || die "Build failed for ${pkg}"
+    cd "$(ls -d */ | head -1)" 2>/dev/null || true
+
+    export PKG="${LFS}"
+
+    if [[ -n "${build_commands}" ]]; then
+        while IFS= read -r cmd; do
+            [[ -z "${cmd}" ]] && continue
+            cmd=$(echo "${cmd}" | sed \
+                -e "s|\\\${LFS}|${LFS}|g" \
+                -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
+                -e "s|\\\${NPROC}|${NPROC}|g" \
+                -e "s|\\\${version}|${version}|g" \
+                -e "s|\\\${PKG}|${PKG}|g")
+            log "  $ ${cmd}"
+            eval "${cmd}" || die "Command failed: ${cmd}"
+        done <<< "${build_commands}"
+    else
+        die "Stage 1 package ${pkg} requires build_commands"
+    fi
 
     ok "Built ${pkg}"
 }
@@ -203,9 +250,7 @@ stage1_built() {
 
     [[ -z "${provides}" ]] && return 1
 
-    # Check if first provided file exists
     local first=$(echo "${provides}" | head -1 | tr -d ' ')
-    # Expand variables
     first="${first//\$\{LFS\}/${LFS}}"
     first="${first//\$\{LFS_TGT\}/${LFS_TGT}}"
     [[ -f "${first}" ]] && return 0
@@ -234,7 +279,7 @@ build_and_install() {
     fi
 
     if ! pkg_cached "${pkg}" "${version}"; then
-        pkg_build "${pkg}"
+        build_package "${pkg}"
     else
         log "Using cached: ${pkg}"
     fi
@@ -243,146 +288,44 @@ build_and_install() {
 }
 
 # ============================================================
-# Bootstrap (build pkgutils without pkgutils)
+# Bootstrap fay
 # ============================================================
 
-bootstrap_pkgutils() {
-    stage_start "Bootstrapping pkgutils and pkgmk"
+bootstrap_fay() {
+    stage_start "Bootstrapping fay (Fast Archive Yielder)"
 
-    # Bootstrap pkgutils (pkgadd/pkgrm/pkginfo)
-    local version=$(get_pkg_version "pkgutils")
-    local url=$(get_pkg_url "pkgutils")
-    local tarball="${SOURCES_DIR}/pkgutils-v${version}.tar.gz"
-
-    if [[ ! -f "${tarball}" ]]; then
-        log "Downloading pkgutils..."
-        curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 "${url}" -o "${tarball}" || die "Download failed"
+    # Check if fay already built
+    if [[ -x "${LFS}/tools/bin/fay" ]] || command -v fay &>/dev/null; then
+        ok "fay already available"
+        return 0
     fi
 
-    log "Building pkgutils..."
-    rm -rf "${LFS}/build/pkgutils-"*
-    mkdir -p "${LFS}/build"
-    tar -xf "${tarball}" -C "${LFS}/build"
-
-    local build_dir=$(ls -d "${LFS}/build/pkgutils-"* 2>/dev/null | head -1)
-    [[ -d "${build_dir}" ]] || die "pkgutils source not found after extraction"
-
-    cd "${build_dir}"
-    make pkgadd LDFLAGS="-larchive" || die "pkgutils build failed"
-
-    # Install to LFS target
-    mkdir -p "${LFS}/usr/sbin" "${LFS}/usr/bin"
-    cp -f pkgadd "${LFS}/usr/sbin/"
-    chmod 755 "${LFS}/usr/sbin/pkgadd"
-    ln -sf pkgadd "${LFS}/usr/sbin/pkgrm"
-    ln -sf ../sbin/pkgadd "${LFS}/usr/bin/pkginfo"
-
-    # Bootstrap pkgmk (build tool - installed to host)
-    local pkgmk_version="5.45"
-    local pkgmk_url="https://github.com/zeppe-lin/pkgmk/archive/refs/tags/v${pkgmk_version}.tar.gz"
-    local pkgmk_tarball="${SOURCES_DIR}/pkgmk-v${pkgmk_version}.tar.gz"
-
-    if [[ ! -f "${pkgmk_tarball}" ]]; then
-        log "Downloading pkgmk..."
-        curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 "${pkgmk_url}" -o "${pkgmk_tarball}" || die "pkgmk download failed"
+    # Need host gfortran and libarchive-dev to build fay
+    if ! command -v gfortran &>/dev/null; then
+        die "gfortran required to build fay (install: apt install gfortran)"
     fi
 
-    log "Installing pkgmk..."
-    rm -rf "${LFS}/build/pkgmk-"*
-    tar -xf "${pkgmk_tarball}" -C "${LFS}/build"
+    log "Building fay..."
+    cd "${FAY_DIR}"
 
-    local pkgmk_dir=$(ls -d "${LFS}/build/pkgmk-"* 2>/dev/null | head -1)
-    [[ -d "${pkgmk_dir}" ]] || die "pkgmk source not found"
+    # Build fay with static libarchive
+    make clean 2>/dev/null || true
+    make bootstrap || die "fay build failed"
 
-    cd "${pkgmk_dir}"
-    # Install pkgmk to /usr/local/sbin
-    cd src && make PREFIX=/usr/local install
-    cd ..
-    # Copy sample config
-    mkdir -p /usr/local/etc
-    cp -f extra/pkgmk.conf.sample /usr/local/etc/pkgmk.conf
+    # Install to host (for building packages) and LFS tools
+    mkdir -p "${LFS}/tools/bin" /usr/local/bin
+    cp -f fay "${LFS}/tools/bin/"
+    cp -f fay /usr/local/bin/
+    chmod 755 "${LFS}/tools/bin/fay" /usr/local/bin/fay
 
-    # Initialize package database
-    mkdir -p "${LFS}/var/lib/pkg"
-    touch "${LFS}/var/lib/pkg/db"
+    # Initialize fay database
+    mkdir -p "${LFS}/var/lib/fay"
 
-    # Create package cache directory
+    # Create package cache
     mkdir -p "${PKG_CACHE}"
 
-    ok "pkgutils and pkgmk bootstrapped"
-}
-
-# ============================================================
-# Generate Pkgfiles from packages.toml
-# ============================================================
-
-generate_pkgfile() {
-    local pkg="$1"
-    local version=$(get_pkg_version "${pkg}")
-    local description=$(get_pkg_description "${pkg}")
-    local url=$(get_pkg_url "${pkg}")
-    local build_commands=$(get_pkg_build_commands "${pkg}")
-    local source_pkg=$(get_pkg_source_pkg "${pkg}")
-
-    [[ -z "${version}" ]] && return 1
-
-    local pkg_dir="${PKGFILES_DIR}/${pkg}"
-    mkdir -p "${pkg_dir}"
-
-    # Use source package URL if specified
-    if [[ -n "${source_pkg}" ]]; then
-        url=$(get_pkg_url "${source_pkg}")
-    fi
-
-    cat > "${pkg_dir}/Pkgfile" << EOF
-# Description: ${description}
-# Maintainer: LFS-infra
-
-name=${pkg}
-version=${version}
-release=1
-source=(${url})
-
-build() {
-    cd \$(ls -d */ | head -1)
-
-EOF
-
-    if [[ -n "${build_commands}" ]]; then
-        # Use custom build commands
-        while IFS= read -r cmd; do
-            [[ -z "${cmd}" ]] && continue
-            # Expand variables using sed (safer than bash parameter expansion)
-            cmd=$(echo "${cmd}" | sed \
-                -e "s|\\\${LFS}|${LFS}|g" \
-                -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
-                -e "s|\\\${NPROC}|${NPROC}|g" \
-                -e "s|\\\${version}|${version}|g")
-            echo "    ${cmd}"
-        done <<< "${build_commands}" >> "${pkg_dir}/Pkgfile"
-    else
-        # Default autotools build
-        cat >> "${pkg_dir}/Pkgfile" << 'EOF'
-    ./configure --prefix=/usr
-    make -j${NPROC}
-    make DESTDIR=$PKG install
-EOF
-    fi
-
-    echo "}" >> "${pkg_dir}/Pkgfile"
-}
-
-generate_all_pkgfiles() {
-    stage_start "Generating Pkgfiles"
-
-    local count=0
-    for pkg in $(awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}' "${PACKAGES_FILE}"); do
-        if generate_pkgfile "${pkg}" 2>/dev/null; then
-            count=$((count + 1))
-        fi
-    done
-
-    ok "Generated ${count} Pkgfiles"
+    make clean
+    ok "fay bootstrapped"
 }
 
 # ============================================================
@@ -397,7 +340,6 @@ download_sources() {
 
     for pkg in $(awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}' "${PACKAGES_FILE}"); do
         local stage=$(get_pkg_stage "${pkg}")
-        # Skip packages with stage > max_stage or no stage defined
         [[ -z "${stage}" ]] && continue
         [[ "${stage}" -gt "${max_stage}" ]] && continue
 
@@ -408,10 +350,12 @@ download_sources() {
         local target="${SOURCES_DIR}/${filename}"
 
         if [[ -f "${target}" ]]; then
-            log "Already downloaded: ${filename}"
+            log "Have: ${filename}"
         else
             log "Downloading: ${filename}"
-            curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 "${url}" -o "${target}.partial" && mv "${target}.partial" "${target}" || warn "Failed: ${filename}"
+            curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 \
+                "${url}" -o "${target}.partial" && mv "${target}.partial" "${target}" \
+                || warn "Failed: ${filename}"
         fi
     done
 
@@ -444,34 +388,26 @@ main() {
     shift || true
     local extra_args=("$@")
 
-    log "LFS Build Started (pkgutils-based)"
+    log "LFS Build Started (fay-based)"
     log "Target: ${target}"
     log "LFS: ${LFS}"
     log "CPUs: ${NPROC}"
 
-    # Prerequisites
     [[ $EUID -eq 0 ]] || die "Must run as root"
     mountpoint -q "${LFS}" || die "LFS not mounted at ${LFS}"
-    mkdir -p "${SOURCES_DIR}" "${PKG_CACHE}"
+    mkdir -p "${SOURCES_DIR}" "${PKG_CACHE}" "${BUILD_DIR}"
 
     case "${target}" in
         download)
-            # Support: download [max_stage] - default 11 (all), or specific max stage
             local max_stage="${extra_args[0]:-11}"
             download_sources "${max_stage}"
             ;;
-        pkgfiles)
-            generate_all_pkgfiles
-            ;;
         bootstrap)
-            bootstrap_pkgutils
+            bootstrap_fay
             ;;
         minimal)
-            # Minimal USB system - only stages 1-5
             download_sources 5
-            generate_all_pkgfiles
-            bootstrap_pkgutils
-
+            bootstrap_fay
             build_stage 1 "Cross-Toolchain"
             build_stage 2 "Temporary Tools"
             build_stage 3 "Base System"
@@ -480,10 +416,7 @@ main() {
             ;;
         all)
             download_sources
-            generate_all_pkgfiles
-            bootstrap_pkgutils
-
-            # Build all stages in order
+            bootstrap_fay
             build_stage 1 "Cross-Toolchain"
             build_stage 2 "Temporary Tools"
             build_stage 3 "Base System"
@@ -491,7 +424,6 @@ main() {
             build_stage 5 "Kernel"
             ;;
         *)
-            # Build specific stage
             if [[ "${target}" =~ ^[0-9]+$ ]]; then
                 build_stage "${target}" "Stage ${target}"
             else
