@@ -440,6 +440,8 @@ build_stage() {
 
 main() {
     local target="${1:-all}"
+    shift || true
+    local extra_args=("$@")
 
     log "LFS Build Started (pkgutils-based)"
     log "Target: ${target}"
@@ -453,7 +455,9 @@ main() {
 
     case "${target}" in
         download)
-            download_sources
+            # Support: download [max_stage] - default 11 (all), or specific max stage
+            local max_stage="${extra_args[0]:-11}"
+            download_sources "${max_stage}"
             ;;
         pkgfiles)
             generate_all_pkgfiles

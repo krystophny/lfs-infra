@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build minimal LFS USB on macOS (Apple Silicon via Rosetta)
+# Build minimal LFS USB via Docker (Linux/macOS)
 # Creates bootable USB with minimal LFS - boots to bash shell with networking
 # Use lfs-install to install full LFS with desktop onto hard drive
 #
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+ROOT_DIR="$(dirname "${SCRIPT_DIR}")"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,11 +28,12 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 die() { echo -e "${RED}[FATAL]${NC} $*"; exit 1; }
 header() { echo -e "\n${CYAN}=== $* ===${NC}\n"; }
 
-[[ "$(uname -s)" == "Darwin" ]] || die "This script is for macOS"
+OS="$(uname -s)"
 
 # Configuration
 IMAGE_SIZE="${IMAGE_SIZE:-16G}"
-OUTPUT_DIR="${OUTPUT_DIR:-${HOME}/lfs-build}"
+# Use /var/tmp for Docker (AFS doesn't work with Docker volumes)
+OUTPUT_DIR="${OUTPUT_DIR:-/var/tmp/lfs-output}"
 IMAGE_FILE="${OUTPUT_DIR}/lfs-minimal.img"
 CACHE_DIR="${OUTPUT_DIR}/cache"
 CONTAINER_NAME="lfs-builder"
@@ -42,12 +43,13 @@ usage() {
 Usage: $(basename "$0") [OPTIONS]
 
 Build minimal LFS USB for installing full LFS on target hardware.
+All builds run sandboxed in Docker - safe for host system.
 
 The USB boots to bash shell with SSH, WiFi, and networking ready.
 Run: lfs-install /dev/nvme0n1
 
 Options:
-    -d, --device DISK   Target USB disk (e.g., disk4)
+    -d, --device DISK   Target USB disk (Linux: /dev/sdX, macOS: diskN)
     -s, --size SIZE     Image size (default: ${IMAGE_SIZE})
     -o, --output DIR    Output directory (default: ${OUTPUT_DIR})
     -l, --list          List USB drives and exit
@@ -78,13 +80,20 @@ done
 
 list_usb_drives() {
     header "Available USB Drives"
-    diskutil list external 2>/dev/null || diskutil list
+    if [[ "${OS}" == "Darwin" ]]; then
+        diskutil list external 2>/dev/null || diskutil list
+    else
+        lsblk -d -o NAME,SIZE,MODEL,TRAN,RM | grep -E "1$|NAME" || lsblk -d
+        echo ""
+        echo "(RM=1 indicates removable)"
+    fi
 }
 
 [[ ${LIST_ONLY} -eq 1 ]] && { list_usb_drives; exit 0; }
 
-header "LFS Minimal USB Builder"
+header "LFS Minimal USB Builder (Docker)"
 echo "Creates bootable USB with minimal LFS + SSH + networking"
+echo "All builds run sandboxed in Docker - host system is safe"
 echo ""
 
 # ============================================================================
@@ -100,82 +109,41 @@ if [[ -f "${ENV_FILE}" ]]; then
 fi
 
 # ============================================================================
-# User Configuration
+# User Configuration (defaults: user=ert, random password)
 # ============================================================================
 header "User Configuration"
 
-if [[ -n "${LFS_USERNAME:-}" && -n "${LFS_PASSWORD:-}" ]]; then
-    ok "Using username from .env: ${LFS_USERNAME}"
-else
-    read -p "Username [default: lfs]: " LFS_USERNAME
-    LFS_USERNAME="${LFS_USERNAME:-lfs}"
-    [[ "${LFS_USERNAME}" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "Invalid username"
-
-    while true; do
-        read -sp "Password for ${LFS_USERNAME}: " LFS_PASSWORD
-        echo ""
-        read -sp "Confirm password: " LFS_PASSWORD_CONFIRM
-        echo ""
-        [[ "${LFS_PASSWORD}" == "${LFS_PASSWORD_CONFIRM}" ]] && break
-        warn "Passwords don't match."
-    done
-    [[ -z "${LFS_PASSWORD}" ]] && die "Password cannot be empty"
+LFS_USERNAME="${LFS_USERNAME:-ert}"
+if [[ -z "${LFS_PASSWORD:-}" ]]; then
+    LFS_PASSWORD="$(head -c 6 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 8)"
 fi
+
+ok "Username: ${LFS_USERNAME}"
+ok "Password: ${LFS_PASSWORD}"
 
 # ============================================================================
-# Network Configuration
+# Network Configuration (skip - configure after boot)
 # ============================================================================
-header "Network Configuration"
+WIFI_SSID="${WIFI_SSID:-}"
+WIFI_PASSWORD="${WIFI_PASSWORD:-}"
+LAN_MODE="${LAN_MODE:-1}"
+LAN_IP="${LAN_IP:-}"
+LAN_GATEWAY="${LAN_GATEWAY:-}"
+LAN_DNS="${LAN_DNS:-1.1.1.1}"
 
-if [[ -n "${WIFI_SSID:-}" ]]; then
-    ok "Using WiFi from .env: ${WIFI_SSID}"
-else
-    # WiFi
-    echo "WiFi Configuration (leave empty to skip):"
-    read -p "WiFi SSID: " WIFI_SSID
-    WIFI_PASSWORD=""
-    if [[ -n "${WIFI_SSID}" ]]; then
-        read -sp "WiFi Password: " WIFI_PASSWORD
-        echo ""
-    fi
-fi
-
-if [[ -n "${LAN_MODE:-}" ]]; then
-    if [[ "${LAN_MODE}" == "2" ]]; then
-        ok "Using static LAN from .env: ${LAN_IP:-not set}"
-    else
-        ok "Using LAN from .env: DHCP"
-    fi
-else
-    # LAN
-    echo ""
-    echo "LAN Configuration:"
-    echo "  1) DHCP (automatic)"
-    echo "  2) Static IP"
-    read -p "Select [1]: " LAN_MODE
-    LAN_MODE="${LAN_MODE:-1}"
-
-    LAN_IP=""
-    LAN_GATEWAY=""
-    LAN_DNS=""
-    if [[ "${LAN_MODE}" == "2" ]]; then
-        read -p "Static IP (e.g., 192.168.1.100/24): " LAN_IP
-        read -p "Gateway (e.g., 192.168.1.1): " LAN_GATEWAY
-        read -p "DNS (e.g., 8.8.8.8): " LAN_DNS
-    fi
-fi
-
-ok "Network configuration saved"
+ok "Network: configure after boot (DHCP default)"
 
 # ============================================================================
 # Docker Check
 # ============================================================================
-docker info &>/dev/null || die "Docker not running. Start OrbStack first."
+docker info &>/dev/null || die "Docker not running. Start Docker/OrbStack first."
 
-log "Checking x86_64 Rosetta support..."
-docker run --rm --platform linux/amd64 alpine:latest uname -m 2>/dev/null | grep -q x86_64 \
-    || die "Rosetta not working. Enable in OrbStack."
-ok "Rosetta working"
+if [[ "${OS}" == "Darwin" ]]; then
+    log "Checking x86_64 Rosetta support..."
+    docker run --rm --platform linux/amd64 alpine:latest uname -m 2>/dev/null | grep -q x86_64 \
+        || die "Rosetta not working. Enable in OrbStack."
+    ok "Rosetta working"
+fi
 
 # ============================================================================
 # Update Package Versions
@@ -194,18 +162,22 @@ fi
 # ============================================================================
 # Setup Directories
 # ============================================================================
-mkdir -p "${OUTPUT_DIR}" "${CACHE_DIR}/sources" "${CACHE_DIR}/tools"
+mkdir -p "${OUTPUT_DIR}" "${CACHE_DIR}/sources" "${CACHE_DIR}/tools" "${CACHE_DIR}/pkg"
+IMAGE_FILE="${OUTPUT_DIR}/lfs-minimal.img"
 
 if [[ ${NO_CACHE} -eq 1 ]]; then
     warn "Clearing caches..."
     rm -rf "${CACHE_DIR:?}"/*
-    mkdir -p "${CACHE_DIR}/sources" "${CACHE_DIR}/tools"
+    mkdir -p "${CACHE_DIR}/sources" "${CACHE_DIR}/tools" "${CACHE_DIR}/pkg"
 fi
 
 # ============================================================================
 # Build Docker Image
 # ============================================================================
 header "Building Docker Image (Build Host)"
+
+DOCKER_PLATFORM=""
+[[ "${OS}" == "Darwin" ]] && DOCKER_PLATFORM="--platform linux/amd64"
 
 cat > "${OUTPUT_DIR}/Dockerfile" <<'DOCKERFILE'
 FROM archlinux:latest
@@ -230,14 +202,14 @@ RUN useradd -m lfs && echo "lfs ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 WORKDIR /lfs-build
 DOCKERFILE
 
-docker build --platform linux/amd64 -t lfs-builder "${OUTPUT_DIR}"
+docker build ${DOCKER_PLATFORM} -t lfs-builder "${OUTPUT_DIR}"
 
 # ============================================================================
 # Prepare Build
 # ============================================================================
 header "Preparing Build"
 
-rsync -a --exclude='.git' --exclude='*.img' "${ROOT_DIR}/" "${OUTPUT_DIR}/lfs-infra/"
+rsync -a --exclude='.git' --exclude='*.img' --exclude='output' "${ROOT_DIR}/" "${OUTPUT_DIR}/lfs-infra/"
 
 # ============================================================================
 # Create Build Script (runs inside Docker)
@@ -249,7 +221,7 @@ set -e
 export LFS=/mnt/lfs
 export LFS_TGT=x86_64-lfs-linux-gnu
 export MAKEFLAGS="-j\$(nproc)"
-export LFS_GENERIC_BUILD=1  # USB: generic arch for portability
+export LFS_GENERIC_BUILD=1
 export NPROC=\$(nproc)
 export PATH="\${LFS}/tools/bin:\${PATH}"
 
@@ -263,12 +235,12 @@ IMAGE_FILE="/output/lfs-minimal.img"
 IMAGE_SIZE="${IMAGE_SIZE}"
 LFS_USERNAME="${LFS_USERNAME}"
 LFS_PASSWORD="${LFS_PASSWORD}"
-WIFI_SSID="${WIFI_SSID}"
-WIFI_PASSWORD="${WIFI_PASSWORD}"
-LAN_MODE="${LAN_MODE}"
-LAN_IP="${LAN_IP}"
-LAN_GATEWAY="${LAN_GATEWAY}"
-LAN_DNS="${LAN_DNS}"
+WIFI_SSID="${WIFI_SSID:-}"
+WIFI_PASSWORD="${WIFI_PASSWORD:-}"
+LAN_MODE="${LAN_MODE:-1}"
+LAN_IP="${LAN_IP:-}"
+LAN_GATEWAY="${LAN_GATEWAY:-}"
+LAN_DNS="${LAN_DNS:-1.1.1.1}"
 
 log "Setting up loop devices..."
 losetup -D 2>/dev/null || true
@@ -303,28 +275,36 @@ mount "\${LOOP_ROOT}" "\${LFS}"
 mkdir -p "\${LFS}/boot/efi"
 mount "\${LOOP_EFI}" "\${LFS}/boot/efi"
 
-# Use cached sources/tools
+# Restore cached sources
 if ls /cache/sources/*.tar.* &>/dev/null 2>&1; then
     log "Using cached sources..."
     mkdir -p "\${LFS}/sources"
     cp -n /cache/sources/*.tar.* "\${LFS}/sources/" 2>/dev/null || true
 fi
 
+# Restore cached toolchain
 if [[ -d /cache/tools/bin ]]; then
     log "Using cached toolchain..."
     mkdir -p "\${LFS}/tools"
     cp -a /cache/tools/* "\${LFS}/tools/" 2>/dev/null || true
 fi
 
+# Restore cached binary packages
+if ls /cache/pkg/*.pkg.tar.xz &>/dev/null 2>&1; then
+    log "Using cached binary packages..."
+    mkdir -p "\${LFS}/pkg"
+    cp -n /cache/pkg/*.pkg.tar.xz "\${LFS}/pkg/" 2>/dev/null || true
+fi
+
 log "=========================================="
-log "Building Minimal LFS"
+log "Building Minimal LFS (stages 1-5 only)"
 log "=========================================="
 
 cd /lfs-infra
 export LFS_USERNAME LFS_PASSWORD
 
-# Build base system (no desktop)
-./scripts/build/build-lfs.sh download
+# Only download packages for stages 1-5 (minimal USB system)
+./scripts/build/build-lfs.sh download 1 2 3 4 5
 ./scripts/build/build-lfs.sh toolchain
 ./scripts/build/build-lfs.sh temptools
 ./scripts/build/build-lfs.sh chroot-prep
@@ -332,25 +312,20 @@ export LFS_USERNAME LFS_PASSWORD
 ./scripts/build/build-lfs.sh config
 ./scripts/build/build-lfs.sh kernel
 
-# Cache for next build
-log "Caching sources and tools..."
+# Cache sources, tools, and binary packages for future builds
+log "Caching build artifacts..."
 cp -n "\${LFS}/sources/"*.tar.* /cache/sources/ 2>/dev/null || true
 [[ -d "\${LFS}/tools/bin" ]] && cp -a "\${LFS}/tools/"* /cache/tools/ 2>/dev/null || true
+mkdir -p /cache/pkg
+cp -n "\${LFS}/pkg/"*.pkg.tar.xz /cache/pkg/ 2>/dev/null || true
 
-# ============================================================================
-# Install Claude Code CLI
-# ============================================================================
 log "Installing Claude Code CLI..."
 mkdir -p "\${LFS}/home/\${LFS_USERNAME}/.local/bin"
-chroot "\${LFS}" /bin/bash -c "curl -fsSL https://claude.ai/install.sh | bash" || \
-    warn "Claude Code install failed - can install later"
+chroot "\${LFS}" /bin/bash -c "curl -fsSL https://claude.ai/install.sh | bash" 2>/dev/null || \
+    echo "Claude Code install skipped - can install later"
 
-# ============================================================================
-# Configure Networking
-# ============================================================================
 log "Configuring networking..."
 
-# WiFi configuration
 if [[ -n "\${WIFI_SSID}" ]]; then
     mkdir -p "\${LFS}/etc/wpa_supplicant"
     cat > "\${LFS}/etc/wpa_supplicant/wpa_supplicant.conf" <<WPAEOF
@@ -368,7 +343,6 @@ WPAEOF
     ok "WiFi configured: \${WIFI_SSID}"
 fi
 
-# LAN configuration
 mkdir -p "\${LFS}/etc/network"
 if [[ "\${LAN_MODE}" == "2" && -n "\${LAN_IP}" ]]; then
     cat > "\${LFS}/etc/network/interfaces" <<LANEOF
@@ -393,38 +367,17 @@ LANEOF
     ok "LAN configured: DHCP"
 fi
 
-# ============================================================================
-# Enable SSH
-# ============================================================================
 log "Enabling SSH server..."
 mkdir -p "\${LFS}/etc/ssh"
-# Generate host keys during first boot
-cat > "\${LFS}/etc/runit/sv/sshd/run" <<'SSHEOF'
-#!/bin/sh
-[ ! -f /etc/ssh/ssh_host_rsa_key ] && ssh-keygen -A
-exec /usr/sbin/sshd -D
-SSHEOF
-chmod +x "\${LFS}/etc/runit/sv/sshd/run" 2>/dev/null || true
 
-# ============================================================================
-# Copy lfs-infra and create scripts
-# ============================================================================
 log "Installing lfs-infra and scripts..."
 cp -a /lfs-infra "\${LFS}/root/lfs-infra"
 
-# Create lfs-install script
 cat > "\${LFS}/usr/local/bin/lfs-install" <<'INSTALLSCRIPT'
 #!/bin/bash
-# Install full LFS with desktop onto target drive
 set -euo pipefail
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
 log() { echo -e "\${BLUE}[INFO]\${NC} \$*"; }
 ok() { echo -e "\${GREEN}[OK]\${NC} \$*"; }
 warn() { echo -e "\${YELLOW}[WARN]\${NC} \$*"; }
@@ -435,15 +388,11 @@ header() { echo -e "\n\${CYAN}=== \$* ===\${NC}\n"; }
 
 header "LFS Full Installation"
 
-list_drives() {
+DEVICE="\${1:-}"
+if [[ -z "\${DEVICE}" ]]; then
     echo "Available drives:"
     lsblk -d -o NAME,SIZE,MODEL,TRAN | grep -v "loop\|sr\|NAME"
     echo ""
-}
-
-DEVICE="\${1:-}"
-if [[ -z "\${DEVICE}" ]]; then
-    list_drives
     read -p "Device to install to (e.g., /dev/nvme0n1): " DEVICE
 fi
 
@@ -451,23 +400,17 @@ fi
 [[ "\${DEVICE}" != /dev/* ]] && DEVICE="/dev/\${DEVICE}"
 [[ -b "\${DEVICE}" ]] || die "Device \${DEVICE} not found"
 
-# Safety check
 BOOT_DEV=\$(findmnt -n -o SOURCE / 2>/dev/null | sed 's/[0-9]*\$//' | sed 's/p[0-9]*\$//')
 [[ "\${DEVICE}" == "\${BOOT_DEV}" ]] && die "Cannot install to boot device"
 
-echo ""
-echo "Target: \${DEVICE}"
-lsblk "\${DEVICE}"
-echo ""
+echo ""; echo "Target: \${DEVICE}"; lsblk "\${DEVICE}"; echo ""
 warn "ALL DATA WILL BE ERASED!"
-read -p "Type 'ERASE' to confirm: " confirm
+read -p "Type ERASE to confirm: " confirm
 [[ "\${confirm}" == "ERASE" ]] || die "Aborted"
 
 header "Partitioning \${DEVICE}"
-
 for part in "\${DEVICE}"*; do umount "\${part}" 2>/dev/null || true; done
 swapoff -a 2>/dev/null || true
-
 parted -s "\${DEVICE}" mklabel gpt
 parted -s "\${DEVICE}" mkpart ESP fat32 1MiB 513MiB
 parted -s "\${DEVICE}" set 1 esp on
@@ -481,14 +424,12 @@ else
 fi
 
 header "Formatting with btrfs"
-
 mkfs.fat -F32 "\${EFI_PART}"
 mkfs.btrfs -f "\${ROOT_PART}"
 
 export LFS=/mnt/lfs
 mkdir -p "\${LFS}"
 mount "\${ROOT_PART}" "\${LFS}"
-
 btrfs subvolume create "\${LFS}/@"
 btrfs subvolume create "\${LFS}/@home"
 btrfs subvolume create "\${LFS}/@snapshots"
@@ -502,48 +443,23 @@ mount -o subvol=@snapshots,compress=zstd:3,noatime "\${ROOT_PART}" "\${LFS}/.sna
 mount -o subvol=@cache,compress=zstd:3,noatime "\${ROOT_PART}" "\${LFS}/.cache"
 mount "\${EFI_PART}" "\${LFS}/boot/efi"
 
-header "Setting up Build Cache"
-log "Using target disk for build cache (faster than USB)"
-mkdir -p "\${LFS}/.cache/sources" "\${LFS}/.cache/tools"
-
-# Copy sources from USB to target cache if available
-if [[ -d /root/lfs-infra/sources ]] && ls /root/lfs-infra/sources/*.tar.* &>/dev/null 2>&1; then
-    log "Copying cached sources from USB to target disk..."
-    cp -n /root/lfs-infra/sources/*.tar.* "\${LFS}/.cache/sources/" 2>/dev/null || true
-fi
-
-# Link LFS sources to cache
-mkdir -p "\${LFS}/sources"
-mount --bind "\${LFS}/.cache/sources" "\${LFS}/sources"
-ok "Build cache ready on target disk"
-
 header "User Configuration"
-
 read -p "Username [default: user]: " NEW_USER
 NEW_USER="\${NEW_USER:-user}"
-
 while true; do
-    read -sp "Password for \${NEW_USER}: " NEW_PASS
-    echo ""
-    read -sp "Confirm: " NEW_PASS2
-    echo ""
+    read -sp "Password for \${NEW_USER}: " NEW_PASS; echo ""
+    read -sp "Confirm: " NEW_PASS2; echo ""
     [[ "\${NEW_PASS}" == "\${NEW_PASS2}" ]] && break
     warn "Passwords don't match."
 done
-
 export LFS_USERNAME="\${NEW_USER}"
 export LFS_PASSWORD="\${NEW_PASS}"
-# Native build: DO NOT set LFS_GENERIC_BUILD - uses -march=native for this machine
 
 header "Building Full LFS with Desktop"
-echo "This will take several hours..."
-echo "Building with native optimizations for this machine..."
-
 cd /root/lfs-infra
 ./scripts/build/build-lfs.sh all
 
 header "Installing Bootloader"
-
 ROOT_UUID=\$(blkid -s UUID -o value "\${ROOT_PART}")
 EFI_UUID=\$(blkid -s UUID -o value "\${EFI_PART}")
 
@@ -553,14 +469,10 @@ UUID=\${ROOT_UUID}  /home        btrfs  subvol=@home,compress=zstd:3,noatime  0 
 UUID=\${ROOT_UUID}  /.snapshots  btrfs  subvol=@snapshots,compress=zstd:3,noatime  0 2
 UUID=\${ROOT_UUID}  /.cache      btrfs  subvol=@cache,compress=zstd:3,noatime  0 2
 UUID=\${EFI_UUID}   /boot/efi    vfat   umask=0077  0 2
-proc               /proc        proc   nosuid,noexec,nodev  0 0
-sysfs              /sys         sysfs  nosuid,noexec,nodev  0 0
-tmpfs              /run         tmpfs  defaults  0 0
 FSTABEOF
 
 grub-install --target=x86_64-efi --efi-directory="\${LFS}/boot/efi" \
     --boot-directory="\${LFS}/boot" --bootloader-id=LFS --removable
-
 cat > "\${LFS}/boot/grub/grub.cfg" <<GRUBEOF
 set default=0
 set timeout=0
@@ -571,32 +483,12 @@ menuentry "LFS" {
 GRUBEOF
 
 umount -R "\${LFS}"
-
 header "Complete!"
 ok "LFS installed to \${DEVICE}"
-echo ""
 echo "Remove USB and reboot. Login: \${NEW_USER}"
 INSTALLSCRIPT
 chmod +x "\${LFS}/usr/local/bin/lfs-install"
 
-# Create lfs-build-desktop script (for building desktop from within LFS)
-cat > "\${LFS}/usr/local/bin/lfs-build-desktop" <<'DESKTOPSCRIPT'
-#!/bin/bash
-# Build desktop environment on existing LFS installation
-set -euo pipefail
-
-[[ \$EUID -eq 0 ]] || { echo "Run as root: sudo lfs-build-desktop"; exit 1; }
-
-echo "Building XFCE desktop environment..."
-cd /root/lfs-infra
-./scripts/build/build-lfs.sh desktop
-
-echo ""
-echo "Desktop installed! Reboot to start graphical login."
-DESKTOPSCRIPT
-chmod +x "\${LFS}/usr/local/bin/lfs-build-desktop"
-
-# Create motd
 cat > "\${LFS}/etc/motd" <<'MOTDEOF'
 
   _     _____ ____
@@ -609,26 +501,20 @@ cat > "\${LFS}/etc/motd" <<'MOTDEOF'
 
  Commands:
    sudo lfs-install          Install full LFS with desktop to hard drive
-   sudo lfs-build-desktop    Build desktop on current system
    claude                    Claude Code CLI
 
  SSH is enabled. WiFi configured during build.
 
 MOTDEOF
 
-# Generate fstab for USB
 ROOT_UUID=\$(blkid -s UUID -o value "\${LOOP_ROOT}")
 EFI_UUID=\$(blkid -s UUID -o value "\${LOOP_EFI}")
 
 cat > "\${LFS}/etc/fstab" <<USBFSTAB
 UUID=\${ROOT_UUID}  /          ext4  defaults,noatime  0 1
 UUID=\${EFI_UUID}   /boot/efi  vfat  umask=0077        0 2
-proc               /proc      proc  nosuid,noexec,nodev  0 0
-sysfs              /sys       sysfs nosuid,noexec,nodev  0 0
-tmpfs              /run       tmpfs defaults  0 0
 USBFSTAB
 
-# Install bootloader
 log "Installing bootloader..."
 grub-install --target=x86_64-efi \
     --efi-directory="\${LFS}/boot/efi" \
@@ -658,8 +544,6 @@ echo "Image: \${IMAGE_FILE}"
 echo "User: \${LFS_USERNAME} (has sudo)"
 echo "SSH: enabled"
 echo "WiFi: \${WIFI_SSID:-not configured}"
-echo ""
-echo "Boot and run: sudo lfs-install"
 BUILDSCRIPT
 
 chmod +x "${OUTPUT_DIR}/build-inside-docker.sh"
@@ -676,7 +560,7 @@ echo ""
 docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
 docker run --rm \
-    --platform linux/amd64 \
+    ${DOCKER_PLATFORM} \
     --privileged \
     --name "${CONTAINER_NAME}" \
     -v "${OUTPUT_DIR}:/output" \
@@ -695,34 +579,62 @@ ls -lh "${IMAGE_FILE}"
 # ============================================================================
 if [[ ${BUILD_ONLY} -eq 1 ]]; then
     echo ""
-    log "To write: sudo dd if=${IMAGE_FILE} of=/dev/rdiskN bs=4m status=progress"
+    if [[ "${OS}" == "Darwin" ]]; then
+        log "To write: sudo dd if=${IMAGE_FILE} of=/dev/rdiskN bs=4m status=progress"
+    else
+        log "To write: sudo dd if=${IMAGE_FILE} of=/dev/sdX bs=4M status=progress conv=fsync"
+    fi
     exit 0
 fi
 
 if [[ -z "${DEVICE}" ]]; then
     echo ""
     list_usb_drives
-    read -p "Disk to write to (e.g., disk4): " DEVICE
+    if [[ "${OS}" == "Darwin" ]]; then
+        read -p "Disk to write to (e.g., disk4): " DEVICE
+    else
+        read -p "Device to write to (e.g., /dev/sdb): " DEVICE
+    fi
 fi
 
 [[ -z "${DEVICE}" ]] && die "No device"
 
-DEVICE="${DEVICE#/dev/}"
-DEVICE="${DEVICE#disk}"
-DEVICE="disk${DEVICE}"
+if [[ "${OS}" == "Darwin" ]]; then
+    DEVICE="${DEVICE#/dev/}"
+    DEVICE="${DEVICE#disk}"
+    DEVICE="disk${DEVICE}"
 
-diskutil info "/dev/${DEVICE}" 2>/dev/null | grep -q "Removable Media:.*Yes\|Protocol:.*USB\|Location:.*External" \
-    || die "${DEVICE} not a USB drive"
+    diskutil info "/dev/${DEVICE}" 2>/dev/null | grep -q "Removable Media:.*Yes\|Protocol:.*USB\|Location:.*External" \
+        || die "${DEVICE} not a USB drive"
 
-header "Writing to /dev/${DEVICE}"
-warn "ALL DATA WILL BE ERASED!"
-read -p "Type 'YES': " confirm
-[[ "${confirm}" == "YES" ]] || die "Aborted"
+    header "Writing to /dev/${DEVICE}"
+    warn "ALL DATA WILL BE ERASED!"
+    read -p "Type YES: " confirm
+    [[ "${confirm}" == "YES" ]] || die "Aborted"
 
-diskutil unmountDisk "/dev/${DEVICE}" || true
-sudo dd if="${IMAGE_FILE}" of="/dev/r${DEVICE}" bs=4m status=progress
-sync
-diskutil eject "/dev/${DEVICE}" || true
+    diskutil unmountDisk "/dev/${DEVICE}" || true
+    sudo dd if="${IMAGE_FILE}" of="/dev/r${DEVICE}" bs=4m status=progress
+    sync
+    diskutil eject "/dev/${DEVICE}" || true
+else
+    [[ "${DEVICE}" != /dev/* ]] && DEVICE="/dev/${DEVICE}"
+    [[ -b "${DEVICE}" ]] || die "Device ${DEVICE} not found"
+
+    # Safety check - not root device
+    ROOT_DEV=$(findmnt -n -o SOURCE / 2>/dev/null | sed 's/[0-9]*$//' | sed 's/p[0-9]*$//')
+    [[ "${DEVICE}" == "${ROOT_DEV}" ]] && die "Cannot write to root device"
+
+    header "Writing to ${DEVICE}"
+    warn "ALL DATA WILL BE ERASED!"
+    read -p "Type YES: " confirm
+    [[ "${confirm}" == "YES" ]] || die "Aborted"
+
+    for part in "${DEVICE}"*; do
+        umount "${part}" 2>/dev/null || true
+    done
+    sudo dd if="${IMAGE_FILE}" of="${DEVICE}" bs=4M status=progress conv=fsync
+    sync
+fi
 
 header "Done!"
 ok "USB ready!"

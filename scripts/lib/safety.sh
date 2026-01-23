@@ -81,7 +81,7 @@ LFS must point to an isolated build directory (e.g., /mnt/lfs)"
 
     # Warn if LFS is in a suspicious location
     case "${lfs_normalized}" in
-        /mnt/*|/media/*|/build/*|/opt/lfs*)
+        /mnt/*|/media/*|/build/*|/opt/lfs*|/var/tmp/*)
             # These are acceptable locations
             ;;
         *)

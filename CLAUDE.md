@@ -6,27 +6,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LFS-infra is an infrastructure repository for Linux From Scratch (LFS) with bleeding-edge packages, aggressive performance optimizations, btrfs snapshots, and fully automated builds.
 
+All builds run **sandboxed in Docker** for safety - no risk to the host system.
+
 ## Architecture
 
 ```
 lfs-infra/
 ├── packages.toml           # Master package list with versions, URLs, and build commands
 ├── config/
+│   ├── lfs.conf            # LFS build configuration
+│   ├── pkgmk.conf          # Package manager configuration
 │   ├── etc/                # System configuration files (init, fstab, etc.)
 │   └── user/               # User config (XFCE, themes, etc.)
+├── docker/
+│   └── build-lfs-docker.sh # Main USB build script (runs in Docker)
 ├── scripts/
-│   ├── setup/init-lfs.sh   # Initialize LFS environment
+│   ├── lib/safety.sh       # Safety library
 │   ├── build/
 │   │   ├── build-lfs.sh    # Master build orchestrator
 │   │   └── ...             # Other build scripts
-│   ├── vm/
-│   │   ├── setup-disk.sh   # Create disk with btrfs + snapshots
-│   │   └── run-vm.sh       # Run LFS in QEMU/KVM
-│   └── teardown/cleanup.sh
+│   └── vm/
+│       ├── setup-disk.sh   # Create disk with btrfs + snapshots
+│       └── run-vm.sh       # Run LFS in QEMU/KVM
 └── version-checker/check-versions.sh
 ```
 
-## Quick Start (Full Automatic Build)
+## Quick Start (USB Creation via Docker)
+
+This is the recommended workflow - everything runs sandboxed in Docker.
+
+```bash
+# 1. Configure (optional - can be done interactively)
+cp .env.example .env
+# Edit .env with username, password, WiFi settings
+
+# 2. Build USB image (runs in Docker, outputs to output/)
+./docker/build-lfs-docker.sh --build-only
+
+# 3. Write to USB drive
+sudo dd if=output/lfs-minimal.img of=/dev/sdX bs=4M status=progress conv=fsync
+
+# 4. Boot from USB, then install full LFS to target machine:
+sudo lfs-install /dev/nvme0n1
+```
+
+## Quick Start (VM Build)
+
+For testing or building directly (requires Linux host):
 
 ```bash
 # 1. Create disk image with btrfs (supports snapshots)
@@ -47,6 +73,42 @@ sudo ./scripts/vm/setup-disk.sh snapshot pre-boot
 
 # 6. If something breaks, rollback
 sudo ./scripts/vm/setup-disk.sh rollback pre-boot
+```
+
+## Docker Build (Sandboxed)
+
+All USB builds run inside an Arch Linux Docker container:
+- Host system is never at risk
+- Works on Linux and macOS (via Rosetta)
+- Loop devices and partitioning happen inside container
+- Output is a raw disk image that can be dd'd to USB
+
+```bash
+# Build image only (no USB write)
+./docker/build-lfs-docker.sh --build-only
+
+# Build and write to USB
+./docker/build-lfs-docker.sh --device /dev/sdb
+
+# List USB drives
+./docker/build-lfs-docker.sh --list
+
+# Clear caches and rebuild
+./docker/build-lfs-docker.sh --no-cache --build-only
+```
+
+## Environment Variables (.env)
+
+```bash
+LFS_BUILD_DIR=/var/tmp/ert    # Build directory (inside Docker)
+LFS_USERNAME=lfs              # USB system username
+LFS_PASSWORD=                 # User password
+WIFI_SSID=                    # WiFi network (optional)
+WIFI_PASSWORD=                # WiFi password
+LAN_MODE=1                    # 1=DHCP, 2=Static
+LAN_IP=                       # Static IP (if LAN_MODE=2)
+LAN_GATEWAY=                  # Gateway (if LAN_MODE=2)
+LAN_DNS=1.1.1.1               # DNS server
 ```
 
 ## Disk Management (btrfs with snapshots)
@@ -173,7 +235,7 @@ Safe flags packages (no -ffast-math): openssl, glibc, python, gmp
 
 ## Key Variables
 
-- `LFS=/mnt/lfs` - LFS root mount point
+- `LFS=/var/tmp/ert` - Default LFS build directory
 - `LFS_TGT=$(uname -m)-lfs-linux-gnu` - Target triplet
 - `NPROC=$(nproc)` - Auto-detected CPU cores
 

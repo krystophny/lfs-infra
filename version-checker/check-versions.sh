@@ -292,13 +292,51 @@ version_ge() {
     [[ "$(printf '%s\n%s' "${v1}" "${v2}" | sort -V | head -1)" == "${v2}" ]]
 }
 
-# Update version in TOML file
+# Get URL for a package with a given version
+get_pkg_url() {
+    local pkg="$1"
+    local version="$2"
+    local version_mm="${version%.*}"
+
+    local url
+    url=$(awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^url *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
+    ' "${PACKAGES_FILE}")
+
+    # Expand version variables
+    url="${url//\$\{version\}/${version}}"
+    url="${url//\$\{version_mm\}/${version_mm}}"
+    echo "${url}"
+}
+
+# Verify URL is accessible (HEAD request)
+verify_url() {
+    local url="$1"
+    curl -fsSL --head --connect-timeout 10 "${url}" &>/dev/null
+}
+
+# Update version in TOML file (with URL verification)
 update_toml_version() {
     local pkg="$1"
     local new_version="$2"
 
-    log "Updating ${pkg} to ${new_version} in packages.toml"
+    # Verify URL works with new version before updating
+    local url
+    url=$(get_pkg_url "${pkg}" "${new_version}")
 
+    if [[ -n "${url}" ]]; then
+        log "Verifying URL: ${url}"
+        if ! verify_url "${url}"; then
+            warn "URL verification failed for ${pkg} ${new_version}: ${url}"
+            warn "Skipping update - version may not be released yet"
+            return 1
+        fi
+        log "URL verified OK"
+    fi
+
+    log "Updating ${pkg} to ${new_version} in packages.toml"
     sed -i "/^\[packages\.${pkg}\]/,/^\[/{s/^version = \"[^\"]*\"/version = \"${new_version}\"/}" "${PACKAGES_FILE}"
 }
 
