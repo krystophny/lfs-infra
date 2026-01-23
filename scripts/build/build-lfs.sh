@@ -27,6 +27,9 @@ export SYSROOT="${LFS}"
 export TOOLS="${LFS}/tools"
 export SOURCES="${LFS}/sources"
 
+# Add cross-tools to PATH so later builds can find cross-assembler, etc.
+export PATH="${TOOLS}/bin:${PATH}"
+
 # Paths
 SOURCES_DIR="${SOURCES}"
 PKG_CACHE="${LFS}/pkg"
