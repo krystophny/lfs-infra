@@ -539,6 +539,13 @@ url = "https://www.python.org/ftp/python/${version}/Python-${version}.tar.xz"
 git_url = "https://github.com/python/cpython.git"
 use_git = false
 stage = 3
+build_commands = [
+    "./configure --prefix=/usr --enable-shared --enable-optimizations --with-lto --with-system-expat --with-system-ffi --with-ensurepip=install",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install",
+    "ln -sf python3 ${PKG}/usr/bin/python",
+    "ln -sf pip3 ${PKG}/usr/bin/pip"
+]
 
 [packages.texinfo]
 version = "7.2"
