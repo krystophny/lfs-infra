@@ -255,7 +255,7 @@ bootstrap_pkgutils() {
 
     if [[ ! -f "${tarball}" ]]; then
         log "Downloading pkgutils..."
-        curl -fL "${url}" -o "${tarball}" || die "Download failed"
+        curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 "${url}" -o "${tarball}" || die "Download failed"
     fi
 
     log "Building pkgutils..."
@@ -283,7 +283,7 @@ bootstrap_pkgutils() {
 
     if [[ ! -f "${pkgmk_tarball}" ]]; then
         log "Downloading pkgmk..."
-        curl -fL "${pkgmk_url}" -o "${pkgmk_tarball}" || die "pkgmk download failed"
+        curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 "${pkgmk_url}" -o "${pkgmk_tarball}" || die "pkgmk download failed"
     fi
 
     log "Installing pkgmk..."
@@ -410,7 +410,7 @@ download_sources() {
             log "Already downloaded: ${filename}"
         else
             log "Downloading: ${filename}"
-            curl -fL "${url}" -o "${target}.partial" && mv "${target}.partial" "${target}" || warn "Failed: ${filename}"
+            curl -fL --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 10 "${url}" -o "${target}.partial" && mv "${target}.partial" "${target}" || warn "Failed: ${filename}"
         fi
     done
 
