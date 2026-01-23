@@ -1,8 +1,9 @@
 # fay - Fast Archive Yielder
 # Static build for LFS bootstrap
 
-FC ?= gfortran
-CC ?= gcc
+# Force gfortran (Make's default FC is f77)
+FC := gfortran
+CC := gcc
 
 # LFS_GENERIC_BUILD=1 for USB (portable), else native optimization
 ifeq ($(LFS_GENERIC_BUILD),1)
