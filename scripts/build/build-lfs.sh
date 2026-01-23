@@ -95,7 +95,7 @@ list_packages_by_stage() {
     local stage="$1"
     awk -v stage="${stage}" '
         /^\[packages\./ { pkg=$0; gsub(/^\[packages\.|]$/, "", pkg) }
-        /^stage *= *'${stage}'/ { print pkg }
+        /^stage *= *'${stage}'$/ { print pkg }
     ' "${PACKAGES_FILE}"
 }
 
