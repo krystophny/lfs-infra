@@ -194,98 +194,10 @@ build_package() {
     ok "Built ${pkg}-${version}.pkg.tar.xz"
 }
 
-# Build package directly (Stage 1 cross-toolchain - no packaging)
-build_direct() {
-    local pkg="$1"
-    local version=$(get_pkg_version "${pkg}")
-    local url=$(get_pkg_url "${pkg}")
-    local source_pkg=$(get_pkg_source_pkg "${pkg}")
-    local build_commands=$(get_pkg_build_commands "${pkg}")
-
-    if [[ -n "${source_pkg}" ]]; then
-        url=$(get_pkg_url "${source_pkg}")
-    fi
-
-    local filename=$(basename "${url}")
-    local tarball="${SOURCES_DIR}/${filename}"
-    local work_dir="${BUILD_DIR}/${pkg}"
-
-    [[ -f "${tarball}" ]] || die "Source not found: ${tarball}"
-
-    log "Building ${pkg} (direct install)..."
-
-    rm -rf "${work_dir}"
-    mkdir -p "${work_dir}/src"
-
-    tar -xf "${tarball}" -C "${work_dir}/src" || die "Extract failed"
-
-    cd "${work_dir}/src"
-    cd "$(ls -d */ | head -1)" 2>/dev/null || true
-
-    export PKG="${LFS}"
-
-    if [[ -n "${build_commands}" ]]; then
-        while IFS= read -r cmd; do
-            [[ -z "${cmd}" ]] && continue
-            cmd=$(echo "${cmd}" | sed \
-                -e "s|\\\${SYSROOT}|${SYSROOT}|g" \
-                -e "s|\\\${TOOLS}|${TOOLS}|g" \
-                -e "s|\\\${SOURCES}|${SOURCES}|g" \
-                -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
-                -e "s|\\\${NPROC}|${NPROC}|g" \
-                -e "s|\\\${version}|${version}|g" \
-                -e "s|\\\${PKG}|${PKG}|g")
-            log "  $ ${cmd}"
-            eval "${cmd}" || die "Command failed: ${cmd}"
-        done <<< "${build_commands}"
-    else
-        die "Stage 1 package ${pkg} requires build_commands"
-    fi
-
-    ok "Built ${pkg}"
-}
-
-# Check if Stage 1 package was built (by checking provides)
-stage1_built() {
-    local pkg="$1"
-    local provides=$(awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
-        /^\[/ && found { exit }
-        found && /^provides/ {
-            gsub(/.*\[|\].*/, "")
-            gsub(/\"/, "")
-            gsub(/,/, "\n")
-            print
-            exit
-        }
-    ' "${PACKAGES_FILE}")
-
-    [[ -z "${provides}" ]] && return 1
-
-    local first=$(echo "${provides}" | head -1 | tr -d ' ')
-    # Substitute build environment variables
-    first="${first//\$\{SYSROOT\}/${SYSROOT}}"
-    first="${first//\$\{TOOLS\}/${TOOLS}}"
-    first="${first//\$\{LFS_TGT\}/${LFS_TGT}}"
-    [[ -f "${first}" ]] && return 0
-    return 1
-}
-
-# Build and install a package
+# Build and install a package (all stages use fay)
 build_and_install() {
     local pkg="$1"
     local version=$(get_pkg_version "${pkg}")
-    local stage=$(get_pkg_stage "${pkg}")
-
-    # Stage 1 packages install directly (cross-toolchain)
-    if [[ "${stage}" == "1" ]]; then
-        if stage1_built "${pkg}"; then
-            log "Already built: ${pkg}"
-            return 0
-        fi
-        build_direct "${pkg}"
-        return 0
-    fi
 
     if pkg_installed "${pkg}"; then
         log "Already installed: ${pkg}"

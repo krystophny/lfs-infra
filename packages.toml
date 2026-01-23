@@ -49,12 +49,11 @@ git_url = "git://sourceware.org/git/binutils-gdb.git"
 use_git = false
 checksum_url = "https://ftpmirror.gnu.org/gnu/binutils/binutils-${version}.tar.xz.sig"
 stage = 1
-provides = ["${TOOLS}/bin/${LFS_TGT}-ld"]
 build_commands = [
     "mkdir -p build && cd build",
-    "../configure --prefix=${TOOLS} --with-sysroot=${SYSROOT} --target=${LFS_TGT} --disable-nls --enable-gprofng=no --disable-werror --enable-new-dtags --enable-default-hash-style=gnu",
+    "../configure --prefix=/tools --with-sysroot=/ --target=${LFS_TGT} --disable-nls --enable-gprofng=no --disable-werror --enable-new-dtags --enable-default-hash-style=gnu",
     "make -j${NPROC}",
-    "make install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.gcc]
@@ -76,14 +75,13 @@ version_check = "gcc-snapshot:"
 description = "GCC cross-compiler pass 1"
 source_pkg = "gcc"
 stage = 1
-provides = ["${TOOLS}/bin/${LFS_TGT}-gcc"]
 build_commands = [
     "tar -xf ${SOURCES}/mpfr-*.tar.xz && mv mpfr-* mpfr",
     "tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp",
     "tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --target=${LFS_TGT} --prefix=${TOOLS} --with-glibc-version=2.42 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make install",
-    "cd .. && cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${TOOLS}/bin/${LFS_TGT}-gcc -print-libgcc-file-name))/include/limits.h"
+    "mkdir -p build && cd build && ../configure --target=${LFS_TGT} --prefix=/tools --with-glibc-version=2.42 --with-sysroot=/ --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "cd .. && cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PKG}/tools/bin/${LFS_TGT}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
 [packages.linux-headers]
@@ -92,13 +90,12 @@ version_check = "kernel:"
 description = "Linux kernel headers"
 source_pkg = "linux"
 stage = 1
-provides = ["${SYSROOT}/usr/include/linux/kernel.h"]
 build_commands = [
     "make mrproper",
     "make headers",
     "find usr/include -type f ! -name '*.h' -delete",
-    "mkdir -p ${SYSROOT}/usr/include",
-    "cp -rv usr/include/* ${SYSROOT}/usr/include/"
+    "mkdir -p ${PKG}/usr/include",
+    "cp -rv usr/include/* ${PKG}/usr/include/"
 ]
 
 [packages.glibc]
@@ -111,15 +108,14 @@ use_git = false
 checksum_url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz.sig"
 stage = 1
 safe_flags = true
-provides = ["${SYSROOT}/usr/lib/libc.so.6"]
 build_commands = [
-    "case $(uname -m) in x86_64) mkdir -pv ${SYSROOT}/lib64 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${SYSROOT}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${SYSROOT}/lib64/ld-lsb-x86-64.so.3 ;; esac",
     "mkdir -p build && cd build",
     "echo 'rootsbindir=/usr/sbin' > configparms",
     "../configure --prefix=/usr --host=${LFS_TGT} --build=$(../scripts/config.guess) --enable-kernel=5.4 --with-headers=${SYSROOT}/usr/include --disable-nscd libc_cv_slibdir=/usr/lib",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install",
-    "sed '/RTLDLIST=/s@/usr@@g' -i ${SYSROOT}/usr/bin/ldd"
+    "make DESTDIR=${PKG} install",
+    "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
+    "sed '/RTLDLIST=/s@/usr@@g' -i ${PKG}/usr/bin/ldd"
 ]
 
 # libstdc++ - Standard C++ library (built from gcc source, after glibc)
@@ -129,10 +125,9 @@ version_check = "gcc-snapshot:"
 description = "GNU Standard C++ Library"
 source_pkg = "gcc"
 stage = 1
-provides = ["${SYSROOT}/usr/lib/libstdc++.so"]
 build_commands = [
-    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${SYSROOT} install",
-    "rm -fv ${SYSROOT}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
+    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${LFS_TGT} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/tools/${LFS_TGT}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "rm -fv ${PKG}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
 ]
 
 # =============================================================================
