@@ -375,6 +375,60 @@ elif [[ -L /etc/localtime ]]; then
     cp -P /etc/localtime "${MOUNT_POINT}/etc/"
 fi
 
+# Create basic passwd/group/shadow
+log "Creating user accounts..."
+cat > "${MOUNT_POINT}/etc/passwd" << EOF
+root:x:0:0:root:/root:/bin/bash
+${LFS_USERNAME}:x:1000:1000:${LFS_USERNAME}:/home/${LFS_USERNAME}:/bin/bash
+nobody:x:65534:65534:Unprivileged User:/dev/null:/bin/false
+EOF
+
+cat > "${MOUNT_POINT}/etc/group" << EOF
+root:x:0:
+bin:x:1:
+sys:x:2:
+kmem:x:3:
+tape:x:4:
+tty:x:5:
+daemon:x:6:
+floppy:x:7:
+disk:x:8:
+lp:x:9:
+dialout:x:10:
+audio:x:11:${LFS_USERNAME}
+video:x:12:${LFS_USERNAME}
+utmp:x:13:
+cdrom:x:15:
+adm:x:16:
+mail:x:34:
+wheel:x:97:${LFS_USERNAME}
+nogroup:x:65534:
+${LFS_USERNAME}:x:1000:
+EOF
+
+# Hash password and create shadow (root locked - use sudo)
+HASHED_PW=$(openssl passwd -6 "${LFS_PASSWORD}")
+cat > "${MOUNT_POINT}/etc/shadow" << EOF
+root:!:19000:0:99999:7:::
+${LFS_USERNAME}:${HASHED_PW}:19000:0:99999:7:::
+nobody:!:19000:0:99999:7:::
+EOF
+chmod 600 "${MOUNT_POINT}/etc/shadow"
+
+# Configure sudo for wheel group (passwordless)
+mkdir -p "${MOUNT_POINT}/etc/sudoers.d"
+cat > "${MOUNT_POINT}/etc/sudoers.d/wheel" << 'EOF'
+%wheel ALL=(ALL:ALL) NOPASSWD: ALL
+EOF
+chmod 440 "${MOUNT_POINT}/etc/sudoers.d/wheel"
+
+# Create home directory
+mkdir -p "${MOUNT_POINT}/home/${LFS_USERNAME}"
+chown 1000:1000 "${MOUNT_POINT}/home/${LFS_USERNAME}"
+chmod 755 "${MOUNT_POINT}/home/${LFS_USERNAME}"
+
+ok "User ${LFS_USERNAME} created (sudo via wheel, root locked)"
+
 # Network configuration
 mkdir -p "${MOUNT_POINT}/etc/iwd" "${MOUNT_POINT}/var/lib/iwd"
 
