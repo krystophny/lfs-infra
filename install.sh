@@ -38,7 +38,6 @@ Arguments:
 
 Options:
     -m, --mount PATH    Mount point (default: /mnt/lfs)
-    -s, --swap SIZE     Swap partition size (default: 16G, 0 to disable)
     -u, --user NAME     Username
     -p, --password PASS Password
     -y, --yes           Skip confirmation prompts
@@ -48,7 +47,6 @@ Options:
 Environment Variables (.env file):
     LFS_DEVICE          Target device
     LFS_MOUNT           Mount point
-    LFS_SWAP_SIZE       Swap size (0 to disable)
     LFS_USERNAME        Username
     LFS_PASSWORD        Password
     LFS_HOSTNAME        Hostname (default: lfs)
@@ -63,7 +61,7 @@ Examples:
     sudo ./install.sh --yes /dev/nvme0n1
 
     # Specify options
-    sudo ./install.sh -u myuser -s 32G /dev/sda
+    sudo ./install.sh -u myuser /dev/sda
 
 EOF
     exit 0
@@ -87,7 +85,6 @@ load_env ".env"
 
 # Defaults (can be overridden by .env or CLI)
 MOUNT_POINT="${LFS_MOUNT:-/mnt/lfs}"
-SWAP_SIZE="${LFS_SWAP_SIZE:-16G}"
 LFS_USERNAME="${LFS_USERNAME:-}"
 LFS_PASSWORD="${LFS_PASSWORD:-}"
 LFS_HOSTNAME="${LFS_HOSTNAME:-lfs}"
@@ -99,7 +96,6 @@ DEVICE="${LFS_DEVICE:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -m|--mount) MOUNT_POINT="$2"; shift 2 ;;
-        -s|--swap) SWAP_SIZE="$2"; shift 2 ;;
         -u|--user) LFS_USERNAME="$2"; shift 2 ;;
         -p|--password) LFS_PASSWORD="$2"; shift 2 ;;
         -y|--yes) SKIP_CONFIRM=1; shift ;;
@@ -133,7 +129,6 @@ export MAKEFLAGS="-j${NPROC}"
 header "LFS Installation"
 echo "Target:      ${DEVICE}"
 echo "Mount:       ${MOUNT_POINT}"
-echo "Swap:        ${SWAP_SIZE}"
 echo "Hostname:    ${LFS_HOSTNAME}"
 echo "CPU cores:   ${NPROC}"
 echo ""
@@ -182,7 +177,6 @@ header "Partitioning ${DEVICE}"
 for part in "${DEVICE}"*; do
     umount "${part}" 2>/dev/null || true
 done
-swapoff -a 2>/dev/null || true
 
 # Create GPT partition table
 log "Creating GPT partition table..."
@@ -195,29 +189,13 @@ else
     PART_PREFIX="${DEVICE}"
 fi
 
-# Create partitions: EFI (512M), Swap (optional), Root (btrfs)
+# Create partitions: EFI (512M), Root (ext4)
 parted -s "${DEVICE}" mkpart ESP fat32 1MiB 513MiB
 parted -s "${DEVICE}" set 1 esp on
+parted -s "${DEVICE}" mkpart root ext4 513MiB 100%
 
-NEXT_START=513
-if [[ "${SWAP_SIZE}" != "0" ]]; then
-    case "${SWAP_SIZE}" in
-        *M) SWAP_MIB="${SWAP_SIZE%M}" ;;
-        *G) SWAP_MIB="$((${SWAP_SIZE%G} * 1024))" ;;
-        *) SWAP_MIB="${SWAP_SIZE}" ;;
-    esac
-    SWAP_END=$((NEXT_START + SWAP_MIB))
-    parted -s "${DEVICE}" mkpart swap linux-swap "${NEXT_START}MiB" "${SWAP_END}MiB"
-    NEXT_START="${SWAP_END}"
-    SWAP_PART="${PART_PREFIX}2"
-    ROOT_PART="${PART_PREFIX}3"
-else
-    ROOT_PART="${PART_PREFIX}2"
-    SWAP_PART=""
-fi
-
-parted -s "${DEVICE}" mkpart root btrfs "${NEXT_START}MiB" 100%
 EFI_PART="${PART_PREFIX}1"
+ROOT_PART="${PART_PREFIX}2"
 
 sleep 2  # Wait for partitions to appear
 
@@ -226,11 +204,6 @@ header "Formatting (ext4)"
 
 log "Formatting EFI partition (FAT32)..."
 mkfs.fat -F32 -n EFI "${EFI_PART}"
-
-if [[ -n "${SWAP_PART}" ]]; then
-    log "Setting up swap..."
-    mkswap -L swap "${SWAP_PART}"
-fi
 
 log "Formatting root partition (ext4)..."
 mkfs.ext4 -L lfs-root "${ROOT_PART}"
@@ -241,8 +214,6 @@ mkdir -p "${MOUNT_POINT}"
 mount -o noatime "${ROOT_PART}" "${MOUNT_POINT}"
 mkdir -p "${MOUNT_POINT}/boot/efi"
 mount "${EFI_PART}" "${MOUNT_POINT}/boot/efi"
-
-[[ -n "${SWAP_PART}" ]] && swapon "${SWAP_PART}"
 
 ok "Filesystem ready (ext4)"
 
@@ -284,15 +255,10 @@ ROOT_UUID=$(blkid -s UUID -o value "${ROOT_PART}")
 EFI_UUID=$(blkid -s UUID -o value "${EFI_PART}")
 
 cat > "${MOUNT_POINT}/etc/fstab" << EOF
-# /etc/fstab - LFS (ext4)
+# /etc/fstab - LFS (ext4, no swap - 96GB RAM is plenty)
 UUID=${ROOT_UUID}  /            ext4   noatime      0 1
 UUID=${EFI_UUID}   /boot/efi    vfat   umask=0077   0 2
 EOF
-
-if [[ -n "${SWAP_PART}" ]]; then
-    SWAP_UUID=$(blkid -s UUID -o value "${SWAP_PART}")
-    echo "UUID=${SWAP_UUID}  none         swap   sw  0 0" >> "${MOUNT_POINT}/etc/fstab"
-fi
 
 cat >> "${MOUNT_POINT}/etc/fstab" << EOF
 
@@ -347,17 +313,17 @@ grub-install --target=x86_64-efi \
     --removable
 
 cat > "${MOUNT_POINT}/boot/grub/grub.cfg" << EOF
+# GRUB config for LFS - instant boot (hold SHIFT for menu)
 set default=0
-set timeout=3
+set timeout=0
+set timeout_style=hidden
 
 menuentry "LFS" {
-    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet
-    initrd /boot/initrd.img
+    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet loglevel=3 amd_pstate=active
 }
 
 menuentry "LFS (recovery)" {
     linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro single
-    initrd /boot/initrd.img
 }
 EOF
 
@@ -592,7 +558,6 @@ header "Installation Complete!"
 log "Unmounting filesystems..."
 sync
 umount -R "${MOUNT_POINT}" || umount -l "${MOUNT_POINT}"
-[[ -n "${SWAP_PART}" ]] && swapoff "${SWAP_PART}" 2>/dev/null || true
 
 echo ""
 ok "LFS installed to ${DEVICE}"

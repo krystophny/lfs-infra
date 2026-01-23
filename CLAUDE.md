@@ -70,7 +70,6 @@ From `.env` or command line:
 | LFS_USERNAME | (prompt) | Username |
 | LFS_PASSWORD | (prompt) | Password |
 | LFS_HOSTNAME | lfs | Hostname |
-| LFS_SWAP_SIZE | 16G | Swap size (0 to disable) |
 | WIFI_SSID | - | WiFi network |
 | WIFI_PASSWORD | - | WiFi password |
 | LAN_IP | - | Static IP |

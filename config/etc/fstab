@@ -7,11 +7,8 @@
 # EFI System Partition (if using UEFI)
 /dev/sda1       /boot/efi       vfat    defaults,noatime        0 2
 
-# Swap partition (optional)
-#/dev/sda3      swap            swap    defaults                0 0
-
-# Tmpfs for /tmp (recommended for performance)
-tmpfs           /tmp            tmpfs   defaults,nosuid,nodev,size=4G   0 0
+# Tmpfs for /tmp (90% of RAM - with 96GB, no swap needed)
+tmpfs           /tmp            tmpfs   defaults,nosuid,nodev,size=90%  0 0
 
 # Tmpfs for /run
 tmpfs           /run            tmpfs   defaults,nosuid,nodev,mode=755  0 0

@@ -132,7 +132,6 @@ Check for package updates:
 | LFS_USERNAME | (prompt) | System username |
 | LFS_PASSWORD | (prompt) | User password |
 | LFS_HOSTNAME | lfs | System hostname |
-| LFS_SWAP_SIZE | 16G | Swap partition size |
 | LFS_TIMEZONE | (from host) | System timezone |
 | NPROC | (auto) | Parallel build jobs |
 
