@@ -176,6 +176,7 @@ build_direct() {
     cd "${work_dir}/src"
     (
         # Source the Pkgfile to get build()
+        export PKG="${LFS}"  # Stage 1 installs directly to LFS root
         source "${pkgfile_dir}/Pkgfile"
         # Run build
         set -x
