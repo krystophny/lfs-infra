@@ -6,7 +6,6 @@ FC := gfortran
 CC := gcc
 
 # LFS_GENERIC_BUILD=1 for USB (portable), else native optimization
-# Note: -static removed - needs libgfortran-static which isn't always available
 ifeq ($(LFS_GENERIC_BUILD),1)
     FFLAGS ?= -O3 -march=x86-64-v2 -mtune=generic -flto
     CFLAGS ?= -O3 -march=x86-64-v2 -mtune=generic -flto
@@ -14,6 +13,9 @@ else
     FFLAGS ?= -O3 -march=native -mtune=native -flto
     CFLAGS ?= -O3 -march=native -mtune=native -flto
 endif
+
+# Static linking flags for portable binary (no runtime deps)
+STATIC_LDFLAGS = -static-libgfortran -static-libgcc
 
 PREFIX ?= /usr
 DESTDIR ?=
@@ -34,23 +36,27 @@ LIBARCHIVE_CONF = --disable-shared --enable-static \
 # Full libarchive (all compression)
 LIBARCHIVE_CONF_FULL = --disable-shared --enable-static
 
-.PHONY: all clean install bootstrap full
+.PHONY: all clean install bootstrap full static
 
 all: fay
 
-# Bootstrap: minimal deps for early LFS
+# Bootstrap: minimal deps for early LFS (statically linked gfortran)
 bootstrap: fay-bootstrap
 
 # Full: all compression support
 full: LIBARCHIVE_CONF := $(LIBARCHIVE_CONF_FULL)
 full: fay
 
+# Fully static: zero runtime dependencies (needs static libs on build host)
+static: STATIC_LDFLAGS = -static
+static: fay-bootstrap
+
 fay: fay.f90 $(LIBARCHIVE_A)
-	$(FC) $(FFLAGS) -o $@ $< -I$(LIBARCHIVE_DIR)/libarchive \
+	$(FC) $(FFLAGS) $(STATIC_LDFLAGS) -o $@ $< -I$(LIBARCHIVE_DIR)/libarchive \
 		$(LIBARCHIVE_A) -lz -llzma -lpthread
 
 fay-bootstrap: fay.f90 $(LIBARCHIVE_A)
-	$(FC) $(FFLAGS) -o fay $< -I$(LIBARCHIVE_DIR)/libarchive \
+	$(FC) $(FFLAGS) $(STATIC_LDFLAGS) -o fay $< -I$(LIBARCHIVE_DIR)/libarchive \
 		$(LIBARCHIVE_A) -lz -lpthread
 
 $(LIBARCHIVE_A): $(LIBARCHIVE_DIR)/Makefile

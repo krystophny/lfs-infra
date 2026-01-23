@@ -19,8 +19,16 @@ export NPROC="$(nproc)"
 export MAKEFLAGS="-j${NPROC}"
 export FORCE_UNSAFE_CONFIGURE=1
 
+# Build environment variables (used by packages.toml commands)
+# SYSROOT: where target files go (e.g., headers, libraries)
+# TOOLS: cross-toolchain location
+# SOURCES: source tarballs location
+export SYSROOT="${LFS}"
+export TOOLS="${LFS}/tools"
+export SOURCES="${LFS}/sources"
+
 # Paths
-SOURCES_DIR="${LFS}/sources"
+SOURCES_DIR="${SOURCES}"
 PKG_CACHE="${LFS}/pkg"
 BUILD_DIR="${LFS}/build"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
@@ -163,7 +171,9 @@ build_package() {
         while IFS= read -r cmd; do
             [[ -z "${cmd}" ]] && continue
             cmd=$(echo "${cmd}" | sed \
-                -e "s|\\\${LFS}|${LFS}|g" \
+                -e "s|\\\${SYSROOT}|${SYSROOT}|g" \
+                -e "s|\\\${TOOLS}|${TOOLS}|g" \
+                -e "s|\\\${SOURCES}|${SOURCES}|g" \
                 -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
                 -e "s|\\\${NPROC}|${NPROC}|g" \
                 -e "s|\\\${version}|${version}|g" \
@@ -218,7 +228,9 @@ build_direct() {
         while IFS= read -r cmd; do
             [[ -z "${cmd}" ]] && continue
             cmd=$(echo "${cmd}" | sed \
-                -e "s|\\\${LFS}|${LFS}|g" \
+                -e "s|\\\${SYSROOT}|${SYSROOT}|g" \
+                -e "s|\\\${TOOLS}|${TOOLS}|g" \
+                -e "s|\\\${SOURCES}|${SOURCES}|g" \
                 -e "s|\\\${LFS_TGT}|${LFS_TGT}|g" \
                 -e "s|\\\${NPROC}|${NPROC}|g" \
                 -e "s|\\\${version}|${version}|g" \
@@ -251,7 +263,9 @@ stage1_built() {
     [[ -z "${provides}" ]] && return 1
 
     local first=$(echo "${provides}" | head -1 | tr -d ' ')
-    first="${first//\$\{LFS\}/${LFS}}"
+    # Substitute build environment variables
+    first="${first//\$\{SYSROOT\}/${SYSROOT}}"
+    first="${first//\$\{TOOLS\}/${TOOLS}}"
     first="${first//\$\{LFS_TGT\}/${LFS_TGT}}"
     [[ -f "${first}" ]] && return 0
     return 1
@@ -290,6 +304,55 @@ build_and_install() {
 # ============================================================
 # Bootstrap fay
 # ============================================================
+
+# Ensure sys/sdt.h is available for libstdcxx cross-compilation
+setup_sdt_header() {
+    local sdt_target="${LFS}/usr/include/sys/sdt.h"
+    if [[ -f "${sdt_target}" ]]; then
+        return 0
+    fi
+
+    log "Setting up sys/sdt.h for libstdcxx..."
+    mkdir -p "$(dirname "${sdt_target}")"
+
+    # Try to copy from host first
+    if [[ -f "/usr/include/sys/sdt.h" ]]; then
+        cp "/usr/include/sys/sdt.h" "${sdt_target}"
+        ok "Copied sys/sdt.h from host"
+        return 0
+    fi
+
+    # Create minimal stub if host doesn't have it
+    cat > "${sdt_target}" << 'EOF'
+/* Minimal sys/sdt.h stub for libstdc++ cross-compilation */
+#ifndef _SYS_SDT_H
+#define _SYS_SDT_H
+
+#define STAP_PROBE(provider, name)
+#define STAP_PROBE1(provider, name, arg1)
+#define STAP_PROBE2(provider, name, arg1, arg2)
+#define STAP_PROBE3(provider, name, arg1, arg2, arg3)
+#define STAP_PROBE4(provider, name, arg1, arg2, arg3, arg4)
+#define STAP_PROBE5(provider, name, arg1, arg2, arg3, arg4, arg5)
+#define STAP_PROBE6(provider, name, arg1, arg2, arg3, arg4, arg5, arg6)
+#define STAP_PROBE7(provider, name, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+#define STAP_PROBE8(provider, name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+#define STAP_PROBE9(provider, name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+#define STAP_PROBE10(provider, name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+#define STAP_PROBE11(provider, name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+#define STAP_PROBE12(provider, name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12)
+
+#define DTRACE_PROBE(provider, name) STAP_PROBE(provider, name)
+#define DTRACE_PROBE1(provider, name, arg1) STAP_PROBE1(provider, name, arg1)
+#define DTRACE_PROBE2(provider, name, arg1, arg2) STAP_PROBE2(provider, name, arg1, arg2)
+#define DTRACE_PROBE3(provider, name, arg1, arg2, arg3) STAP_PROBE3(provider, name, arg1, arg2, arg3)
+#define DTRACE_PROBE4(provider, name, arg1, arg2, arg3, arg4) STAP_PROBE4(provider, name, arg1, arg2, arg3, arg4)
+#define DTRACE_PROBE5(provider, name, arg1, arg2, arg3, arg4, arg5) STAP_PROBE5(provider, name, arg1, arg2, arg3, arg4, arg5)
+
+#endif /* _SYS_SDT_H */
+EOF
+    ok "Created sys/sdt.h stub"
+}
 
 bootstrap_fay() {
     stage_start "Bootstrapping fay (Fast Archive Yielder)"
@@ -408,6 +471,7 @@ main() {
         minimal)
             download_sources 5
             bootstrap_fay
+            setup_sdt_header
             build_stage 1 "Cross-Toolchain"
             build_stage 2 "Temporary Tools"
             build_stage 3 "Base System"
@@ -417,6 +481,7 @@ main() {
         all)
             download_sources
             bootstrap_fay
+            setup_sdt_header
             build_stage 1 "Cross-Toolchain"
             build_stage 2 "Temporary Tools"
             build_stage 3 "Base System"

@@ -180,23 +180,28 @@ DOCKER_PLATFORM=""
 [[ "${OS}" == "Darwin" ]] && DOCKER_PLATFORM="--platform linux/amd64"
 
 cat > "${OUTPUT_DIR}/Dockerfile" <<'DOCKERFILE'
-FROM archlinux:latest
+FROM fedora:rawhide
 
-RUN pacman -Syu --noconfirm && \
-    pacman -S --noconfirm --needed \
-        base-devel git vim wget curl \
+# Fedora Rawhide has GCC 15.x and ships static libraries
+RUN dnf -y update && \
+    dnf -y install \
+        @development-tools \
+        gcc gcc-c++ gcc-gfortran \
+        glibc-static libstdc++-static libgfortran-static \
+        git vim wget curl \
         bison flex texinfo gawk m4 \
-        python python-pip \
+        python3 python3-pip \
         dosfstools e2fsprogs btrfs-progs parted \
-        grub efibootmgr \
-        bc libelf openssl \
-        cpio xz zstd lz4 \
-        perl perl-xml-parser \
-        meson ninja cmake \
+        grub2-tools grub2-efi-x64 efibootmgr \
+        bc elfutils-libelf-devel openssl-devel libarchive-devel \
+        cpio xz xz-devel zstd lz4 zlib-devel \
+        perl perl-XML-Parser \
+        meson ninja-build cmake \
         autoconf automake libtool pkgconf \
         patch diffutils rsync \
-        iproute2 wpa_supplicant dhcpcd openssh \
-        && pacman -Scc --noconfirm
+        iproute wpa_supplicant dhcp-client openssh-server \
+        systemtap-sdt-devel \
+        && dnf clean all
 
 RUN useradd -m lfs && echo "lfs ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 WORKDIR /lfs-build
