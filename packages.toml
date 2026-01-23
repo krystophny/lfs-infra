@@ -49,7 +49,7 @@ source_pkg = "binutils"
 stage = 1
 build_commands = [
     "mkdir -p build && cd build",
-    "../configure --prefix=/tools --with-sysroot=${LFS} --target=${LFS_TGT} --disable-nls --enable-gprofng=no --disable-werror --enable-new-dtags --enable-default-hash-style=gnu",
+    "../configure --prefix=/tools --with-sysroot=${SYSROOT} --target=${LFS_TGT} --disable-nls --enable-gprofng=no --disable-werror --enable-new-dtags --enable-default-hash-style=gnu",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
@@ -96,7 +96,7 @@ build_commands = [
     "tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp",
     "tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --target=${LFS_TGT} --prefix=/tools --with-glibc-version=2.42 --with-sysroot=${LFS} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "mkdir -p build && cd build && ../configure --target=${LFS_TGT} --prefix=/tools --with-glibc-version=2.42 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
     "cd .. && cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PKG}/tools/bin/${LFS_TGT}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
@@ -125,7 +125,7 @@ safe_flags = true
 build_commands = [
     "mkdir -p build && cd build",
     "echo 'rootsbindir=/usr/sbin' > configparms",
-    "../configure --prefix=/usr --host=${LFS_TGT} --build=$(../scripts/config.guess) --enable-kernel=5.4 --with-headers=${LFS}/usr/include --disable-nscd libc_cv_slibdir=/usr/lib",
+    "../configure --prefix=/usr --host=${LFS_TGT} --build=$(../scripts/config.guess) --enable-kernel=5.4 --with-headers=${SYSROOT}/usr/include --disable-nscd libc_cv_slibdir=/usr/lib",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install",
     "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
