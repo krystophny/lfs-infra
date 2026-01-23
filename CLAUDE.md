@@ -100,7 +100,7 @@ build_commands = [
 
 ## Filesystem
 
-- **btrfs** with zstd compression
+- **btrfs** with lzo compression
 - Subvolumes: `@` (root), `@home`, `@snapshots`
 - Automatic `fresh-install` snapshot created
 

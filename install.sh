@@ -246,15 +246,15 @@ umount "${MOUNT_POINT}"
 
 # Mount with subvolumes and compression
 log "Mounting filesystems..."
-mount -o subvol=@,compress=zstd:3,noatime "${ROOT_PART}" "${MOUNT_POINT}"
+mount -o subvol=@,compress=lzo,noatime "${ROOT_PART}" "${MOUNT_POINT}"
 mkdir -p "${MOUNT_POINT}/home" "${MOUNT_POINT}/.snapshots" "${MOUNT_POINT}/boot/efi"
-mount -o subvol=@home,compress=zstd:3,noatime "${ROOT_PART}" "${MOUNT_POINT}/home"
-mount -o subvol=@snapshots,compress=zstd:3,noatime "${ROOT_PART}" "${MOUNT_POINT}/.snapshots"
+mount -o subvol=@home,compress=lzo,noatime "${ROOT_PART}" "${MOUNT_POINT}/home"
+mount -o subvol=@snapshots,compress=lzo,noatime "${ROOT_PART}" "${MOUNT_POINT}/.snapshots"
 mount "${EFI_PART}" "${MOUNT_POINT}/boot/efi"
 
 [[ -n "${SWAP_PART}" ]] && swapon "${SWAP_PART}"
 
-ok "Filesystem ready (btrfs with zstd compression)"
+ok "Filesystem ready (btrfs with lzo compression)"
 
 # ============================================================================
 # Step 3: Create Directory Structure
@@ -286,10 +286,10 @@ ROOT_UUID=$(blkid -s UUID -o value "${ROOT_PART}")
 EFI_UUID=$(blkid -s UUID -o value "${EFI_PART}")
 
 cat > "${MOUNT_POINT}/etc/fstab" << EOF
-# /etc/fstab - LFS (btrfs with zstd compression)
-UUID=${ROOT_UUID}  /            btrfs  subvol=@,compress=zstd:3,noatime  0 1
-UUID=${ROOT_UUID}  /home        btrfs  subvol=@home,compress=zstd:3,noatime  0 2
-UUID=${ROOT_UUID}  /.snapshots  btrfs  subvol=@snapshots,compress=zstd:3,noatime  0 2
+# /etc/fstab - LFS (btrfs with lzo compression)
+UUID=${ROOT_UUID}  /            btrfs  subvol=@,compress=lzo,noatime  0 1
+UUID=${ROOT_UUID}  /home        btrfs  subvol=@home,compress=lzo,noatime  0 2
+UUID=${ROOT_UUID}  /.snapshots  btrfs  subvol=@snapshots,compress=lzo,noatime  0 2
 UUID=${EFI_UUID}   /boot/efi    vfat   umask=0077  0 2
 EOF
 

@@ -42,7 +42,7 @@ sudo ./install.sh --yes /dev/nvme0n1
 
 - **Bleeding-edge packages**: GCC 16, Linux 6.18, glibc 2.42
 - **Btrfs with snapshots**: Automatic `fresh-install` snapshot, easy rollback
-- **Zstd compression**: Transparent filesystem compression
+- **LZO compression**: Fast transparent filesystem compression
 - **Performance optimized**: `-O3 -march=native -mtune=native` by default
 - **Minimal package manager**: `pk` - 120 lines of shell, zero dependencies
 
