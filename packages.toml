@@ -75,7 +75,7 @@ url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz"
 git_url = "git://gcc.gnu.org/git/gcc.git"
 use_git = false
 checksum_url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/sha512.sum"
-stage = 1
+stage = 3
 depends = ["gmp", "mpfr", "mpc"]
 languages = "c,c++,fortran"
 

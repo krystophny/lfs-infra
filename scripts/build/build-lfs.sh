@@ -53,9 +53,19 @@ get_pkg_field() {
     ' "${PACKAGES_FILE}"
 }
 
+# Get numeric field (no quotes)
+get_pkg_num_field() {
+    local pkg="$1" field="$2"
+    awk -v pkg="[packages.${pkg}]" -v field="${field}" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && $0 ~ "^"field" *= *[0-9]" { gsub(/.*= */, ""); print; exit }
+    ' "${PACKAGES_FILE}"
+}
+
 get_pkg_version() { get_pkg_field "$1" "version"; }
 get_pkg_description() { get_pkg_field "$1" "description"; }
-get_pkg_stage() { get_pkg_field "$1" "stage"; }
+get_pkg_stage() { get_pkg_num_field "$1" "stage"; }
 get_pkg_source_pkg() { get_pkg_field "$1" "source_pkg"; }
 
 get_pkg_url() {
@@ -136,10 +146,83 @@ pkg_install() {
     ok "Installed ${pkg}"
 }
 
+# Build package directly (for cross-toolchain stage)
+build_direct() {
+    local pkg="$1"
+    local pkgfile_dir="${PKGFILES_DIR}/${pkg}"
+    local version=$(get_pkg_version "${pkg}")
+
+    [[ -f "${pkgfile_dir}/Pkgfile" ]] || die "No Pkgfile for ${pkg}"
+
+    log "Building ${pkg} (direct install)..."
+
+    # Get source URL and download
+    local url=$(grep "^source=" "${pkgfile_dir}/Pkgfile" | sed 's/source=(\(.*\))/\1/')
+    local filename=$(basename "${url}")
+    local tarball="${SOURCES_DIR}/${filename}"
+
+    # Create work directory
+    local work_dir="${LFS}/build/${pkg}"
+    rm -rf "${work_dir}"
+    mkdir -p "${work_dir}/src"
+
+    # Extract source
+    tar -xf "${tarball}" -C "${work_dir}/src" || die "Extract failed for ${pkg}"
+
+    # Run build function from Pkgfile
+    cd "${work_dir}/src"
+    (
+        # Source the Pkgfile to get build()
+        source "${pkgfile_dir}/Pkgfile"
+        # Run build
+        set -x
+        build
+    ) || die "Build failed for ${pkg}"
+
+    ok "Built ${pkg}"
+}
+
+# Check if Stage 1 package was built (by checking provides)
+stage1_built() {
+    local pkg="$1"
+    local provides=$(awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^provides/ {
+            gsub(/.*\[|\].*/, "")
+            gsub(/\"/, "")
+            gsub(/,/, "\n")
+            print
+            exit
+        }
+    ' "${PACKAGES_FILE}")
+
+    [[ -z "${provides}" ]] && return 1
+
+    # Check if first provided file exists
+    local first=$(echo "${provides}" | head -1 | tr -d ' ')
+    # Expand variables
+    first="${first//\$\{LFS\}/${LFS}}"
+    first="${first//\$\{LFS_TGT\}/${LFS_TGT}}"
+    [[ -f "${first}" ]] && return 0
+    return 1
+}
+
 # Build and install a package
 build_and_install() {
     local pkg="$1"
     local version=$(get_pkg_version "${pkg}")
+    local stage=$(get_pkg_stage "${pkg}")
+
+    # Stage 1 packages install directly (cross-toolchain)
+    if [[ "${stage}" == "1" ]]; then
+        if stage1_built "${pkg}"; then
+            log "Already built: ${pkg}"
+            return 0
+        fi
+        build_direct "${pkg}"
+        return 0
+    fi
 
     if pkg_installed "${pkg}"; then
         log "Already installed: ${pkg}"
