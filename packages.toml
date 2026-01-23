@@ -50,7 +50,7 @@ source_pkg = "binutils"
 stage = 1
 build_order = 1
 build_commands = [
-    "mkdir -p build && cd build && ../configure --prefix=/tools --with-sysroot=${SYSROOT} --target=${TARGET} --disable-nls --enable-gprofng=no --disable-werror --enable-new-dtags --enable-default-hash-style=gnu && make -j${NPROC} && make DESTDIR=${PKG} install"
+    "mkdir -p build && cd build && ../configure --prefix=/var/tmp/lfs-bootstrap --with-sysroot=${SYSROOT} --target=${TARGET} --disable-nls --enable-gprofng=no --disable-werror --enable-new-dtags --enable-default-hash-style=gnu && make -j${NPROC} && make DESTDIR=${PKG} install"
 ]
 
 # Final native binutils
@@ -96,8 +96,8 @@ depends = ["binutils-pass1"]
 build_commands = [
     "tar -xf ${SOURCES}/mpfr-*.tar.xz && mv mpfr-* mpfr && tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp && tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --target=${TARGET} --prefix=/tools --with-glibc-version=2.42 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
-    "cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PKG}/tools/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h"
+    "mkdir -p build && cd build && ../configure --target=${TARGET} --prefix=/var/tmp/lfs-bootstrap --with-glibc-version=2.42 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PKG}/var/tmp/lfs-bootstrap/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
 # Linux headers - can build in parallel with gcc-pass1
@@ -163,7 +163,7 @@ stage = 1
 build_order = 5
 depends = ["glibc-pass1"]
 build_commands = [
-    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${TARGET} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/tools/${TARGET}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${PKG} install && rm -fv ${PKG}/usr/lib/lib{stdc++{,exp,fs},supc++}.la"
+    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${TARGET} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/var/tmp/lfs-bootstrap/${TARGET}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${PKG} install && rm -fv ${PKG}/usr/lib/lib{stdc++{,exp,fs},supc++}.la"
 ]
 
 # Final native libstdc++ (built as part of gcc, but can be built separately)
@@ -195,8 +195,8 @@ build_commands = [
     "tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp",
     "tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${TARGET} --target=${TARGET} LDFLAGS_FOR_TARGET=-L${PWD}/${TARGET}/libgcc --prefix=/usr --with-build-sysroot=${SYSROOT} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${SYSROOT} install",
-    "ln -sv gcc ${SYSROOT}/usr/bin/cc"
+    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${TARGET} --target=${TARGET} LDFLAGS_FOR_TARGET=-L${PWD}/${TARGET}/libgcc --prefix=/usr --with-build-sysroot=${SYSROOT} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "ln -sv gcc ${PKG}/usr/bin/cc"
 ]
 
 [packages.m4]
@@ -211,7 +211,7 @@ provides = ["${SYSROOT}/usr/bin/m4"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(build-aux/config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.ncurses]
@@ -227,9 +227,9 @@ build_commands = [
     "mkdir -p build && pushd build && ../configure AWK=gawk && make -C include && make -C progs tic && popd",
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess) --mandir=/usr/share/man --with-manpage-format=normal --with-shared --without-normal --without-cxx-binding --without-debug --without-ada --disable-stripping",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} TIC_PATH=$(pwd)/build/progs/tic install",
-    "ln -svf libncursesw.so ${SYSROOT}/usr/lib/libncurses.so",
-    "sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${SYSROOT}/usr/include/curses.h"
+    "make DESTDIR=${PKG} TIC_PATH=$(pwd)/build/progs/tic install",
+    "ln -svf libncursesw.so ${PKG}/usr/lib/libncurses.so",
+    "sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${PKG}/usr/include/curses.h"
 ]
 
 [packages.bash]
@@ -244,8 +244,8 @@ provides = ["${SYSROOT}/usr/bin/bash"]
 build_commands = [
     "./configure --prefix=/usr --build=$(sh support/config.guess) --host=${TARGET} --without-bash-malloc bash_cv_strtold_broken=no",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install",
-    "ln -svf bash ${SYSROOT}/usr/bin/sh"
+    "make DESTDIR=${PKG} install",
+    "ln -svf bash ${PKG}/usr/bin/sh"
 ]
 
 [packages.coreutils]
@@ -260,8 +260,8 @@ provides = ["${SYSROOT}/usr/bin/ls"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(build-aux/config.guess) --enable-install-program=hostname",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install",
-    "mv -v ${SYSROOT}/usr/bin/chroot ${SYSROOT}/usr/sbin"
+    "make DESTDIR=${PKG} install",
+    "mv -v ${PKG}/usr/bin/chroot ${PKG}/usr/sbin"
 ]
 
 [packages.diffutils]
@@ -276,7 +276,7 @@ provides = ["${SYSROOT}/usr/bin/diff"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess) gl_cv_func_strcasecmp_works=yes",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.file]
@@ -292,8 +292,8 @@ build_commands = [
     "mkdir -p build && pushd build && ../configure --disable-bzlib --disable-libseccomp --disable-xzlib --disable-zlib && make && popd",
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess)",
     "make FILE_COMPILE=$(pwd)/build/src/file -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install",
-    "rm -v ${SYSROOT}/usr/lib/libmagic.la"
+    "make DESTDIR=${PKG} install",
+    "rm -v ${PKG}/usr/lib/libmagic.la"
 ]
 
 [packages.findutils]
@@ -308,7 +308,7 @@ provides = ["${SYSROOT}/usr/bin/find"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess) --localstatedir=/var/lib/locate gl_cv_func_wcwidth_works=yes",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.gawk]
@@ -324,7 +324,7 @@ build_commands = [
     "sed -i 's/extras//' Makefile.in",
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.grep]
@@ -339,7 +339,7 @@ provides = ["${SYSROOT}/usr/bin/grep"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.gzip]
@@ -354,7 +354,7 @@ provides = ["${SYSROOT}/usr/bin/gzip"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.make]
@@ -369,7 +369,7 @@ provides = ["${SYSROOT}/usr/bin/make"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(build-aux/config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.patch]
@@ -384,7 +384,7 @@ provides = ["${SYSROOT}/usr/bin/patch"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.sed]
@@ -399,7 +399,7 @@ provides = ["${SYSROOT}/usr/bin/sed"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.tar]
@@ -414,7 +414,7 @@ provides = ["${SYSROOT}/usr/bin/tar"]
 build_commands = [
     "FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr --host=${TARGET} --build=$(build-aux/config.guess)",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install"
+    "make DESTDIR=${PKG} install"
 ]
 
 [packages.xz]
@@ -429,8 +429,8 @@ provides = ["${SYSROOT}/usr/bin/xz"]
 build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess) --disable-static --docdir=/usr/share/doc/xz-${version}",
     "make -j${NPROC}",
-    "make DESTDIR=${SYSROOT} install",
-    "rm -v ${SYSROOT}/usr/lib/liblzma.la"
+    "make DESTDIR=${PKG} install",
+    "rm -v ${PKG}/usr/lib/liblzma.la"
 ]
 
 # Binutils Pass 2 - Cross binutils for temp tools (after glibc)
@@ -442,8 +442,8 @@ source_pkg = "binutils"
 stage = 2
 provides = ["${SYSROOT}/usr/bin/ld"]
 build_commands = [
-    "mkdir -p build && cd build && ../configure --prefix=/usr --build=$(../config.guess) --host=${TARGET} --disable-nls --enable-shared --enable-gprofng=no --disable-werror --enable-64-bit-bfd --enable-new-dtags --enable-default-hash-style=gnu && make -j${NPROC} && make DESTDIR=${SYSROOT} install",
-    "rm -v ${SYSROOT}/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}"
+    "mkdir -p build && cd build && ../configure --prefix=/usr --build=$(../config.guess) --host=${TARGET} --disable-nls --enable-shared --enable-gprofng=no --disable-werror --enable-64-bit-bfd --enable-new-dtags --enable-default-hash-style=gnu && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "rm -v ${PKG}/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}"
 ]
 
 # =============================================================================
@@ -959,6 +959,35 @@ url = "https://github.com/cronie-crond/cronie/releases/download/cronie-${version
 git_url = "https://github.com/cronie-crond/cronie.git"
 use_git = false
 stage = 7
+
+[packages.rsync]
+version = "3.4.1"
+version_check = "url:https://rsync.samba.org/|rsync-([0-9]+\\.[0-9]+\\.[0-9]+)"
+description = "Fast incremental file transfer"
+url = "https://rsync.samba.org/ftp/rsync/src/rsync-${version}.tar.gz"
+git_url = "https://github.com/WayneD/rsync.git"
+use_git = false
+stage = 7
+build_commands = [
+    "./configure --prefix=/usr --disable-debug --with-included-zlib=no --with-included-popt=no",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
+[packages.rsnapshot]
+version = "1.5.1"
+version_check = "github:rsnapshot/rsnapshot"
+description = "Filesystem snapshot utility based on rsync"
+url = "https://github.com/rsnapshot/rsnapshot/releases/download/${version}/rsnapshot-${version}.tar.gz"
+git_url = "https://github.com/rsnapshot/rsnapshot.git"
+use_git = false
+stage = 7
+depends = ["rsync", "perl"]
+build_commands = [
+    "./configure --prefix=/usr --sysconfdir=/etc",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.curl]
 version = "8.18.0"
@@ -1870,6 +1899,18 @@ git_url = ""
 use_git = false
 stage = 12
 # Note: Newer features but may be less stable
+
+[packages.cuda-toolkit]
+version = "12.8.1"
+version_check = "url:https://developer.nvidia.com/cuda-downloads|CUDA Toolkit ([0-9]+\\.[0-9]+)"
+description = "NVIDIA CUDA Toolkit (nvcc, cuBLAS, cuDNN, etc.)"
+url = "https://developer.download.nvidia.com/compute/cuda/${version}/local_installers/cuda_${version}_570.124.06_linux.run"
+git_url = ""
+use_git = false
+stage = 12
+depends = ["nvidia-driver"]
+# Note: Run with: sh cuda_*.run --silent --toolkit --no-opengl-libs
+# Installs to /usr/local/cuda-12.8
 
 # =============================================================================
 # VM Support (QEMU/KVM)

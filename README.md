@@ -1,6 +1,6 @@
 # LFS Infrastructure
 
-Automated Linux From Scratch build system with bleeding-edge packages, btrfs snapshots, and aggressive performance optimizations.
+Automated Linux From Scratch build system with bleeding-edge packages and aggressive performance optimizations.
 
 ## Quick Start
 
@@ -41,9 +41,21 @@ sudo ./install.sh --yes /dev/nvme0n1
 ## Features
 
 - **Bleeding-edge packages**: GCC 16, Linux 6.18, glibc 2.42
-- **Ext4 filesystem**: Fast, stable, proven
+- **Ext4 filesystem**: Fast, stable, proven (noatime)
+- **86GB tmpfs /tmp**: RAM-speed compilation
 - **Performance optimized**: `-O3 -march=native -mtune=native` by default
 - **Minimal package manager**: `pk` - 120 lines of shell, zero dependencies
+- **All packages tracked**: Even bootstrap cross-tools are pk-managed
+
+## Target System Layout
+
+| Path | Purpose |
+|------|---------|
+| `/usr/src` | Source tarballs and extracted code (user-writable via src group) |
+| `/var/tmp/lfs-bootstrap` | Cross-compiler (temporary, deleted after build) |
+| `/var/cache/pk` | Built .pkg.tar.xz packages |
+| `/var/lib/pk` | Package database |
+| `/tmp` | 90% RAM tmpfs |
 
 ## Package Manager (pk)
 

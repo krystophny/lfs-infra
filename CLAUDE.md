@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Project Overview
 
-LFS-infra is an automated Linux From Scratch build system with bleeding-edge packages (GCC 16, Linux 6.18, glibc 2.42), btrfs snapshots, and aggressive performance optimizations.
+LFS-infra is an automated Linux From Scratch build system with bleeding-edge packages (GCC 16, Linux 6.18, glibc 2.42), ext4 filesystem, and aggressive performance optimizations.
 
 **Primary workflow**: Boot from Fedora Rawhide live USB, run `./install.sh /dev/nvme0n1` to install LFS on target device.
 
@@ -98,10 +98,22 @@ build_commands = [
 4. **Stage 4**: System packages (openssl, meson, cmake)
 5. **Stage 5**: Kernel and bootloader
 
-## Filesystem
+## Filesystem & Directory Structure
 
-- **ext4** with noatime
-- Simple, fast, stable
+- **ext4** with noatime - simple, fast, stable
+- **/tmp** as tmpfs (90% of RAM) - fast compilation
+
+| Path | Purpose |
+|------|---------|
+| `/usr/src` | Source tarballs and extracted code |
+| `/var/tmp/lfs-bootstrap` | Cross-compiler (temporary, delete after build) |
+| `/var/cache/pk` | Built .pkg.tar.xz packages |
+| `/var/lib/pk` | Package database |
+
+All packages tracked by pk from Stage 1, including bootstrap cross-tools.
+Cleanup after build: `pk r binutils-pass1 gcc-pass1 ... && rm -rf /var/tmp/lfs-bootstrap`
+
+User is in `src` group (GID 50) with write access to `/usr/src` - build as user, install as root.
 
 ## Key Commands
 

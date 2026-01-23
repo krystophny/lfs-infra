@@ -251,7 +251,6 @@ ok "Filesystem ready (ext4)"
 # ============================================================================
 header "Creating Directory Structure"
 
-mkdir -p "${MOUNT_POINT}"/{sources,tools,build,pkg,logs}
 mkdir -p "${MOUNT_POINT}"/{boot,etc,home,mnt,opt,srv,run,root}
 mkdir -p "${MOUNT_POINT}"/etc/{opt,sysconfig}
 mkdir -p "${MOUNT_POINT}"/{lib,bin,sbin}
@@ -261,11 +260,20 @@ mkdir -p "${MOUNT_POINT}"/usr/{,local/}share/{color,dict,doc,info,locale,man}
 mkdir -p "${MOUNT_POINT}"/usr/{,local/}share/{misc,terminfo,zoneinfo}
 mkdir -p "${MOUNT_POINT}"/usr/{,local/}share/man/man{1..8}
 mkdir -p "${MOUNT_POINT}"/var/{cache,local,log,mail,opt,spool}
+mkdir -p "${MOUNT_POINT}"/var/cache/pk
 mkdir -p "${MOUNT_POINT}"/var/lib/{color,misc,locate,pk}
+mkdir -p "${MOUNT_POINT}"/var/log/lfs-build
 install -d -m 1777 "${MOUNT_POINT}"/{var/,}tmp
 mkdir -p "${MOUNT_POINT}/lib/firmware"
 
 ok "Directory structure created"
+
+# Set /usr/src writable by src group (GID 50) - user can build without root
+chown -R root:50 "${MOUNT_POINT}/usr/src"
+chmod -R g+w "${MOUNT_POINT}/usr/src"
+chmod g+s "${MOUNT_POINT}/usr/src"  # setgid so new files inherit src group
+
+ok "Build directories configured (user can write to /usr/src)"
 
 # ============================================================================
 # Step 4: Generate fstab
@@ -293,6 +301,7 @@ proc           /proc         proc   nosuid,noexec,nodev  0 0
 sysfs          /sys          sysfs  nosuid,noexec,nodev  0 0
 devpts         /dev/pts      devpts gid=5,mode=620       0 0
 tmpfs          /run          tmpfs  defaults             0 0
+tmpfs          /tmp          tmpfs  defaults,noatime,nosuid,nodev,size=90%  0 0
 EOF
 
 ok "fstab generated"
@@ -302,9 +311,8 @@ ok "fstab generated"
 # ============================================================================
 header "Installing pk Package Manager"
 
-cp "${SCRIPT_DIR}/pk" "${MOUNT_POINT}/tools/bin/pk"
-chmod +x "${MOUNT_POINT}/tools/bin/pk"
-mkdir -p "${MOUNT_POINT}/var/lib/pk"
+cp "${SCRIPT_DIR}/pk" "${MOUNT_POINT}/usr/bin/pk"
+chmod +x "${MOUNT_POINT}/usr/bin/pk"
 
 ok "pk installed"
 
@@ -313,7 +321,7 @@ ok "pk installed"
 # ============================================================================
 header "Downloading Sources"
 
-export LFS_SOURCES="${MOUNT_POINT}/sources"
+export LFS_SOURCES="${MOUNT_POINT}/usr/src"
 "${SCRIPT_DIR}/scripts/build/download-sources.sh"
 
 ok "Sources downloaded"
@@ -343,12 +351,12 @@ set default=0
 set timeout=3
 
 menuentry "LFS" {
-    linux /boot/vmlinuz root=UUID=${ROOT_UUID} rootflags=subvol=@ ro quiet
+    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet
     initrd /boot/initrd.img
 }
 
 menuentry "LFS (recovery)" {
-    linux /boot/vmlinuz root=UUID=${ROOT_UUID} rootflags=subvol=@ ro single
+    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro single
     initrd /boot/initrd.img
 }
 EOF
@@ -401,6 +409,7 @@ utmp:x:13:
 cdrom:x:15:
 adm:x:16:
 mail:x:34:
+src:x:50:${LFS_USERNAME}
 wheel:x:97:${LFS_USERNAME}
 nogroup:x:65534:
 ${LFS_USERNAME}:x:1000:

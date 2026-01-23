@@ -21,24 +21,23 @@ export FORCE_UNSAFE_CONFIGURE=1
 # Cross-compilation variables (standard names for packages.toml)
 # TARGET: target triplet for cross-compilation
 # SYSROOT: where target system files go (headers, libraries)
-# CROSS_TOOLS: where cross-toolchain binaries install
+# BOOTSTRAP: where cross-toolchain binaries install (temporary, deleted after build)
 # SOURCES: source tarballs location
 export TARGET="$(uname -m)-lfs-linux-gnu"
 export SYSROOT="${LFS}"
-export CROSS_TOOLS="${LFS}/tools"
-export SOURCES="${LFS}/sources"
+export BOOTSTRAP="${LFS}/var/tmp/lfs-bootstrap"
+export SOURCES="${LFS}/usr/src"
 
 # Legacy alias for internal use
 export LFS_TGT="${TARGET}"
-export TOOLS="${CROSS_TOOLS}"
 
-# Add cross-tools to PATH so later builds can find cross-assembler, etc.
-export PATH="${TOOLS}/bin:${PATH}"
+# Add bootstrap tools to PATH so builds can find cross-assembler, etc.
+export PATH="${BOOTSTRAP}/bin:${PATH}"
 
 # Paths
 SOURCES_DIR="${SOURCES}"
-PKG_CACHE="${LFS}/pkg"
-BUILD_DIR="${LFS}/build"
+PKG_CACHE="${LFS}/var/cache/pk"
+BUILD_DIR="${LFS}/usr/src"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
 PK_SCRIPT="${ROOT_DIR}/pk"
 
@@ -230,8 +229,7 @@ build_package() {
             cmd=$(echo "${cmd}" | sed \
                 -e "s|\\\${TARGET}|${TARGET}|g" \
                 -e "s|\\\${SYSROOT}|${SYSROOT}|g" \
-                -e "s|\\\${CROSS_TOOLS}|${CROSS_TOOLS}|g" \
-                -e "s|\\\${TOOLS}|${TOOLS}|g" \
+                -e "s|\\\${BOOTSTRAP}|${BOOTSTRAP}|g" \
                 -e "s|\\\${SOURCES}|${SOURCES}|g" \
                 -e "s|\\\${NPROC}|${NPROC}|g" \
                 -e "s|\\\${version}|${version}|g" \
@@ -339,16 +337,13 @@ bootstrap_pk() {
     # pk is a shell script, just needs to be available and database initialized
     [[ -x "${PK_SCRIPT}" ]] || die "pk not found at ${PK_SCRIPT}"
 
-    # Install pk to LFS tools for use inside chroot later
-    mkdir -p "${LFS}/tools/bin"
-    cp -f "${PK_SCRIPT}" "${LFS}/tools/bin/pk"
-    chmod 755 "${LFS}/tools/bin/pk"
-
-    # Initialize pk database
+    # pk should already be installed by install.sh to /usr/bin/pk
+    # Just ensure the database and cache directories exist
     mkdir -p "${LFS}/var/lib/pk"
-
-    # Create package cache
     mkdir -p "${PKG_CACHE}"
+
+    # Create bootstrap tools directory
+    mkdir -p "${BOOTSTRAP}/bin"
 
     ok "pk ready"
 }
