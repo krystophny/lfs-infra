@@ -1,6 +1,8 @@
 #!/bin/bash
 # LFS Package Version Checker
 # Uses direct source checks with fallback to Repology
+# Can compare against Fedora Rawhide to ensure bleeding-edge versions
+#
 # version_check formats:
 #   gnu:<project>         - GNU FTP mirror
 #   kernel:               - kernel.org
@@ -19,6 +21,9 @@
 #   sourceware:<project>  - sourceware.org
 #   alsa:<component>      - ALSA releases
 #   kernelorg:<path>      - kernel.org subdirs
+#
+# fedora_name field:
+#   Maps LFS package name to Fedora package name (if different)
 
 set -euo pipefail
 
@@ -40,6 +45,8 @@ VERBOSE=0
 CHECK_ALL=0
 PACKAGE_FILTER=""
 UPDATE_TOML=0
+RAWHIDE_CHECK=0
+RAWHIDE_ONLY=0
 
 usage() {
     cat <<EOF
@@ -52,12 +59,16 @@ Options:
     -a, --all       Show all packages (default: only outdated)
     -v, --verbose   Verbose output
     -u, --update    Update packages.toml with new versions
+    -r, --rawhide   Compare against Fedora Rawhide (must be >= Rawhide)
+    -R, --rawhide-only  Only check against Rawhide (skip upstream)
     -c, --clear     Clear version cache
     -h, --help      Show this help
 
 Examples:
     $(basename "$0")              # Check all, show outdated only
     $(basename "$0") -a           # Check all, show all results
+    $(basename "$0") -r           # Check against Rawhide baseline
+    $(basename "$0") -R           # Only compare with Rawhide
     $(basename "$0") gcc binutils # Check specific packages
     $(basename "$0") -u gcc       # Update gcc version in packages.toml
 EOF
@@ -69,6 +80,8 @@ while [[ $# -gt 0 ]]; do
         -a|--all) CHECK_ALL=1; shift ;;
         -v|--verbose) VERBOSE=1; shift ;;
         -u|--update) UPDATE_TOML=1; shift ;;
+        -r|--rawhide) RAWHIDE_CHECK=1; shift ;;
+        -R|--rawhide-only) RAWHIDE_CHECK=1; RAWHIDE_ONLY=1; shift ;;
         -c|--clear) rm -rf "${CACHE_DIR}"; echo "Cache cleared"; exit 0 ;;
         -h|--help) usage ;;
         -*) echo "Unknown option: $1"; usage ;;
@@ -367,6 +380,202 @@ check_repology() {
 }
 
 # ============================================================
+# Fedora Rawhide version check
+# ============================================================
+
+# Package name mappings: LFS name -> Fedora name
+declare -A FEDORA_NAME_MAP=(
+    ["linux"]="kernel"
+    ["linux-headers"]="kernel-headers"
+    ["linux-firmware"]="linux-firmware"
+    ["man-pages"]="man-pages"
+    ["iana-etc"]="iana-etc"
+    ["tcl"]="tcl"
+    ["expect"]="expect"
+    ["dejagnu"]="dejagnu"
+    ["pkgconf"]="pkgconf"
+    ["binutils"]="binutils"
+    ["gmp"]="gmp"
+    ["mpfr"]="mpfr"
+    ["mpc"]="libmpc"
+    ["isl"]="isl"
+    ["zstd"]="zstd"
+    ["gcc"]="gcc"
+    ["ncurses"]="ncurses"
+    ["sed"]="sed"
+    ["psmisc"]="psmisc"
+    ["gettext"]="gettext"
+    ["bison"]="bison"
+    ["grep"]="grep"
+    ["bash"]="bash"
+    ["libtool"]="libtool"
+    ["gdbm"]="gdbm"
+    ["gperf"]="gperf"
+    ["expat"]="expat"
+    ["inetutils"]="inetutils"
+    ["less"]="less"
+    ["perl"]="perl"
+    ["xml-parser"]="perl-XML-Parser"
+    ["intltool"]="intltool"
+    ["autoconf"]="autoconf"
+    ["automake"]="automake"
+    ["openssl"]="openssl"
+    ["kmod"]="kmod"
+    ["libelf"]="elfutils-libelf"
+    ["libffi"]="libffi"
+    ["python"]="python3"
+    ["flit-core"]="python-flit-core"
+    ["wheel"]="python-wheel"
+    ["setuptools"]="python-setuptools"
+    ["ninja"]="ninja-build"
+    ["meson"]="meson"
+    ["coreutils"]="coreutils"
+    ["diffutils"]="diffutils"
+    ["gawk"]="gawk"
+    ["findutils"]="findutils"
+    ["glibc"]="glibc"
+    ["zlib"]="zlib"
+    ["bzip2"]="bzip2"
+    ["xz"]="xz"
+    ["lz4"]="lz4"
+    ["file"]="file"
+    ["readline"]="readline"
+    ["m4"]="m4"
+    ["bc"]="bc"
+    ["flex"]="flex"
+    ["texinfo"]="texinfo"
+    ["grub"]="grub2"
+    ["patch"]="patch"
+    ["tar"]="tar"
+    ["gzip"]="gzip"
+    ["make"]="make"
+    ["vim"]="vim"
+    ["e2fsprogs"]="e2fsprogs"
+    ["procps-ng"]="procps-ng"
+    ["util-linux"]="util-linux"
+    ["sysklogd"]="rsyslog"
+    ["sysvinit"]="sysvinit"
+    ["eudev"]="systemd"
+    ["shadow"]="shadow-utils"
+    ["acl"]="acl"
+    ["attr"]="attr"
+    ["libcap"]="libcap"
+    ["libpipeline"]="libpipeline"
+    ["man-db"]="man-db"
+    ["cmake"]="cmake"
+    ["curl"]="curl"
+    ["git"]="git"
+    ["wget"]="wget"
+    ["which"]="which"
+    ["sudo"]="sudo"
+    ["openssh"]="openssh"
+    ["dbus"]="dbus"
+    ["efivar"]="efivar"
+    ["efibootmgr"]="efibootmgr"
+    ["popt"]="popt"
+    ["libtasn1"]="libtasn1"
+    ["p11-kit"]="p11-kit"
+    ["ca-certificates"]="ca-certificates"
+    ["gnutls"]="gnutls"
+    ["nettle"]="nettle"
+    ["libunistring"]="libunistring"
+    ["libidn2"]="libidn2"
+    ["libpsl"]="libpsl"
+    ["nghttp2"]="nghttp2"
+    ["brotli"]="brotli"
+    ["sqlite"]="sqlite"
+    ["nspr"]="nspr"
+    ["nss"]="nss"
+    ["pciutils"]="pciutils"
+    ["usbutils"]="usbutils"
+    ["hwdata"]="hwdata"
+    ["libusb"]="libusb1"
+    ["pcre2"]="pcre2"
+    ["libxml2"]="libxml2"
+    ["libxslt"]="libxslt"
+    ["iproute2"]="iproute"
+    ["kbd"]="kbd"
+    ["libarchive"]="libarchive"
+    ["llvm"]="llvm"
+    ["clang"]="clang"
+    ["rust"]="rust"
+    ["go"]="golang"
+    ["lua"]="lua"
+    ["ruby"]="ruby"
+    ["mesa"]="mesa"
+    ["wayland"]="wayland"
+    ["wayland-protocols"]="wayland-protocols"
+    ["libdrm"]="libdrm"
+    ["libinput"]="libinput"
+    ["libevdev"]="libevdev"
+    ["mtdev"]="mtdev"
+    ["pixman"]="pixman"
+    ["freetype"]="freetype"
+    ["fontconfig"]="fontconfig"
+    ["harfbuzz"]="harfbuzz"
+    ["cairo"]="cairo"
+    ["pango"]="pango"
+    ["gdk-pixbuf"]="gdk-pixbuf2"
+    ["gtk3"]="gtk3"
+    ["gtk4"]="gtk4"
+    ["glib"]="glib2"
+    ["gobject-introspection"]="gobject-introspection"
+    ["at-spi2-core"]="at-spi2-core"
+    ["json-glib"]="json-glib"
+    ["libnotify"]="libnotify"
+    ["vte"]="vte291"
+    ["ffmpeg"]="ffmpeg-free"
+    ["gstreamer"]="gstreamer1"
+    ["pipewire"]="pipewire"
+    ["pulseaudio"]="pulseaudio"
+    ["alsa-lib"]="alsa-lib"
+    ["alsa-utils"]="alsa-utils"
+    ["NetworkManager"]="NetworkManager"
+    ["wpa_supplicant"]="wpa_supplicant"
+    ["bluez"]="bluez"
+    ["cups"]="cups"
+    ["avahi"]="avahi"
+    ["samba"]="samba"
+)
+
+check_fedora_rawhide() {
+    local pkg="$1"
+    local fedora_name="${2:-}"
+
+    # Use mapping if no explicit name given
+    if [[ -z "${fedora_name}" ]]; then
+        fedora_name="${FEDORA_NAME_MAP[${pkg}]:-${pkg}}"
+    fi
+
+    log "Checking Fedora Rawhide: ${fedora_name}"
+
+    local json
+    json=$(fetch_url "https://mdapi.fedoraproject.org/rawhide/pkg/${fedora_name}") || return 1
+
+    # Extract version, handling epoch:version-release format
+    local version
+    version=$(echo "${json}" | jq -r '.version // empty' 2>/dev/null)
+
+    if [[ -z "${version}" ]]; then
+        # Try srcpkg endpoint
+        json=$(fetch_url "https://mdapi.fedoraproject.org/rawhide/srcpkg/${fedora_name}") || return 1
+        version=$(echo "${json}" | jq -r '.version // empty' 2>/dev/null)
+    fi
+
+    [[ -n "${version}" ]] && echo "${version}"
+}
+
+# Get fedora_name from packages.toml if specified
+get_fedora_name() {
+    local pkg="$1"
+    awk -v pkg="[packages.${pkg}]" '
+        $0 == pkg { found=1; next }
+        /^\[/ && found { exit }
+        found && /^fedora_name *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
+    ' "${PACKAGES_FILE}"
+}
+
+# ============================================================
 # Main version check dispatcher
 # ============================================================
 
@@ -530,11 +739,15 @@ update_toml_version() {
 # Main
 main() {
     echo -e "${BLUE}LFS Package Version Checker${NC}"
-    echo -e "Direct source checks with Repology fallback"
+    if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
+        echo -e "Comparing against Fedora Rawhide baseline"
+    else
+        echo -e "Direct source checks with Repology fallback"
+    fi
     echo "========================================"
     echo ""
 
-    local outdated=0 checked=0 errors=0
+    local outdated=0 checked=0 errors=0 behind_rawhide=0
 
     declare -a packages=()
     while IFS= read -r line; do
@@ -553,8 +766,19 @@ main() {
         packages=("${filtered[@]}")
     fi
 
-    printf "%-25s %-15s %-15s %s\n" "PACKAGE" "LOCAL" "UPSTREAM" "STATUS"
-    printf "%-25s %-15s %-15s %s\n" "-------" "-----" "--------" "------"
+    # Print header based on mode
+    if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
+        if [[ ${RAWHIDE_ONLY} -eq 1 ]]; then
+            printf "%-25s %-15s %-15s %s\n" "PACKAGE" "LOCAL" "RAWHIDE" "STATUS"
+            printf "%-25s %-15s %-15s %s\n" "-------" "-----" "-------" "------"
+        else
+            printf "%-25s %-12s %-12s %-12s %s\n" "PACKAGE" "LOCAL" "UPSTREAM" "RAWHIDE" "STATUS"
+            printf "%-25s %-12s %-12s %-12s %s\n" "-------" "-----" "--------" "-------" "------"
+        fi
+    else
+        printf "%-25s %-15s %-15s %s\n" "PACKAGE" "LOCAL" "UPSTREAM" "STATUS"
+        printf "%-25s %-15s %-15s %s\n" "-------" "-----" "--------" "------"
+    fi
 
     for entry in "${packages[@]}"; do
         local pkg="${entry%%=*}"
@@ -562,40 +786,135 @@ main() {
         local version="${info%|*}"
         local version_check="${info#*|}"
 
+        # Skip -pass1, -pass2 variants (they use same source as base package)
+        [[ "${pkg}" =~ -pass[12]$ ]] && continue
+
         checked=$((checked + 1))
 
-        local upstream
-        upstream=$(check_version "${pkg}" "${version_check}" 2>/dev/null) || true
+        local upstream="" rawhide="" fedora_name=""
 
-        if [[ -z "${upstream}" ]]; then
-            [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}unknown${NC}"
-            errors=$((errors + 1))
-            continue
+        # Get Rawhide version if requested
+        if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
+            fedora_name=$(get_fedora_name "${pkg}")
+            rawhide=$(check_fedora_rawhide "${pkg}" "${fedora_name}" 2>/dev/null) || true
         fi
 
-        local status
-        if version_ge "${version}" "${upstream}"; then
-            status="${GREEN}up-to-date${NC}"
-            [[ ${CHECK_ALL} -eq 0 ]] && continue
-        else
-            status="${RED}outdated${NC}"
-            outdated=$((outdated + 1))
-            if [[ ${UPDATE_TOML} -eq 1 ]]; then
-                if update_toml_version "${pkg}" "${upstream}"; then
-                    status="${YELLOW}updated${NC}"
+        # Get upstream version (unless rawhide-only mode)
+        if [[ ${RAWHIDE_ONLY} -eq 0 ]]; then
+            upstream=$(check_version "${pkg}" "${version_check}" 2>/dev/null) || true
+        fi
+
+        # Determine status
+        local status="" show_line=0
+
+        if [[ ${RAWHIDE_ONLY} -eq 1 ]]; then
+            # Rawhide-only mode: compare against Rawhide
+            if [[ -z "${rawhide}" ]]; then
+                [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}not-in-rawhide${NC}"
+                errors=$((errors + 1))
+                continue
+            fi
+
+            if version_ge "${version}" "${rawhide}"; then
+                status="${GREEN}>=rawhide${NC}"
+                [[ ${CHECK_ALL} -eq 1 ]] && show_line=1
+            else
+                status="${RED}<rawhide${NC}"
+                behind_rawhide=$((behind_rawhide + 1))
+                show_line=1
+            fi
+
+            [[ ${show_line} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${rawhide}" "${status}"
+
+        elif [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
+            # Both upstream and Rawhide comparison
+            if [[ -z "${upstream}" && -z "${rawhide}" ]]; then
+                [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "?" "?" "${YELLOW}unknown${NC}"
+                errors=$((errors + 1))
+                continue
+            fi
+
+            local up_status="" rh_status=""
+
+            # Check against upstream
+            if [[ -n "${upstream}" ]]; then
+                if version_ge "${version}" "${upstream}"; then
+                    up_status="ok"
+                else
+                    up_status="old"
+                    outdated=$((outdated + 1))
                 fi
             fi
-        fi
 
-        printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${upstream}" "${status}"
+            # Check against Rawhide
+            if [[ -n "${rawhide}" ]]; then
+                if version_ge "${version}" "${rawhide}"; then
+                    rh_status="ok"
+                else
+                    rh_status="old"
+                    behind_rawhide=$((behind_rawhide + 1))
+                fi
+            fi
+
+            # Determine combined status
+            if [[ "${up_status}" == "old" || "${rh_status}" == "old" ]]; then
+                if [[ "${rh_status}" == "old" ]]; then
+                    status="${RED}<rawhide${NC}"
+                else
+                    status="${YELLOW}outdated${NC}"
+                fi
+                show_line=1
+            else
+                status="${GREEN}up-to-date${NC}"
+                [[ ${CHECK_ALL} -eq 1 ]] && show_line=1
+            fi
+
+            if [[ ${show_line} -eq 1 ]]; then
+                printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "${upstream:-?}" "${rawhide:-?}" "${status}"
+            fi
+
+        else
+            # Standard upstream-only mode
+            if [[ -z "${upstream}" ]]; then
+                [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}unknown${NC}"
+                errors=$((errors + 1))
+                continue
+            fi
+
+            if version_ge "${version}" "${upstream}"; then
+                status="${GREEN}up-to-date${NC}"
+                [[ ${CHECK_ALL} -eq 0 ]] && continue
+            else
+                status="${RED}outdated${NC}"
+                outdated=$((outdated + 1))
+                if [[ ${UPDATE_TOML} -eq 1 ]]; then
+                    if update_toml_version "${pkg}" "${upstream}"; then
+                        status="${YELLOW}updated${NC}"
+                    fi
+                fi
+            fi
+
+            printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${upstream}" "${status}"
+        fi
     done
 
     echo ""
     echo "========================================"
-    echo "Checked: ${checked} | Outdated: ${outdated} | Errors: ${errors}"
+    if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
+        echo "Checked: ${checked} | Outdated: ${outdated} | Behind Rawhide: ${behind_rawhide} | Errors: ${errors}"
+        if [[ ${behind_rawhide} -gt 0 ]]; then
+            echo -e "${RED}WARNING: ${behind_rawhide} packages are older than Fedora Rawhide!${NC}"
+        fi
+    else
+        echo "Checked: ${checked} | Outdated: ${outdated} | Errors: ${errors}"
+    fi
 
     [[ ${UPDATE_TOML} -eq 1 ]] && [[ ${outdated} -gt 0 ]] && echo -e "${YELLOW}packages.toml updated${NC}"
 
+    # Return error if behind rawhide (when checking rawhide)
+    if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
+        return ${behind_rawhide}
+    fi
     return ${outdated}
 }
 
