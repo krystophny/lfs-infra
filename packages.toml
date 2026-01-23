@@ -23,7 +23,7 @@
 # provides = ["/usr/lib/libfoo.so", "/usr/bin/foo"]
 #   Files to check for idempotency (skip build if all exist)
 #
-# safe_flags = true
+# # LTO enabled (glibc 2.35+ supports it)
 #   Use IEEE-compliant flags (no -ffast-math)
 #
 # Standard autotools packages need no extra fields - defaults work.
@@ -123,7 +123,7 @@ source_pkg = "glibc"
 stage = 1
 build_order = 4
 depends = ["gcc-pass1", "linux-headers"]
-safe_flags = true
+# LTO enabled (glibc 2.35+ supports it)
 build_commands = [
     "mkdir -p build && cd build && echo 'rootsbindir=/usr/sbin' > configparms && ../configure --prefix=/usr --host=${TARGET} --build=$(../scripts/config.guess) --enable-kernel=5.4 --with-headers=${SYSROOT}/usr/include --disable-nscd libc_cv_slibdir=/usr/lib && make -j${NPROC} && make DESTDIR=${PKG} install",
     "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
@@ -140,7 +140,7 @@ git_url = "git://sourceware.org/git/glibc.git"
 use_git = false
 checksum_url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz.sig"
 stage = 3
-safe_flags = true
+# LTO enabled (glibc 2.35+ supports it)
 build_commands = [
     "mkdir -p build && cd build",
     "echo 'rootsbindir=/usr/sbin' > configparms",
@@ -650,7 +650,7 @@ url = "https://github.com/openssl/openssl/releases/download/openssl-${version}/o
 git_url = "https://github.com/openssl/openssl.git"
 use_git = false
 stage = 4
-safe_flags = true
+# LTO enabled (glibc 2.35+ supports it)
 provides = ["/usr/lib/libssl.so", "/usr/lib/libcrypto.so"]
 
 [packages.nettle]
