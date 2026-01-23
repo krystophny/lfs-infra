@@ -101,9 +101,12 @@ check_github() {
     [[ -z "$tags" ]] && return 1
 
     # Extract version numbers, converting underscores to dots
+    # Filter out dev/rc/alpha/beta tags and tags with non-version suffixes
     # Handle: v1.2.3, 1.2.3, pkg-1.2.3, pkg-1_2_3, release-1.2.3
-    echo "$tags" | sed -E 's/^[a-zA-Z_-]+//; s/_/./g; s/^v//' | \
-        grep -E '^[0-9]+\.[0-9]+' | sort -V | tail -1
+    echo "$tags" | \
+        grep -vE '(alpha|beta|rc|dev|start|pre|test|snapshot)' | \
+        sed -E 's/^[a-zA-Z_-]+//; s/_/./g; s/^v//' | \
+        grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1
 }
 
 # GNU FTP directory
@@ -139,21 +142,32 @@ check_pypi() {
 # Python.org (for Python itself)
 check_python() {
     local url="https://www.python.org/ftp/python/"
-    local content
+    local content versions version
     content=$(fetch_cached "$url" 2>/dev/null) || return 1
 
-    echo "$content" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+/' | sed 's|/||' | sort -V | tail -1
+    # Get all version directories, filter to those with actual tarballs
+    versions=$(echo "$content" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+/' | sed 's|/||' | sort -rV)
+    for version in $versions; do
+        # Check if tarball exists (HEAD request)
+        if curl -sfI --max-time 5 "https://www.python.org/ftp/python/${version}/Python-${version}.tar.xz" >/dev/null 2>&1; then
+            echo "$version"
+            return 0
+        fi
+    done
+    return 1
 }
 
-# CPAN Perl source
+# CPAN Perl source (filters to stable versions - even minor numbers)
 check_cpan() {
     local pkg="$1"
     local url="https://www.cpan.org/src/5.0/"
     local content
     content=$(fetch_cached "$url" 2>/dev/null) || return 1
 
+    # Perl uses even minor versions for stable (5.40, 5.42), odd for dev (5.41, 5.43)
     echo "$content" | grep -oE 'perl-[0-9]+\.[0-9]+\.[0-9]+\.tar' | \
-        sed 's/perl-//;s/\.tar//' | sort -V | tail -1
+        sed 's/perl-//;s/\.tar//' | \
+        awk -F. '$2 % 2 == 0' | sort -V | tail -1
 }
 
 # Sourceware (glibc, binutils, bzip2, etc.)
@@ -299,8 +313,10 @@ check_url() {
         versions=$(echo "$content" | grep -oE "$pattern" | head -30)
 
         # Convert formats like FILE5_46 -> 5.46, V3-6-0 -> 3.6.0
+        # Also strip common archive suffixes
         echo "$versions" | sed -E '
             s/^[A-Za-z_-]*//
+            s/\.(tar|xz|gz|bz2|zip|tgz).*$//
             s/_/./g
             s/-/./g
             s/^\.//

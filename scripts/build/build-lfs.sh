@@ -183,13 +183,15 @@ get_pkg_version() {
 
 get_pkg_url() {
     local pkg="$1"
-    local version
+    local version version_mm
     version=$(get_pkg_version "${pkg}")
+    # Extract major.minor (e.g., 2.41.3 -> 2.41)
+    version_mm=$(echo "${version}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
     awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
         found && /^url/ { gsub(/.*= *"|".*/, ""); print }
-    ' "${PACKAGES_FILE}" | sed "s/\${version}/${version}/g"
+    ' "${PACKAGES_FILE}" | sed -e "s/\${version}/${version}/g" -e "s/\${version_mm}/${version_mm}/g"
 }
 
 # Get build system (autotools, meson, cmake, make, custom)
