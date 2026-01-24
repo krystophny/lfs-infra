@@ -2250,7 +2250,8 @@ stage = 14
 version = "100.630"
 version_check = "url:https://developer.nvidia.com/hpc-sdk-downloads|([0-9]+\.[0-9]+)"
 description = "NVIDIA HPC SDK (nvfortran, nvc, nvc++)"
-url = "https://developer.download.nvidia.com/hpc-sdk/${version}/nvhpc_2025_251_Linux_x86_64_cuda_12.6.tar.gz"
+# Manual download required from NVIDIA developer site
+url = ""
 git_url = ""
 use_git = false
 stage = 15
@@ -2261,7 +2262,8 @@ stage = 15
 version = "2025.3"
 version_check = "url:https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit-download.html|([0-9]+\.[0-9]+)"
 description = "Intel oneAPI HPC Toolkit (ifort, ifx, icc, icx)"
-url = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b5a6d35a-da06-4bb6-9f83-c2d58c96ed61/intel-oneapi-hpc-toolkit-${version}_offline.sh"
+# Manual download required from Intel developer site (registration needed)
+url = ""
 git_url = ""
 use_git = false
 stage = 15
@@ -2272,7 +2274,8 @@ stage = 15
 version = "2025.3"
 version_check = "url:https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html|([0-9]+\.[0-9]+)"
 description = "Intel oneAPI Base Toolkit"
-url = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/e6ff8e9c-ee28-47fb-abd7-5c524c983e1c/intel-oneapi-base-toolkit-${version}_offline.sh"
+# Manual download required from Intel developer site (registration needed)
+url = ""
 git_url = ""
 use_git = false
 stage = 15
