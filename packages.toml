@@ -669,7 +669,7 @@ stage = 3
 depends = ["libmd"]
 
 [packages.procps-ng]
-version = "4.0.5rc1"
+version = "4.0.4"
 version_check = "github:procps-ng/procps"
 description = "Process monitoring utilities (ps, top, pgrep)"
 url = "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-${version}.tar.xz"
@@ -982,7 +982,7 @@ stage = 6
 # =============================================================================
 
 [packages.libnl]
-version = "3.12.0"
+version = "3.11.0"
 version_check = "url:https://github.com/thom311/libnl/tags|libnl([0-9]+)_([0-9]+)_([0-9]+)"
 description = "Netlink protocol library suite"
 url = "https://github.com/thom311/libnl/releases/download/libnl3_11_0/libnl-${version}.tar.gz"
@@ -1074,7 +1074,7 @@ use_git = false
 stage = 7
 
 [packages.wget]
-version = "1.25"
+version = "1.24.5"
 version_check = "gnu:wget"
 description = "Network downloader"
 url = "https://ftpmirror.gnu.org/gnu/wget/wget-${version}.tar.gz"
@@ -1267,7 +1267,7 @@ use_git = false
 stage = 8
 
 [packages.mesa]
-version = "26.0.0"
+version = "24.3.4"
 version_check = "freedesktop:mesa/mesa"
 description = "OpenGL implementation"
 url = "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
@@ -1580,7 +1580,7 @@ use_git = false
 stage = 9
 
 [packages.pango]
-version = "1.90"
+version = "1.56.0"
 version_check = "gnome:pango"
 description = "Text layout and rendering library"
 url = "https://download.gnome.org/sources/pango/1.56/pango-${version}.tar.xz"
@@ -1645,7 +1645,7 @@ meson_flags = "-Dman=false -Dgtk_doc=false -Dintrospection=false -Ddemos=false -
 provides = ["/usr/lib/libgtk-3.so"]
 
 [packages.dbus]
-version = "v1.14.0"
+version = "1.14.10"
 version_check = "freedesktop:dbus/dbus"
 description = "Message bus system"
 url = "https://dbus.freedesktop.org/releases/dbus/dbus-${version}.tar.xz"
@@ -1843,7 +1843,7 @@ use_git = false
 stage = 11
 
 [packages.pulseaudio]
-version = "v16.99.1"
+version = "17.0"
 version_check = "freedesktop:pulseaudio/pulseaudio"
 description = "Sound server"
 url = "https://www.freedesktop.org/software/pulseaudio/releases/pulseaudio-${version}.tar.xz"
@@ -2189,7 +2189,7 @@ use_git = false
 stage = 14
 
 [packages.llvm]
-version = "22.1.0"
+version = "19.1.7"
 version_check = "url:https://github.com/llvm/llvm-project/tags|llvmorg-([0-9]+\.[0-9]+\.[0-9]+)"
 description = "LLVM compiler infrastructure"
 url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/llvm-project-${version}.src.tar.xz"
@@ -2433,10 +2433,10 @@ use_git = false
 stage = 17
 
 [packages.ghostscript]
-version = "10.06.0"
+version = "10.04.0"
 version_check = "url:https://github.com/ArtifexSoftware/ghostpdl-downloads/releases|ghostscript-([0-9]+\.[0-9]+\.[0-9]+)"
 description = "PostScript/PDF interpreter"
-url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10050/ghostscript-${version}.tar.xz"
+url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-${version}.tar.xz"
 git_url = ""
 use_git = false
 stage = 17
