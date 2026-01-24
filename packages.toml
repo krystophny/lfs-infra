@@ -76,12 +76,13 @@ git_url = "git://sourceware.org/git/binutils-gdb.git"
 use_git = false
 checksum_url = "https://ftpmirror.gnu.org/gnu/binutils/binutils-${version}.tar.xz.sig"
 stage = 3
+build_order = 16
 build_commands = [
     "mkdir -p build && cd build",
-    "../configure --prefix=/usr --sysconfdir=/etc --enable-gold --enable-ld=default --enable-plugins --enable-shared --disable-werror --enable-64-bit-bfd --enable-new-dtags --with-system-zlib --enable-default-hash-style=gnu",
+    "../configure --prefix=/usr --sysconfdir=/etc --enable-gold --enable-ld=default --enable-plugins --enable-shared --disable-werror --enable-64-bit-bfd --enable-new-dtags --with-system-zlib --enable-default-hash-style=gnu --enable-gprofng=no",
     "make -j${NPROC} tooldir=/usr",
     "make DESTDIR=${PKG} tooldir=/usr install",
-    "rm -fv ${PKG}/usr/lib/lib{bfd,ctf,ctf-nobfd,gprofng,opcodes,sframe}.a || true"
+    "rm -fv ${PKG}/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.a || true"
 ]
 
 # GCC 14.2 - stable release for cross-compilation (known to work with glibc 2.40)
@@ -100,16 +101,18 @@ git_url = "git://gcc.gnu.org/git/gcc.git"
 use_git = false
 checksum_url = "https://gcc.gnu.org/pub/gcc/snapshots/LATEST-16/sha512.sum"
 stage = 3
-depends = ["gmp", "mpfr", "mpc"]
+build_order = 25
+depends = ["gmp", "mpfr", "mpc", "flex"]
 languages = "c,c++,fortran"
 # PGO: profiledbootstrap compiles GCC 4 times with profile-guided optimization
 # This takes longer but results in ~10% faster GCC
 build_commands = [
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --prefix=/usr --enable-languages=c,c++,fortran --enable-default-pie --enable-default-ssp --disable-multilib --with-system-zlib --enable-plugin",
-    "cd build && make -j${NPROC} profiledbootstrap",
-    "cd build && make DESTDIR=${PKG} install",
+    "(mkdir -p build && cd build && ../configure --prefix=/usr --enable-languages=c,c++,fortran --enable-default-pie --enable-default-ssp --disable-multilib --with-system-zlib --enable-plugin --disable-werror)",
+    "(cd build && make -j${NPROC} profiledbootstrap)",
+    "(cd build && make DESTDIR=${PKG} install)",
     "ln -svf gcc ${PKG}/usr/bin/cc",
+    "printf '#!/bin/sh\\nexec gcc -std=c99 \"$@\"\\n' > ${PKG}/usr/bin/c99 && chmod +x ${PKG}/usr/bin/c99",
     "ln -svf ../bin/cpp ${PKG}/usr/lib/cpp",
     "ln -svf gcc.1 ${PKG}/usr/share/man/man1/cc.1"
 ]
@@ -169,7 +172,9 @@ git_url = "git://sourceware.org/git/glibc.git"
 use_git = false
 checksum_url = "https://ftpmirror.gnu.org/gnu/glibc/glibc-${version}.tar.xz.sig"
 stage = 3
-# LTO enabled (glibc 2.35+ supports it)
+build_order = 7
+# Note: glibc needs gettext, bison, perl, python to build
+# LTO causes POINTER_GUARD undefined errors, so build_order < 10 disables it
 build_commands = [
     "mkdir -p build && cd build",
     "echo 'rootsbindir=/usr/sbin' > configparms",
@@ -202,6 +207,7 @@ version_check = "gcc-snapshot:"
 description = "GNU Standard C++ Library"
 source_pkg = "gcc"
 stage = 3
+build_order = 26
 build_commands = [
     "mkdir -p build && cd build && ../libstdc++-v3/configure --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --with-gxx-include-dir=/usr/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${PKG} install",
     "rm -fv ${PKG}/usr/lib/lib{stdc++{,exp,fs},supc++}.la || true"
@@ -262,6 +268,24 @@ build_commands = [
     "sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${PKG}/usr/include/curses.h"
 ]
 
+# Stage 3: rebuild ncurses natively with pkg-config support
+[packages.ncurses-stage3]
+version = "6.6"
+version_check = "gnu:ncurses"
+description = "Terminal handling library (native build)"
+url = "https://ftpmirror.gnu.org/gnu/ncurses/ncurses-${version}.tar.gz"
+tarball = "ncurses-${version}.tar.gz"
+stage = 3
+build_order = 30
+build_commands = [
+    "./configure --prefix=/usr --mandir=/usr/share/man --with-shared --without-debug --without-normal --without-cxx-binding --with-abi-version=6 --enable-widec --enable-pc-files --with-pkg-config-libdir=/usr/lib/pkgconfig",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install",
+    "for lib in ncurses form panel menu; do ln -svf lib${lib}w.so ${PKG}/usr/lib/lib${lib}.so; ln -svf ${lib}w.pc ${PKG}/usr/lib/pkgconfig/${lib}.pc; done",
+    "ln -svf libncursesw.so ${PKG}/usr/lib/libcursesw.so",
+    "ln -svf libncurses.so ${PKG}/usr/lib/libcurses.so"
+]
+
 [packages.bash]
 version = "5.3"
 version_check = "gnu:bash"
@@ -275,7 +299,10 @@ build_commands = [
     "./configure --prefix=/usr --build=$(sh support/config.guess) --host=${TARGET} --without-bash-malloc bash_cv_strtold_broken=no",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install",
-    "ln -svf bash ${PKG}/usr/bin/sh"
+    "ln -svf bash ${PKG}/usr/bin/sh",
+    "mkdir -pv ${PKG}/bin",
+    "ln -svf /usr/bin/bash ${PKG}/bin/bash",
+    "ln -svf bash ${PKG}/bin/sh"
 ]
 
 [packages.coreutils]
@@ -488,6 +515,12 @@ url = "https://zlib.net/zlib-${version}.tar.xz"
 git_url = "https://github.com/madler/zlib.git"
 use_git = false
 stage = 3
+build_order = 15
+build_commands = [
+    "./configure --prefix=/usr",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.bzip2]
 version = "1.0.8"
@@ -497,6 +530,21 @@ url = "https://sourceware.org/pub/bzip2/bzip2-${version}.tar.gz"
 git_url = "https://gitlab.com/bzip2/bzip2.git"
 use_git = false
 stage = 3
+build_order = 12
+build_commands = [
+    "sed -i 's@\\(ln -s -f \\)\\$(PREFIX)/bin/@\\1@' Makefile",
+    "sed -i 's@(PREFIX)/man@(PREFIX)/share/man@g' Makefile",
+    "make -f Makefile-libbz2_so",
+    "make clean",
+    "make -j${NPROC}",
+    "make PREFIX=${PKG}/usr install",
+    "cp -av libbz2.so.* ${PKG}/usr/lib",
+    "ln -sv libbz2.so.1.0.8 ${PKG}/usr/lib/libbz2.so",
+    "cp -v bzip2-shared ${PKG}/usr/bin/bzip2",
+    "ln -sfv bzip2 ${PKG}/usr/bin/bzcat",
+    "ln -sfv bzip2 ${PKG}/usr/bin/bunzip2",
+    "rm -fv ${PKG}/usr/lib/libbz2.a"
+]
 
 [packages.zstd]
 version = "1.5.7"
@@ -506,15 +554,10 @@ url = "https://github.com/facebook/zstd/releases/download/v${version}/zstd-${ver
 git_url = "https://github.com/facebook/zstd.git"
 use_git = false
 stage = 3
-# PGO: Build with profiling, run benchmarks, rebuild with profile data
-# Results in ~5-10% faster compression/decompression
+# TODO: PGO can provide ~5-10% gains but needs build script changes for proper variable handling
 build_commands = [
-    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-generate\" LDFLAGS=\"${LDFLAGS} -fprofile-generate\" lib-mt",
-    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-generate\" LDFLAGS=\"${LDFLAGS} -fprofile-generate\" zstd",
-    "./zstd -b1 -e19 -i5",
-    "make clean",
-    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-use -fprofile-correction\" LDFLAGS=\"${LDFLAGS}\" lib-mt",
-    "make -j${NPROC} CFLAGS=\"${CFLAGS} -fprofile-use -fprofile-correction\" LDFLAGS=\"${LDFLAGS}\" zstd",
+    "make -j${NPROC} lib-mt",
+    "make -j${NPROC} zstd",
     "make PREFIX=/usr DESTDIR=${PKG} install"
 ]
 
@@ -526,6 +569,14 @@ url = "https://ftpmirror.gnu.org/gnu/readline/readline-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/readline.git"
 use_git = false
 stage = 3
+build_order = 13
+build_commands = [
+    "sed -i '/MV.*telexit.o/d' shlib/Makefile.in",
+    "./configure --prefix=/usr --disable-static --with-curses --docdir=/usr/share/doc/readline-${version}",
+    "make -j${NPROC} SHLIB_LIBS=\"-lncursesw\"",
+    "make SHLIB_LIBS=\"-lncursesw\" DESTDIR=${PKG} install",
+    "install -v -m644 doc/*.{ps,pdf,html,dvi} ${PKG}/usr/share/doc/readline-${version} || true"
+]
 
 [packages.sqlite]
 version = "3.48.0"
@@ -535,15 +586,9 @@ url = "https://www.sqlite.org/2025/sqlite-autoconf-3480000.tar.gz"
 git_url = "https://github.com/sqlite/sqlite.git"
 use_git = false
 stage = 3
-# PGO: SQLite benefits significantly from PGO (~10-30% gains)
-# Build instrumented, run speedtest1 benchmark, rebuild with profile data
+# TODO: PGO can provide ~10-30% gains but needs build script changes for proper variable handling
 build_commands = [
-    "./configure --prefix=/usr --enable-fts5 --enable-json1 CFLAGS=\"${CFLAGS} -fprofile-generate\" LDFLAGS=\"${LDFLAGS} -fprofile-generate\"",
-    "make -j${NPROC}",
-    "gcc -O2 -I. test/speedtest1.c .libs/libsqlite3.a -lpthread -ldl -lm -o speedtest1 -fprofile-generate || true",
-    "./speedtest1 --size 50 || ./sqlite3 ':memory:' 'SELECT * FROM sqlite_master;' || true",
-    "make clean",
-    "./configure --prefix=/usr --enable-fts5 --enable-json1 CFLAGS=\"${CFLAGS} -fprofile-use -fprofile-correction\" LDFLAGS=\"${LDFLAGS}\"",
+    "./configure --prefix=/usr --enable-fts5",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
@@ -566,6 +611,10 @@ url = "https://github.com/westes/flex/releases/download/v${version}/flex-${versi
 git_url = "https://github.com/westes/flex.git"
 use_git = false
 stage = 3
+build_order = 24
+
+# Stage 3 temporary tools (needed before glibc rebuild)
+# These come from LFS Chapter 7
 
 [packages.gettext]
 version = "0.26"
@@ -575,6 +624,13 @@ url = "https://ftpmirror.gnu.org/gnu/gettext/gettext-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/gettext.git"
 use_git = false
 stage = 3
+build_order = 1
+build_commands = [
+    "./configure --prefix=/usr --disable-shared",
+    "make -j${NPROC}",
+    "mkdir -p ${PKG}/usr/bin",
+    "cp -v gettext-tools/src/{msgfmt,msgmerge,xgettext} ${PKG}/usr/bin/"
+]
 
 [packages.bison]
 version = "3.8.2"
@@ -584,6 +640,12 @@ url = "https://ftpmirror.gnu.org/gnu/bison/bison-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/bison.git"
 use_git = false
 stage = 3
+build_order = 2
+build_commands = [
+    "./configure --prefix=/usr --docdir=/usr/share/doc/bison-${version}",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.perl]
 version = "5.42.0"
@@ -593,6 +655,12 @@ url = "https://www.cpan.org/src/5.0/perl-${version}.tar.xz"
 git_url = "https://github.com/Perl/perl5.git"
 use_git = false
 stage = 3
+build_order = 3
+build_commands = [
+    "sh Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duseshrplib -Dprivlib=/usr/lib/perl5/5.42/core_perl -Darchlib=/usr/lib/perl5/5.42/core_perl -Dsitelib=/usr/lib/perl5/5.42/site_perl -Dsitearch=/usr/lib/perl5/5.42/site_perl -Dvendorlib=/usr/lib/perl5/5.42/vendor_perl -Dvendorarch=/usr/lib/perl5/5.42/vendor_perl",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.python]
 version = "3.14.2"
@@ -602,12 +670,13 @@ url = "https://www.python.org/ftp/python/${version}/Python-${version}.tar.xz"
 git_url = "https://github.com/python/cpython.git"
 use_git = false
 stage = 3
+build_order = 4
+# Basic build for Stage 3, will rebuild with optimizations later
 build_commands = [
-    "./configure --prefix=/usr --enable-shared --enable-optimizations --with-lto --with-system-expat --with-system-ffi --with-ensurepip=install",
+    "./configure --prefix=/usr --enable-shared --without-ensurepip",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install",
-    "ln -sf python3 ${PKG}/usr/bin/python",
-    "ln -sf pip3 ${PKG}/usr/bin/pip"
+    "ln -sf python3 ${PKG}/usr/bin/python"
 ]
 
 [packages.texinfo]
@@ -618,6 +687,12 @@ url = "https://ftpmirror.gnu.org/gnu/texinfo/texinfo-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/texinfo.git"
 use_git = false
 stage = 3
+build_order = 5
+build_commands = [
+    "./configure --prefix=/usr",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.util-linux]
 version = "2.40.2"
@@ -627,6 +702,13 @@ url = "https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-${vers
 git_url = "https://github.com/util-linux/util-linux.git"
 use_git = false
 stage = 3
+build_order = 6
+build_commands = [
+    "mkdir -pv ${PKG}/var/lib/hwclock",
+    "./configure --prefix=/usr --bindir=/usr/bin --sbindir=/usr/sbin --libdir=/usr/lib --disable-chfn-chsh --disable-login --disable-nologin --disable-su --disable-setpriv --disable-runuser --disable-pylibmount --disable-static --disable-liblastlog2 --without-python runstatedir=/run ADJTIME_PATH=/var/lib/hwclock/adjtime --docdir=/usr/share/doc/util-linux-${version}",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.attr]
 version = "2.5.2"
@@ -636,7 +718,12 @@ url = "https://download.savannah.nongnu.org/releases/attr/attr-${version}.tar.xz
 git_url = "https://git.savannah.gnu.org/git/attr.git"
 use_git = false
 stage = 3
-build_order = 1
+build_order = 20
+build_commands = [
+    "./configure --prefix=/usr --disable-static --sysconfdir=/etc --docdir=/usr/share/doc/attr-${version}",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.acl]
 version = "2.3.2"
@@ -646,8 +733,28 @@ url = "https://download.savannah.nongnu.org/releases/acl/acl-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/acl.git"
 use_git = false
 stage = 3
-build_order = 2
+build_order = 21
 depends = ["attr"]
+build_commands = [
+    "./configure --prefix=/usr --disable-static --docdir=/usr/share/doc/acl-${version}",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
+[packages.libxcrypt]
+version = "4.4.38"
+version_check = "github:besser82/libxcrypt"
+description = "Modern library for one-way hashing of passwords"
+url = "https://github.com/besser82/libxcrypt/releases/download/v${version}/libxcrypt-${version}.tar.xz"
+git_url = "https://github.com/besser82/libxcrypt.git"
+use_git = false
+stage = 3
+build_order = 32
+build_commands = [
+    "./configure --prefix=/usr --enable-hashes=strong,glibc --enable-obsolete-api=glibc --disable-static --disable-failure-tokens",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.shadow]
 version = "4.19.2"
@@ -657,6 +764,15 @@ url = "https://github.com/shadow-maint/shadow/releases/download/${version}/shado
 git_url = "https://github.com/shadow-maint/shadow.git"
 use_git = false
 stage = 3
+build_order = 33
+depends = ["libxcrypt"]
+build_commands = [
+    "./configure --prefix=/usr --disable-static --disable-logind --without-libbsd --with-bcrypt --with-yescrypt --with-group-name-max-length=32",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install",
+    "mkdir -pv ${PKG}/etc/default",
+    "touch ${PKG}/etc/default/useradd"
+]
 
 [packages.libmd]
 version = "1.1.0"
@@ -666,6 +782,7 @@ url = "https://libbsd.freedesktop.org/releases/libmd-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/libbsd/libmd.git"
 use_git = false
 stage = 3
+build_order = 26
 
 [packages.libbsd]
 version = "0.12.2"
@@ -675,6 +792,7 @@ url = "https://libbsd.freedesktop.org/releases/libbsd-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/libbsd/libbsd.git"
 use_git = false
 stage = 3
+build_order = 27
 depends = ["libmd"]
 
 [packages.procps-ng]
@@ -685,6 +803,8 @@ url = "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-${v
 git_url = "https://gitlab.com/procps-ng/procps.git"
 use_git = false
 stage = 3
+build_order = 31
+depends = ["pkgconf", "ncurses-stage3"]
 
 [packages.libtirpc]
 version = "1.3.6"
@@ -694,6 +814,11 @@ url = "https://downloads.sourceforge.net/libtirpc/libtirpc-${version}.tar.bz2"
 git_url = "https://git.linux-nfs.org/projects/steved/libtirpc.git"
 use_git = false
 stage = 3
+build_commands = [
+    "CFLAGS='-std=gnu11' ./configure --prefix=/usr --sysconfdir=/etc --disable-static --disable-gssapi",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.iana-etc]
 version = "20251215"
@@ -703,6 +828,11 @@ url = "https://github.com/Mic92/iana-etc/releases/download/${version}/iana-etc-$
 git_url = "https://github.com/Mic92/iana-etc.git"
 use_git = false
 stage = 3
+# No build required - just copy data files
+build_commands = [
+    "install -Dm644 services ${PKG}/etc/services",
+    "install -Dm644 protocols ${PKG}/etc/protocols"
+]
 
 # =============================================================================
 # STAGE 4: System Configuration & Security
@@ -716,19 +846,13 @@ url = "https://github.com/openssl/openssl/releases/download/openssl-${version}/o
 git_url = "https://github.com/openssl/openssl.git"
 use_git = false
 stage = 4
-# PGO: OpenSSL benefits ~5% from PGO using crypto benchmarks
-# Build instrumented, run openssl speed benchmarks, rebuild with profile
+build_order = 1
+# TODO: PGO can provide ~5% gains but needs build script changes for proper variable handling
 build_commands = [
-    "./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib shared zlib-dynamic enable-ktls linux-x86_64 -fprofile-generate",
-    "make -j${NPROC}",
-    "./apps/openssl speed -seconds 3 rsa2048 aes-256-cbc sha256 || true",
-    "./apps/openssl speed -seconds 3 -evp aes-256-gcm sha512 || true",
-    "make clean",
-    "./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib shared zlib-dynamic enable-ktls linux-x86_64 -fprofile-use -fprofile-correction",
+    "./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib shared zlib-dynamic enable-ktls linux-x86_64",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
-provides = ["/usr/lib/libssl.so", "/usr/lib/libcrypto.so"]
 
 [packages.nettle]
 version = "3.10.2"
@@ -738,8 +862,8 @@ url = "https://ftpmirror.gnu.org/gnu/nettle/nettle-${version}.tar.gz"
 git_url = "https://git.lysator.liu.se/nettle/nettle.git"
 use_git = false
 stage = 4
+build_order = 2
 configure_flags = "--disable-static"
-provides = ["/usr/lib/libnettle.so", "/usr/lib/libhogweed.so"]
 depends = ["gmp"]
 
 [packages.libtasn1]
@@ -750,8 +874,8 @@ url = "https://ftpmirror.gnu.org/gnu/libtasn1/libtasn1-${version}.tar.gz"
 git_url = "https://gitlab.com/gnutls/libtasn1.git"
 use_git = false
 stage = 4
+build_order = 3
 configure_flags = "--disable-static"
-provides = ["/usr/lib/libtasn1.so"]
 
 [packages.libunistring]
 version = "1.4.1"
@@ -761,8 +885,8 @@ url = "https://ftpmirror.gnu.org/gnu/libunistring/libunistring-${version}.tar.xz
 git_url = "https://git.savannah.gnu.org/git/libunistring.git"
 use_git = false
 stage = 4
+build_order = 4
 configure_flags = "--disable-static"
-provides = ["/usr/lib/libunistring.so"]
 
 [packages.gnutls]
 version = "3.8.11"
@@ -772,9 +896,13 @@ url = "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-${version}.tar.xz"
 git_url = "https://gitlab.com/gnutls/gnutls.git"
 use_git = false
 stage = 4
-configure_flags = "--disable-static --without-p11-kit --with-default-trust-store-file=/etc/ssl/certs/ca-certificates.crt --disable-doc --disable-tests --disable-libdane"
-provides = ["/usr/lib/libgnutls.so"]
+build_order = 5
 depends = ["nettle", "libtasn1", "libunistring", "gmp"]
+build_commands = [
+    "./configure --prefix=/usr --disable-static --without-p11-kit --with-default-trust-store-file=/etc/ssl/certs/ca-certificates.crt --disable-doc --disable-tests --disable-libdane",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.libffi]
 version = "3.5.2"
@@ -828,7 +956,14 @@ description = "Package compiler and linker metadata toolkit"
 url = "https://distfiles.ariadne.space/pkgconf/pkgconf-${version}.tar.xz"
 git_url = "https://github.com/pkgconf/pkgconf.git"
 use_git = false
-stage = 4
+stage = 3
+build_order = 28
+build_commands = [
+    "./configure --prefix=/usr --disable-static",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install",
+    "ln -svf pkgconf ${PKG}/usr/bin/pkg-config"
+]
 
 [packages.ninja]
 version = "1.13.2"
@@ -913,7 +1048,13 @@ url = "https://ftpmirror.gnu.org/gnu/gmp/gmp-${version}.tar.xz"
 git_url = "https://gmplib.org/repo/gmp/"
 use_git = false
 stage = 3
-configure_flags = "--enable-cxx"
+build_order = 17
+build_commands = [
+    "unset CFLAGS CXXFLAGS && CC='gcc -std=gnu17' ./configure --prefix=/usr --disable-cxx --docdir=/usr/share/doc/gmp-${version}",
+    "make -j${NPROC}",
+    "make html || true",
+    "make DESTDIR=${PKG} install install-html || make DESTDIR=${PKG} install"
+]
 provides = ["/usr/lib/libgmp.so"]
 
 [packages.mpfr]
@@ -924,7 +1065,14 @@ url = "https://ftpmirror.gnu.org/gnu/mpfr/mpfr-${version}.tar.xz"
 git_url = "https://gitlab.inria.fr/mpfr/mpfr.git"
 use_git = false
 stage = 3
+build_order = 18
 depends = ["gmp"]
+build_commands = [
+    "unset CFLAGS CXXFLAGS LDFLAGS && ./configure --prefix=/usr --enable-thread-safe --docdir=/usr/share/doc/mpfr-${version}",
+    "make -j${NPROC}",
+    "make html || true",
+    "make DESTDIR=${PKG} install install-html || make DESTDIR=${PKG} install"
+]
 
 [packages.mpc]
 version = "1.3.1"
@@ -934,7 +1082,14 @@ url = "https://ftpmirror.gnu.org/gnu/mpc/mpc-${version}.tar.gz"
 git_url = "https://gitlab.inria.fr/mpc/mpc.git"
 use_git = false
 stage = 3
+build_order = 19
 depends = ["gmp", "mpfr"]
+build_commands = [
+    "unset CFLAGS CXXFLAGS LDFLAGS && ./configure --prefix=/usr --docdir=/usr/share/doc/mpc-${version}",
+    "make -j${NPROC}",
+    "make html || true",
+    "make DESTDIR=${PKG} install install-html || make DESTDIR=${PKG} install"
+]
 
 [packages.isl]
 version = "0.27"
@@ -951,16 +1106,20 @@ depends = ["gmp"]
 # =============================================================================
 
 [packages.cmake]
-version = "4.2.2"
+version = "3.28.6"
 version_check = "github:Kitware/CMake"
 description = "Cross-platform build system generator"
 url = "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}.tar.gz"
 git_url = "https://github.com/Kitware/CMake.git"
 use_git = false
-stage = 4
-build_system = "custom"
-build_commands = ["./bootstrap --prefix=/usr --parallel=${NPROC}", "make -j${NPROC}", "make install"]
-provides = ["/usr/bin/cmake"]
+# TODO: cmake has bootstrap issues with GCC 16, defer to later stage
+stage = 99
+depends = ["openssl"]
+build_commands = [
+    "./bootstrap --prefix=/usr --parallel=${NPROC} --system-zstd --system-zlib --system-bzip2",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.sudo]
 version = "1.9.17p2"
