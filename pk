@@ -5,6 +5,40 @@
 set -e
 
 VERSION="1.0.0"
+
+# CRITICAL SAFETY: Prevent accidental installation to host system
+#
+# When to use PK_ROOT:
+#   - HOST building LFS: export PK_ROOT=/mnt/lfs
+#   - Inside LFS chroot: PK_ROOT unset (installs to / which is correct)
+#   - Running natively on LFS: PK_ROOT unset (installs to /)
+#
+# Safety detection: If we're NOT in a chroot and PK_ROOT is unset,
+# we're likely on the host - refuse to install to host root.
+
+is_in_chroot() {
+    # Check if root inode is 2 (standard for non-chroot)
+    # In a chroot, the root inode is different
+    [ "$(stat -c %i / 2>/dev/null)" != "2" ] && return 0
+    # Alternative: check /proc/1/root
+    [ -r /proc/1/root ] && [ "$(readlink -f /proc/1/root 2>/dev/null)" != "/" ] && return 0
+    return 1
+}
+
+# If PK_ROOT is not set and we're NOT in a chroot, block installation
+if [ -z "${PK_ROOT:-}" ]; then
+    if ! is_in_chroot; then
+        if [ "${PK_FORCE_ROOT:-0}" != "1" ]; then
+            echo "pk: SAFETY ERROR - PK_ROOT is not set and you're on the HOST system!" >&2
+            echo "pk: This would install packages to your HOST root filesystem!" >&2
+            echo "pk: Set PK_ROOT=/mnt/lfs (or your LFS mount point) before running pk." >&2
+            echo "pk: (If you're inside an LFS chroot, this check should not trigger)" >&2
+            echo "pk: (Set PK_FORCE_ROOT=1 to override - DANGEROUS)" >&2
+            exit 1
+        fi
+    fi
+fi
+
 DB_DIR="${PK_ROOT:-}/var/lib/pk"
 
 die() { echo "pk: $*" >&2; exit 1; }
@@ -67,7 +101,7 @@ pkg_install() {
     local dbdir="$DB_DIR/$pkgname"
     mkdir -p "$dbdir"
 
-    # Extract and record files
+    # Extract and record files (defaults to / for chroot/native use)
     local root="${PK_ROOT:-/}"
 
     # List files in archive

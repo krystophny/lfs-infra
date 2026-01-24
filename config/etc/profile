@@ -4,6 +4,9 @@
 # Set default PATH
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
 
+# pk package manager root (this IS the target system)
+export PK_ROOT=/
+
 # Default umask
 umask 022
 
