@@ -973,9 +973,11 @@ url = "https://github.com/ninja-build/ninja/archive/refs/tags/v${version}.tar.gz
 git_url = "https://github.com/ninja-build/ninja.git"
 use_git = false
 stage = 4
-build_system = "custom"
-build_commands = ["python3 configure.py --bootstrap", "install -m755 ninja /usr/bin/"]
-provides = ["/usr/bin/ninja"]
+build_order = 6
+build_commands = [
+    "python3 configure.py --bootstrap",
+    "install -Dm755 ninja ${PKG}/usr/bin/ninja"
+]
 
 [packages.meson]
 version = "1.10.1"
@@ -985,10 +987,16 @@ url = "https://github.com/mesonbuild/meson/releases/download/${version}/meson-${
 git_url = "https://github.com/mesonbuild/meson.git"
 use_git = false
 stage = 4
-build_system = "custom"
-build_commands = ["pip3 install --root=/ --prefix=/usr --no-deps ."]
-provides = ["/usr/bin/meson"]
+build_order = 7
 depends = ["python", "ninja"]
+# Manual install - setuptools not available, meson is pure Python
+build_commands = [
+    "mkdir -p ${PKG}/usr/lib/python3.14/site-packages",
+    "cp -r mesonbuild ${PKG}/usr/lib/python3.14/site-packages/",
+    "mkdir -p ${PKG}/usr/bin",
+    "printf '%s\\n' '#!/usr/bin/env python3' 'import sys' 'from mesonbuild import mesonmain' 'sys.exit(mesonmain.main())' > ${PKG}/usr/bin/meson",
+    "chmod 755 ${PKG}/usr/bin/meson"
+]
 
 # =============================================================================
 # STAGE 5: Kernel and Bootloader
@@ -1003,9 +1011,32 @@ git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
 use_git = false
 checksum_url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc"
 stage = 5
+build_order = 6
+depends = ["elfutils"]
 build_system = "custom"
-build_commands = ["make mrproper", "make defconfig", "make -j${NPROC}", "make modules_install", "cp arch/x86/boot/bzImage /boot/vmlinuz-${version}", "cp System.map /boot/System.map-${version}"]
+build_commands = [
+    "make mrproper",
+    "make defconfig",
+    "make -j${NPROC}",
+    "make INSTALL_MOD_PATH=${PKG} modules_install",
+    "mkdir -p ${PKG}/boot",
+    "cp arch/x86/boot/bzImage ${PKG}/boot/vmlinuz-${version}",
+    "cp System.map ${PKG}/boot/System.map-${version}"
+]
 provides = ["/boot/vmlinuz-${version}"]
+
+[packages.elfutils]
+version = "0.193"
+version_check = "url:https://sourceware.org/elfutils/ftp/|elfutils-([0-9.]+)\\.tar"
+description = "ELF handling libraries"
+url = "https://sourceware.org/elfutils/ftp/${version}/elfutils-${version}.tar.bz2"
+stage = 5
+build_order = 4
+build_commands = [
+    "./configure --prefix=/usr --disable-debuginfod --disable-libdebuginfod",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.grub]
 version = "2.14"
@@ -1015,6 +1046,41 @@ url = "https://ftpmirror.gnu.org/gnu/grub/grub-${version}.tar.xz"
 git_url = "https://git.savannah.gnu.org/git/grub.git"
 use_git = false
 stage = 5
+build_order = 5
+# disable LTO - causes linker issues
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --disable-werror --disable-efiemu --disable-grub-mkfont --with-platform=efi --target=x86_64 --disable-grub-mount",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
+[packages.popt]
+version = "1.19"
+version_check = "github:rpm-software-management/popt"
+description = "Command-line option parsing library"
+url = "https://ftp.osuosl.org/pub/rpm/popt/releases/popt-1.x/popt-${version}.tar.gz"
+stage = 5
+build_order = 1
+build_commands = [
+    "./configure --prefix=/usr --disable-static",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
+[packages.efivar]
+version = "39"
+version_check = "github:rhboot/efivar"
+description = "EFI variable manipulation library"
+url = "https://github.com/rhboot/efivar/archive/refs/tags/${version}.tar.gz"
+tarball = "efivar-${version}.tar.gz"
+git_url = "https://github.com/rhboot/efivar.git"
+use_git = false
+stage = 5
+build_order = 2
+build_commands = [
+    "make -j${NPROC} CFLAGS='-O2 -flto=auto' PREFIX=/usr LIBDIR=/usr/lib ENABLE_DOCS=0",
+    "make PREFIX=/usr LIBDIR=/usr/lib DESTDIR=${PKG} ENABLE_DOCS=0 install"
+]
 
 [packages.efibootmgr]
 version = "18"
@@ -1024,15 +1090,12 @@ url = "https://github.com/rhboot/efibootmgr/releases/download/${version}/efiboot
 git_url = "https://github.com/rhboot/efibootmgr.git"
 use_git = false
 stage = 5
-
-[packages.efivar]
-version = "38"
-version_check = "github:rhboot/efivar"
-description = "EFI variable manipulation library"
-url = "https://github.com/rhboot/efivar/archive/refs/tags/${version}.tar.gz"
-git_url = "https://github.com/rhboot/efivar.git"
-use_git = false
-stage = 5
+build_order = 3
+depends = ["efivar", "popt"]
+build_commands = [
+    "make -j${NPROC} EFIDIR=BOOT EFI_LOADER=bootx64.efi PREFIX=/usr LIBDIR=/usr/lib",
+    "make EFIDIR=BOOT PREFIX=/usr LIBDIR=/usr/lib DESTDIR=${PKG} install"
+]
 
 # =============================================================================
 # GCC Support Libraries (built before GCC)
@@ -1129,8 +1192,13 @@ url = "https://www.sudo.ws/dist/sudo-${version}.tar.gz"
 git_url = "https://github.com/sudo-project/sudo.git"
 use_git = false
 stage = 4
-configure_flags = "--with-all-insults --with-env-editor --with-passprompt=[sudo] password for %p:"
 provides = ["/usr/bin/sudo"]
+# disable LTO - causes linker issues with internal libraries
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --with-all-insults --with-env-editor --disable-log-server --disable-log-client",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 # =============================================================================
 # STAGE 6: Init System (runit for fast boot)
@@ -1144,6 +1212,15 @@ url = "http://smarden.org/runit/runit-${version}.tar.gz"
 git_url = "https://github.com/void-linux/runit.git"
 use_git = false
 stage = 6
+# runit extracts to admin/runit-X.Y.Z, but build script cd's to admin/
+build_commands = [
+    "cd runit-*/src && make",
+    "mkdir -p ${PKG}/usr/bin ${PKG}/sbin",
+    "cd runit-*/src && install -m 755 runit ${PKG}/sbin/",
+    "cd runit-*/src && install -m 755 runit-init ${PKG}/sbin/",
+    "cd runit-*/src && install -m 755 sv runsv runsvdir runsvchdir svlogd chpst ${PKG}/usr/bin/",
+    "ln -sf runit-init ${PKG}/sbin/init"
+]
 
 # =============================================================================
 # STAGE 7: Networking
