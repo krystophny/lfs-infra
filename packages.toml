@@ -507,6 +507,13 @@ build_commands = [
 # STAGE 3: Basic System Software
 # =============================================================================
 
+[packages.gperf]
+version = "3.1"
+description = "Perfect hash function generator"
+url = "https://ftpmirror.gnu.org/gnu/gperf/gperf-${version}.tar.gz"
+stage = 3
+build_order = 1
+
 [packages.zlib]
 version = "1.3.1"
 version_check = "zlib:"
@@ -1242,7 +1249,8 @@ description = "Intel wireless daemon"
 url = "https://www.kernel.org/pub/linux/network/wireless/iwd-${version}.tar.xz"
 git_url = "https://git.kernel.org/pub/scm/network/wireless/iwd.git"
 use_git = false
-stage = 7
+# TODO: requires dbus, defer for now
+stage = 99
 
 [packages.wpa_supplicant]
 version = "2.11"
@@ -1252,6 +1260,16 @@ url = "https://w1.fi/releases/wpa_supplicant-${version}.tar.gz"
 git_url = "https://w1.fi/cgit/hostap/"
 use_git = false
 stage = 7
+depends = ["openssl", "libnl"]
+# wpa_supplicant builds from wpa_supplicant/ subdir with .config file
+build_commands = [
+    "cd wpa_supplicant",
+    "cp defconfig .config",
+    "echo 'CONFIG_LIBNL32=y' >> .config",
+    "sed -i 's/CONFIG_CTRL_IFACE_DBUS/#CONFIG_CTRL_IFACE_DBUS/' .config",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} BINDIR=/usr/sbin LIBDIR=/usr/lib install"
+]
 
 [packages.wireless-tools]
 version = "29"
@@ -1261,6 +1279,11 @@ url = "https://hewlettpackard.github.io/wireless-tools/wireless_tools.${version}
 git_url = ""
 use_git = false
 stage = 7
+# No configure script - uses Makefile directly
+build_commands = [
+    "make -j${NPROC}",
+    "make PREFIX=${PKG}/usr install"
+]
 
 [packages.dhcpcd]
 version = "10.3.0"
@@ -1279,6 +1302,12 @@ url = "https://github.com/cronie-crond/cronie/releases/download/cronie-${version
 git_url = "https://github.com/cronie-crond/cronie.git"
 use_git = false
 stage = 7
+# -std=gnu11 required for GCC 16 C23 function pointer compatibility
+build_commands = [
+    "CFLAGS='-std=gnu11' ./configure --prefix=/usr --sysconfdir=/etc",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.rsync]
 version = "3.4.1"
@@ -1288,8 +1317,9 @@ url = "https://rsync.samba.org/ftp/rsync/src/rsync-${version}.tar.gz"
 git_url = "https://github.com/WayneD/rsync.git"
 use_git = false
 stage = 7
+build_order = 1
 build_commands = [
-    "./configure --prefix=/usr --disable-debug --with-included-zlib=no --with-included-popt=no",
+    "./configure --prefix=/usr --disable-debug --with-included-zlib=no --with-included-popt=no --disable-xxhash --disable-lz4",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
@@ -1302,6 +1332,7 @@ url = "https://github.com/rsnapshot/rsnapshot/releases/download/${version}/rsnap
 git_url = "https://github.com/rsnapshot/rsnapshot.git"
 use_git = false
 stage = 7
+build_order = 10
 depends = ["rsync", "perl"]
 build_commands = [
     "./configure --prefix=/usr --sysconfdir=/etc",
@@ -1317,6 +1348,13 @@ url = "https://curl.se/download/curl-${version}.tar.xz"
 git_url = "https://github.com/curl/curl.git"
 use_git = false
 stage = 7
+depends = ["openssl"]
+# disable LTO - libtool has issues with nm output parsing
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --with-openssl --enable-threaded-resolver --without-libpsl",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.wget]
 version = "1.24.5"
@@ -1326,6 +1364,12 @@ url = "https://ftpmirror.gnu.org/gnu/wget/wget-${version}.tar.gz"
 git_url = "https://git.savannah.gnu.org/git/wget.git"
 use_git = false
 stage = 7
+# disable LTO - causes undefined references to gnulib internal functions
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --with-ssl=openssl",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 # =============================================================================
 # STAGE 8: X11/Xorg
@@ -1644,7 +1688,15 @@ description = "Device manager for Linux (udev fork)"
 url = "https://github.com/eudev-project/eudev/releases/download/v${version}/eudev-${version}.tar.gz"
 git_url = "https://github.com/eudev-project/eudev.git"
 use_git = false
-stage = 8
+stage = 3
+build_order = 90
+depends = ["gperf"]
+# disable LTO - causes undefined references to libudev symbols
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --enable-manpages=no --disable-selinux",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.libICE]
 version = "1.1.2"

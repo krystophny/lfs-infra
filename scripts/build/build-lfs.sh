@@ -1,6 +1,11 @@
 #!/bin/bash
 # LFS Master Build Script
 # Builds packages directly from packages.toml using pk package manager
+#
+# Build Stages:
+#   Stage 1: Cross-toolchain (built on host, installs to $BOOTSTRAP)
+#   Stage 2: Temporary tools (cross-compiled on host, installs to $LFS/usr)
+#   Stage 3+: System packages (built in chroot using Stage 2 tools)
 
 set -euo pipefail
 
@@ -19,17 +24,22 @@ export MAKEFLAGS="-j${NPROC}"
 export FORCE_UNSAFE_CONFIGURE=1
 
 # Optimization flags for Zen 3 (used by packages that respect environment)
-export CFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe -flto=${NPROC} -fuse-linker-plugin"
-export CXXFLAGS="${CFLAGS}"
-export FFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe"
-export FCFLAGS="${FFLAGS}"
-export LDFLAGS="-Wl,-O2 -Wl,--as-needed -flto=${NPROC} -fuse-linker-plugin"
+# LTO enabled for Stage 3+ only
+export CFLAGS_LTO="-O3 -march=znver3 -mtune=znver3 -pipe -flto=${NPROC} -fuse-linker-plugin"
+export CXXFLAGS_LTO="${CFLAGS_LTO}"
+export LDFLAGS_LTO="-Wl,-O2 -Wl,--as-needed -flto=${NPROC} -fuse-linker-plugin"
 
-# Safe flags (no LTO, for packages that break with LTO like glibc)
+# Safe flags (no LTO, for cross-compilation in stages 1-2)
 export CFLAGS_SAFE="-O3 -march=znver3 -mtune=znver3 -pipe"
 export CXXFLAGS_SAFE="${CFLAGS_SAFE}"
-export FFLAGS_SAFE="${CFLAGS_SAFE}"
 export LDFLAGS_SAFE="-Wl,-O2 -Wl,--as-needed"
+
+# Default to safe flags (will be overridden per-stage)
+export CFLAGS="${CFLAGS_SAFE}"
+export CXXFLAGS="${CXXFLAGS_SAFE}"
+export FFLAGS="${CFLAGS_SAFE}"
+export FCFLAGS="${CFLAGS_SAFE}"
+export LDFLAGS="${LDFLAGS_SAFE}"
 
 # Cross-compilation variables (standard names for packages.toml)
 # TARGET: target triplet for cross-compilation
@@ -54,6 +64,9 @@ BUILD_DIR="${LFS}/usr/src"
 PACKAGES_FILE="${ROOT_DIR}/packages.toml"
 PK_SCRIPT="${ROOT_DIR}/pk"
 
+# Chroot state
+CHROOT_PREPARED=0
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -74,8 +87,9 @@ stage_start() { echo -e "\n${CYAN}========== $* ==========${NC}\n"; }
 
 get_pkg_field() {
     local pkg="$1" field="$2"
-    awk -v pkg="[packages.${pkg}]" -v field="${field}" '
-        $0 == pkg { found=1; next }
+    awk -v pkg="${pkg}" -v field="${field}" '
+        BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
+        $0 ~ pattern { found=1; next }
         /^\[/ && found { exit }
         found && $0 ~ "^"field" *= *\"" { gsub(/.*= *"|".*/, ""); print; exit }
     ' "${PACKAGES_FILE}"
@@ -83,8 +97,9 @@ get_pkg_field() {
 
 get_pkg_num_field() {
     local pkg="$1" field="$2"
-    awk -v pkg="[packages.${pkg}]" -v field="${field}" '
-        $0 == pkg { found=1; next }
+    awk -v pkg="${pkg}" -v field="${field}" '
+        BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
+        $0 ~ pattern { found=1; next }
         /^\[/ && found { exit }
         found && $0 ~ "^"field" *= *[0-9]" { gsub(/.*= */, ""); print; exit }
     ' "${PACKAGES_FILE}"
@@ -99,8 +114,9 @@ get_pkg_build_order() { get_pkg_num_field "$1" "build_order"; }
 # Get package dependencies (comma-separated list)
 get_pkg_depends() {
     local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
+    awk -v pkg="${pkg}" '
+        BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
+        $0 ~ pattern { found=1; next }
         /^\[/ && found { exit }
         found && /^depends *= *\[/ {
             gsub(/^depends *= *\[|\]$/, "")
@@ -124,8 +140,9 @@ get_pkg_url() {
 
 get_pkg_build_commands() {
     local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
-        $0 == pkg { found=1; next }
+    awk -v pkg="${pkg}" '
+        BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
+        $0 ~ pattern { found=1; next }
         /^\[packages\./ && found { exit }
         found && /^build_commands/ { in_array=1; next }
         in_array && /^\]/ { exit }
@@ -270,20 +287,6 @@ build_and_install() {
     local desc=$(get_pkg_description "${pkg}")
     local stage=$(get_pkg_stage "${pkg}")
 
-    # Use safe flags (no LTO) for cross-compiled stages 1-2
-    if [[ "${stage}" -le 2 ]]; then
-        export CFLAGS="${CFLAGS_SAFE}"
-        export CXXFLAGS="${CXXFLAGS_SAFE}"
-        export LDFLAGS="${LDFLAGS_SAFE}"
-    else
-        # Stage 3+: Use LFS sysroot for headers/libs
-        export CFLAGS="${CFLAGS} -I${LFS}/usr/include"
-        export CXXFLAGS="${CXXFLAGS} -I${LFS}/usr/include"
-        export LDFLAGS="${LDFLAGS} -L${LFS}/usr/lib -Wl,-rpath-link,${LFS}/usr/lib"
-        export PKG_CONFIG_PATH="${LFS}/usr/lib/pkgconfig:${LFS}/usr/share/pkgconfig"
-        export PKG_CONFIG_SYSROOT_DIR="${LFS}"
-    fi
-
     echo ""
     log ">>> Package: ${pkg}-${version}"
     log "    ${desc}"
@@ -296,14 +299,42 @@ build_and_install() {
     # Check dependencies before building
     check_dependencies "${pkg}"
 
-    if ! pkg_cached "${pkg}" "${version}"; then
-        log "Building ${pkg}..."
-        build_package "${pkg}"
-    else
-        log "Using cached package: ${pkg}"
-    fi
+    # Stage 3+: Build and install in chroot
+    if [[ "${stage}" -ge 3 ]]; then
+        local build_order=$(get_pkg_build_order "${pkg}")
+        # Use safe flags for most packages (build_order < 50)
+        # LTO causes issues with glibc, gmp, acl, and many others
+        # Only enable for well-tested packages with high build_order
+        if [[ -n "${build_order}" && "${build_order}" -lt 50 ]]; then
+            export CFLAGS="${CFLAGS_SAFE}"
+            export CXXFLAGS="${CXXFLAGS_SAFE}"
+            export LDFLAGS="${LDFLAGS_SAFE}"
+        else
+            # Use LTO flags for later Stage 3+ packages
+            export CFLAGS="${CFLAGS_LTO}"
+            export CXXFLAGS="${CXXFLAGS_LTO}"
+            export LDFLAGS="${LDFLAGS_LTO}"
+        fi
 
-    pkg_install "${pkg}" "${version}"
+        if ! pkg_cached "${pkg}" "${version}"; then
+            build_package_chroot "${pkg}"
+        else
+            log "Using cached package: ${pkg}"
+        fi
+        pkg_install_chroot "${pkg}" "${version}"
+    else
+        # Stage 1-2: Build on host with cross-compilation
+        export CFLAGS="${CFLAGS_SAFE}"
+        export CXXFLAGS="${CXXFLAGS_SAFE}"
+        export LDFLAGS="${LDFLAGS_SAFE}"
+
+        if ! pkg_cached "${pkg}" "${version}"; then
+            build_package "${pkg}"
+        else
+            log "Using cached package: ${pkg}"
+        fi
+        pkg_install "${pkg}" "${version}"
+    fi
 }
 
 # ============================================================
@@ -359,19 +390,257 @@ EOF
     ok "Created sys/sdt.h stub"
 }
 
+# ============================================================
+# Chroot environment for Stage 3+
+# ============================================================
+
+prepare_chroot() {
+    [[ ${CHROOT_PREPARED} -eq 1 ]] && return 0
+
+    stage_start "Preparing chroot environment"
+
+    # Create essential directories
+    mkdir -p "${LFS}"/{dev,proc,sys,run}
+
+    # Ensure /bin, /lib, /sbin are symlinks to /usr counterparts
+    # Merge any existing files first, then create symlinks
+    for dir in bin lib sbin; do
+        if [[ -d "${LFS}/${dir}" && ! -L "${LFS}/${dir}" ]]; then
+            # It's a directory - move files to /usr and replace with symlink
+            cp -an "${LFS}/${dir}/"* "${LFS}/usr/${dir}/" 2>/dev/null || true
+            rm -rf "${LFS}/${dir}"
+            ln -sv "usr/${dir}" "${LFS}/${dir}"
+            log "Converted /${dir} to symlink"
+        elif [[ ! -e "${LFS}/${dir}" ]]; then
+            # Doesn't exist - create symlink
+            ln -sv "usr/${dir}" "${LFS}/${dir}"
+            log "Created /${dir} symlink"
+        fi
+    done
+
+    # Create essential system files if they don't exist
+    mkdir -p "${LFS}/etc"
+    if [[ ! -f "${LFS}/etc/passwd" ]]; then
+        cat > "${LFS}/etc/passwd" << 'EOF'
+root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/dev/null:/usr/bin/false
+daemon:x:6:6:Daemon User:/dev/null:/usr/bin/false
+messagebus:x:18:18:D-Bus Message Daemon User:/run/dbus:/usr/bin/false
+uuidd:x:80:80:UUID Generation Daemon User:/dev/null:/usr/bin/false
+nobody:x:65534:65534:Unprivileged User:/dev/null:/usr/bin/false
+EOF
+        log "Created /etc/passwd"
+    fi
+    if [[ ! -f "${LFS}/etc/group" ]]; then
+        cat > "${LFS}/etc/group" << 'EOF'
+root:x:0:
+bin:x:1:daemon
+sys:x:2:
+kmem:x:3:
+tape:x:4:
+tty:x:5:
+daemon:x:6:
+floppy:x:7:
+disk:x:8:
+lp:x:9:
+dialout:x:10:
+audio:x:11:
+video:x:12:
+utmp:x:13:
+cdrom:x:15:
+adm:x:16:
+messagebus:x:18:
+input:x:24:
+mail:x:34:
+kvm:x:61:
+uuidd:x:80:
+wheel:x:97:
+users:x:999:
+nogroup:x:65534:
+EOF
+        log "Created /etc/group"
+    fi
+
+    # Mount virtual kernel filesystems
+    if ! mountpoint -q "${LFS}/dev"; then
+        mount --bind /dev "${LFS}/dev"
+        log "Mounted /dev"
+    fi
+
+    if ! mountpoint -q "${LFS}/dev/pts"; then
+        mount --bind /dev/pts "${LFS}/dev/pts"
+        log "Mounted /dev/pts"
+    fi
+
+    if ! mountpoint -q "${LFS}/proc"; then
+        mount -t proc proc "${LFS}/proc"
+        log "Mounted /proc"
+    fi
+
+    if ! mountpoint -q "${LFS}/sys"; then
+        mount -t sysfs sysfs "${LFS}/sys"
+        log "Mounted /sys"
+    fi
+
+    if ! mountpoint -q "${LFS}/run"; then
+        mount -t tmpfs tmpfs "${LFS}/run"
+        log "Mounted /run"
+    fi
+
+    # Copy resolv.conf for network access during build
+    if [[ -f /etc/resolv.conf ]]; then
+        cp -f /etc/resolv.conf "${LFS}/etc/resolv.conf" 2>/dev/null || true
+    fi
+
+    # Create essential directories
+    mkdir -p "${LFS}"/{root,tmp,var/{log,run,tmp}}
+    chmod 1777 "${LFS}/tmp" "${LFS}/var/tmp"
+
+    # Create basic symlinks if they don't exist
+    [[ -L "${LFS}/dev/shm" ]] || ln -sf /run/shm "${LFS}/dev/shm" 2>/dev/null || true
+    [[ -L "${LFS}/var/run" ]] || ln -sf ../run "${LFS}/var/run" 2>/dev/null || true
+
+    # Symlink C++ headers from bootstrap to /usr/include so native g++ can find them
+    if [[ -d "${LFS}/var/tmp/lfs-bootstrap/${TARGET}/include/c++/16.0.1" ]]; then
+        mkdir -p "${LFS}/usr/include/c++"
+        if [[ ! -e "${LFS}/usr/include/c++/16.0.1" ]]; then
+            ln -svf "/var/tmp/lfs-bootstrap/${TARGET}/include/c++/16.0.1" "${LFS}/usr/include/c++/16.0.1"
+            log "Symlinked C++ headers from bootstrap"
+        fi
+    fi
+
+    CHROOT_PREPARED=1
+    ok "Chroot environment ready"
+}
+
+cleanup_chroot() {
+    log "Cleaning up chroot mounts..."
+
+    # Unmount in reverse order
+    for mp in run sys proc dev/pts dev; do
+        mountpoint -q "${LFS}/${mp}" && umount -l "${LFS}/${mp}" 2>/dev/null || true
+    done
+
+    CHROOT_PREPARED=0
+    ok "Chroot cleaned up"
+}
+
+# Run a command inside the chroot
+# Usage: run_in_chroot "command to run"
+run_in_chroot() {
+    local cmd="$1"
+    chroot "${LFS}" /usr/bin/env -i \
+        HOME=/root \
+        TERM="${TERM}" \
+        PATH=/usr/bin:/usr/sbin \
+        MAKEFLAGS="-j${NPROC}" \
+        NPROC="${NPROC}" \
+        CFLAGS="${CFLAGS}" \
+        CXXFLAGS="${CXXFLAGS}" \
+        LDFLAGS="${LDFLAGS}" \
+        FORCE_UNSAFE_CONFIGURE=1 \
+        PK_ROOT=/ \
+        /bin/bash -c "${cmd}"
+}
+
+# Build a package inside chroot (for Stage 3+)
+build_package_chroot() {
+    local pkg="$1"
+    local version=$(get_pkg_version "${pkg}")
+    local url=$(get_pkg_url "${pkg}")
+    local source_pkg=$(get_pkg_source_pkg "${pkg}")
+    local build_commands=$(get_pkg_build_commands "${pkg}")
+
+    # Use source package URL if specified
+    if [[ -n "${source_pkg}" ]]; then
+        url=$(get_pkg_url "${source_pkg}")
+    fi
+
+    local filename=$(basename "${url}")
+    local tarball="/usr/src/${filename}"
+    local work_dir="/usr/src/${pkg}"
+    local pkg_dir="${work_dir}/pkg"
+    local pkg_file="/var/cache/pk/${pkg}-${version}.pkg.tar.xz"
+
+    log "Building ${pkg}-${version} in chroot..."
+
+    # Prepare and build inside chroot
+    local chroot_script="
+set -e
+cd /
+
+# Clean and create work directory
+rm -rf '${work_dir}'
+mkdir -p '${work_dir}/src' '${pkg_dir}'
+
+# Extract source
+tar -xf '${tarball}' -C '${work_dir}/src'
+cd '${work_dir}/src'
+cd \"\$(ls -d */ | head -1)\" 2>/dev/null || true
+
+export PKG='${pkg_dir}'
+export DESTDIR='${pkg_dir}'
+export version='${version}'
+"
+
+    # Add build commands
+    if [[ -n "${build_commands}" ]]; then
+        while IFS= read -r cmd; do
+            [[ -z "${cmd}" ]] && continue
+            # Substitute variables using sed to avoid bash brace expansion issues
+            cmd=$(echo "${cmd}" | sed \
+                -e "s|\\\${version}|${version}|g" \
+                -e "s|\\\${NPROC}|${NPROC}|g")
+            # Don't substitute ${PKG} - it will be expanded in the chroot environment
+            # Escape single quotes in cmd for echo by replacing ' with '\''
+            local echo_cmd="${cmd//\'/\'\\\'\'}"
+            chroot_script+=$'\n'"echo '>>> ${echo_cmd}'"$'\n'"${cmd}"$'\n'
+        done <<< "${build_commands}"
+    else
+        chroot_script+="
+./configure --prefix=/usr
+make -j${NPROC}
+make DESTDIR=\${PKG} install
+"
+    fi
+
+    # Create package
+    chroot_script+="
+cd '${pkg_dir}'
+tar --xz -cf '${pkg_file}' .
+rm -rf '${work_dir}'
+echo 'Package created: ${pkg_file}'
+"
+
+    run_in_chroot "${chroot_script}"
+    ok "Built ${pkg}-${version}.pkg.tar.xz (chroot)"
+}
+
+# Install package with pk inside chroot
+pkg_install_chroot() {
+    local pkg="$1" version="$2"
+    local pkg_file="/var/cache/pk/${pkg}-${version}.pkg.tar.xz"
+
+    log "Installing ${pkg} with pk (chroot)..."
+    run_in_chroot "pk i '${pkg_file}'"
+    ok "Installed ${pkg}"
+}
+
 bootstrap_pk() {
     stage_start "Setting up pk package manager"
 
     # pk is a shell script, just needs to be available and database initialized
     [[ -x "${PK_SCRIPT}" ]] || die "pk not found at ${PK_SCRIPT}"
 
-    # pk should already be installed by install.sh to /usr/bin/pk
-    # Just ensure the database and cache directories exist
+    # Ensure directories exist
     mkdir -p "${LFS}/var/lib/pk"
     mkdir -p "${PKG_CACHE}"
-
-    # Create bootstrap tools directory
     mkdir -p "${BOOTSTRAP}/bin"
+    mkdir -p "${LFS}/usr/bin"
+
+    # Install pk into LFS for chroot use
+    cp "${PK_SCRIPT}" "${LFS}/usr/bin/pk"
+    chmod +x "${LFS}/usr/bin/pk"
 
     ok "pk ready"
 }
@@ -420,6 +689,11 @@ build_stage() {
 
     stage_start "Building Stage ${stage}: ${stage_name}"
 
+    # Prepare chroot for Stage 3+
+    if [[ "${stage}" -ge 3 ]]; then
+        prepare_chroot
+    fi
+
     for pkg in $(list_packages_by_stage "${stage}"); do
         build_and_install "${pkg}"
     done
@@ -444,6 +718,9 @@ main() {
     [[ $EUID -eq 0 ]] || die "Must run as root"
     mountpoint -q "${LFS}" || die "LFS not mounted at ${LFS}"
     mkdir -p "${SOURCES_DIR}" "${PKG_CACHE}" "${BUILD_DIR}"
+
+    # Cleanup chroot on exit
+    trap cleanup_chroot EXIT
 
     case "${target}" in
         download)
