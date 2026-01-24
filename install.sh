@@ -345,16 +345,12 @@ cp "${MOUNT_POINT}/boot/efi/EFI/LFS/grubx64.efi" "${MOUNT_POINT}/boot/efi/EFI/BO
 KERNEL_VERSION=$(ls "${MOUNT_POINT}/boot/" | grep -oP 'vmlinuz-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
 cat > "${MOUNT_POINT}/boot/grub/grub.cfg" << EOF
-# Minimal GRUB config - instant boot, serial console
+# Minimal GRUB config - instant boot
 set timeout=0
 set default=0
 
-serial --speed=115200
-terminal_input serial console
-terminal_output serial console
-
 menuentry "LFS" {
-    linux /boot/vmlinuz-${KERNEL_VERSION} root=PARTUUID=${ROOT_PARTUUID} ro console=ttyS0,115200n8 console=tty0 quiet
+    linux /boot/vmlinuz-${KERNEL_VERSION} root=PARTUUID=${ROOT_PARTUUID} ro console=tty0
 }
 EOF
 
