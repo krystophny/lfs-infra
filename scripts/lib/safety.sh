@@ -338,6 +338,7 @@ validate_all_build_paths() {
     [[ -n "${SOURCES_DIR:-}" ]] && validate_critical_path "SOURCES_DIR" "${SOURCES_DIR}"
     [[ -n "${BUILD_DIR:-}" ]] && validate_critical_path "BUILD_DIR" "${BUILD_DIR}"
     [[ -n "${PKG_CACHE:-}" ]] && validate_critical_path "PKG_CACHE" "${PKG_CACHE}"
+    return 0  # Ensure success if all checks pass
 }
 
 # Comprehensive safety check for build scripts

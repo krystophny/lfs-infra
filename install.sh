@@ -169,18 +169,8 @@ export LFS_USERNAME LFS_PASSWORD
 ok "User: ${LFS_USERNAME}"
 
 # ============================================================================
-# Step 2: Partition and Format (btrfs)
+# Step 2: Partition and Format (ext4)
 # ============================================================================
-header "Partitioning ${DEVICE}"
-
-# Unmount any existing mounts
-for part in "${DEVICE}"*; do
-    umount "${part}" 2>/dev/null || true
-done
-
-# Create GPT partition table
-log "Creating GPT partition table..."
-parted -s "${DEVICE}" mklabel gpt
 
 # Determine partition naming
 if [[ "${DEVICE}" == *nvme* ]] || [[ "${DEVICE}" == *loop* ]]; then
@@ -189,33 +179,58 @@ else
     PART_PREFIX="${DEVICE}"
 fi
 
-# Create partitions: EFI (512M), Root (ext4)
-parted -s "${DEVICE}" mkpart ESP fat32 1MiB 513MiB
-parted -s "${DEVICE}" set 1 esp on
-parted -s "${DEVICE}" mkpart root ext4 513MiB 100%
-
 EFI_PART="${PART_PREFIX}1"
 ROOT_PART="${PART_PREFIX}2"
 
-sleep 2  # Wait for partitions to appear
+# Check if already mounted - reuse existing filesystem
+if mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
+    header "Using Existing Filesystem"
+    log "Target already mounted at ${MOUNT_POINT}"
 
-# Format
-header "Formatting (ext4)"
+    # Verify EFI is mounted too
+    if ! mountpoint -q "${MOUNT_POINT}/boot/efi" 2>/dev/null; then
+        mkdir -p "${MOUNT_POINT}/boot/efi"
+        mount "${EFI_PART}" "${MOUNT_POINT}/boot/efi"
+    fi
 
-log "Formatting EFI partition (FAT32)..."
-mkfs.fat -F32 -n EFI "${EFI_PART}"
+    ok "Reusing existing filesystem (cached files preserved)"
+else
+    header "Partitioning ${DEVICE}"
 
-log "Formatting root partition (ext4)..."
-mkfs.ext4 -L lfs-root "${ROOT_PART}"
+    # Unmount any existing mounts
+    for part in "${DEVICE}"*; do
+        umount "${part}" 2>/dev/null || true
+    done
 
-# Mount filesystems
-log "Mounting filesystems..."
-mkdir -p "${MOUNT_POINT}"
-mount -o noatime "${ROOT_PART}" "${MOUNT_POINT}"
-mkdir -p "${MOUNT_POINT}/boot/efi"
-mount "${EFI_PART}" "${MOUNT_POINT}/boot/efi"
+    # Create GPT partition table
+    log "Creating GPT partition table..."
+    parted -s "${DEVICE}" mklabel gpt
 
-ok "Filesystem ready (ext4)"
+    # Create partitions: EFI (512M), Root (ext4)
+    parted -s "${DEVICE}" mkpart ESP fat32 1MiB 513MiB
+    parted -s "${DEVICE}" set 1 esp on
+    parted -s "${DEVICE}" mkpart root ext4 513MiB 100%
+
+    sleep 2  # Wait for partitions to appear
+
+    # Format
+    header "Formatting (ext4)"
+
+    log "Formatting EFI partition (FAT32)..."
+    mkfs.fat -F32 -n EFI "${EFI_PART}"
+
+    log "Formatting root partition (ext4)..."
+    mkfs.ext4 -L lfs-root "${ROOT_PART}"
+
+    # Mount filesystems
+    log "Mounting filesystems..."
+    mkdir -p "${MOUNT_POINT}"
+    mount -o noatime "${ROOT_PART}" "${MOUNT_POINT}"
+    mkdir -p "${MOUNT_POINT}/boot/efi"
+    mount "${EFI_PART}" "${MOUNT_POINT}/boot/efi"
+
+    ok "Filesystem ready (ext4)"
+fi
 
 # ============================================================================
 # Step 3: Create Directory Structure
