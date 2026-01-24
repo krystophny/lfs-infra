@@ -127,7 +127,7 @@ depends = ["binutils-pass1"]
 build_commands = [
     "tar -xf ${SOURCES}/mpfr-*.tar.xz && mv mpfr-* mpfr && tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp && tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --target=${TARGET} --prefix=/var/tmp/lfs-bootstrap --with-glibc-version=2.40 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c && make -j${NPROC} && make DESTDIR=${PKG} install && cat ../gcc/limitx.h ../gcc/glimits.h ../gcc/limity.h > $(dirname $(${PKG}/var/tmp/lfs-bootstrap/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h"
+    "mkdir -p build && cd build && ../configure --target=${TARGET} --prefix=/var/tmp/lfs-bootstrap --with-glibc-version=2.40 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install && cat ../gcc/limitx.h ../gcc/glimits.h ../gcc/limity.h > $(dirname $(${PKG}/var/tmp/lfs-bootstrap/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
 # Linux headers - can build in parallel with gcc-pass1
@@ -154,8 +154,8 @@ stage = 1
 build_order = 4
 depends = ["gcc-pass1", "linux-headers"]
 build_commands = [
-    "sed -i '30,40d' sysdeps/unix/sysv/linux/x86/longjmp.c && sed -i 's/-Werror=undef//' Makeconfig && mkdir -p build && cd build && echo 'rootsbindir=/usr/sbin' > configparms && CPPFLAGS='-DSIG_BLOCK=0 -DSIG_SETMASK=2 -DoRBP=120 -DoRSP=160 -DoRBX=128 -DoR8=40 -DoR9=48 -DoR10=56 -DoR11=64 -DoR12=72 -DoR13=80 -DoR14=88 -DoR15=96 -DoRDI=104 -DoRSI=112 -DoRDX=136 -DoRAX=144 -DoRCX=152 -DoRIP=168 -DoEFL=176 -DoFPREGS=224 -DoSIGMASK=296 -DoFPREGSMEM=424 -DoMXCSR=448 -DoSSP=816 -D_NSIG8=8' ../configure --prefix=/usr --host=${TARGET} --build=$(../scripts/config.guess) --enable-kernel=5.4 --with-headers=${SYSROOT}/usr/include --disable-nscd --disable-werror libc_cv_slibdir=/usr/lib && echo '#define MULTIPLE_THREADS_OFFSET 24' > tcb-offsets.h && echo '#define POINTER_GUARD 48' >> tcb-offsets.h && echo '#define FEATURE_1_OFFSET 72' >> tcb-offsets.h && echo '#define SSP_BASE_OFFSET 120' >> tcb-offsets.h && touch -d '2099-01-01' tcb-offsets.h tcb-offsets.h.d && echo '#define LOCALE_T___LOCALES 0' > locale-defines.h && echo '#define LC_CTYPE 0' >> locale-defines.h && echo '#define _NL_CTYPE_NONASCII_CASE 71' >> locale-defines.h && echo '#define LOCALE_DATA_VALUES 56' >> locale-defines.h && echo '#define SIZEOF_VALUES 8' >> locale-defines.h && touch -d '2099-01-01' locale-defines.h locale-defines.h.d && echo '#define sizeSS 24' > sigaltstack-offsets.h && echo '#define oSS_SP 0' >> sigaltstack-offsets.h && echo '#define oSS_SIZE 16' >> sigaltstack-offsets.h && echo '#define oSS_FLAGS 8' >> sigaltstack-offsets.h && touch -d '2099-01-01' sigaltstack-offsets.h sigaltstack-offsets.h.d && echo '#define R_DEBUG_SIZE 40' > rtld-sizes.h && echo '#define R_DEBUG_EXTENDED_SIZE 48' >> rtld-sizes.h && echo '#define R_DEBUG_EXTENDED_ALIGN 8' >> rtld-sizes.h && touch -d '2099-01-01' rtld-sizes.h rtld-sizes.h.d && echo '#define RTLD_GLOBAL_RO_DL_X86_CPU_FEATURES_OFFSET 736' > features-offsets.h && echo '#define RTLD_GLOBAL_DL_X86_FEATURE_1_OFFSET 1648' >> features-offsets.h && touch -d '2099-01-01' features-offsets.h features-offsets.h.d && echo '#define XSAVE_STATE_SIZE_OFFSET 584' > cpu-features-offsets.h && echo '#define XSAVE_STATE_FULL_SIZE_OFFSET 588' >> cpu-features-offsets.h && touch -d '2099-01-01' cpu-features-offsets.h cpu-features-offsets.h.d && make -j${NPROC} && make DESTDIR=${PKG} install",
-    "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
+    "mkdir -p build && cd build && echo 'rootsbindir=/usr/sbin' > configparms && ../configure --prefix=/usr --host=${TARGET} --build=$(../scripts/config.guess) --enable-kernel=5.4 --with-headers=${SYSROOT}/usr/include --disable-nscd --disable-werror libc_cv_slibdir=/usr/lib && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../usr/lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../usr/lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
     "sed '/RTLDLIST=/s@/usr@@g' -i ${PKG}/usr/bin/ldd"
 ]
 
@@ -176,7 +176,7 @@ build_commands = [
     "../configure --prefix=/usr --disable-werror --enable-kernel=5.4 --enable-stack-protector=strong --disable-nscd libc_cv_slibdir=/usr/lib",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install",
-    "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
+    "case $(uname -m) in x86_64) mkdir -pv ${PKG}/lib64 && ln -sfv ../usr/lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-linux-x86-64.so.2 && ln -sfv ../usr/lib/ld-linux-x86-64.so.2 ${PKG}/lib64/ld-lsb-x86-64.so.3 ;; esac",
     "sed '/RTLDLIST=/s@/usr@@g' -i ${PKG}/usr/bin/ldd",
     "mkdir -pv ${PKG}/etc && cp -v ../nscd/nscd.conf ${PKG}/etc/nscd.conf"
 ]
@@ -192,7 +192,7 @@ stage = 1
 build_order = 5
 depends = ["glibc-pass1"]
 build_commands = [
-    "mkdir -p build && cd build && CPP=cpp ../libstdc++-v3/configure --host=${TARGET} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/var/tmp/lfs-bootstrap/${TARGET}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${PKG} install && rm -fv ${PKG}/usr/lib/lib{stdc++{,exp,fs},supc++}.la"
+    "mkdir -p build && cd build && ../libstdc++-v3/configure --host=${TARGET} --build=$(../config.guess) --prefix=/usr --disable-multilib --disable-nls --disable-libstdcxx-pch --disable-libstdcxx-sdt --with-gxx-include-dir=/var/tmp/lfs-bootstrap/${TARGET}/include/c++/16.0.1 && make -j${NPROC} && make DESTDIR=${PKG} install && rm -fv ${PKG}/usr/lib/lib{stdc++{,exp,fs},supc++}.la"
 ]
 
 # Final native libstdc++ (built as part of gcc, but can be built separately)
@@ -628,15 +628,6 @@ git_url = "https://github.com/util-linux/util-linux.git"
 use_git = false
 stage = 3
 
-[packages.acl]
-version = "2.3.2"
-version_check = "savannah:acl"
-description = "Access Control Lists"
-url = "https://download.savannah.nongnu.org/releases/acl/acl-${version}.tar.xz"
-git_url = "https://git.savannah.gnu.org/git/acl.git"
-use_git = false
-stage = 3
-
 [packages.attr]
 version = "2.5.2"
 version_check = "savannah:attr"
@@ -645,6 +636,18 @@ url = "https://download.savannah.nongnu.org/releases/attr/attr-${version}.tar.xz
 git_url = "https://git.savannah.gnu.org/git/attr.git"
 use_git = false
 stage = 3
+build_order = 1
+
+[packages.acl]
+version = "2.3.2"
+version_check = "savannah:acl"
+description = "Access Control Lists"
+url = "https://download.savannah.nongnu.org/releases/acl/acl-${version}.tar.xz"
+git_url = "https://git.savannah.gnu.org/git/acl.git"
+use_git = false
+stage = 3
+build_order = 2
+depends = ["attr"]
 
 [packages.shadow]
 version = "4.19.2"
@@ -1988,6 +1991,7 @@ description = "NVIDIA CUDA Toolkit (nvcc, cuBLAS, cuDNN, etc.)"
 url = "https://developer.download.nvidia.com/compute/cuda/${version}/local_installers/cuda_${version}_570.124.06_linux.run"
 git_url = ""
 use_git = false
+manual_download = true
 stage = 12
 depends = ["nvidia-driver"]
 # Note: Run with: sh cuda_*.run --silent --toolkit --no-opengl-libs
@@ -2399,6 +2403,7 @@ description = "TeX Live ISO image (full offline)"
 url = "https://mirror.ctan.org/systems/texlive/Images/texlive${version}.iso"
 git_url = ""
 use_git = false
+manual_download = true
 stage = 17
 # Alternative: Full ISO for offline installation
 

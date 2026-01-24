@@ -275,6 +275,13 @@ build_and_install() {
         export CFLAGS="${CFLAGS_SAFE}"
         export CXXFLAGS="${CXXFLAGS_SAFE}"
         export LDFLAGS="${LDFLAGS_SAFE}"
+    else
+        # Stage 3+: Use LFS sysroot for headers/libs
+        export CFLAGS="${CFLAGS} -I${LFS}/usr/include"
+        export CXXFLAGS="${CXXFLAGS} -I${LFS}/usr/include"
+        export LDFLAGS="${LDFLAGS} -L${LFS}/usr/lib -Wl,-rpath-link,${LFS}/usr/lib"
+        export PKG_CONFIG_PATH="${LFS}/usr/lib/pkgconfig:${LFS}/usr/share/pkgconfig"
+        export PKG_CONFIG_SYSROOT_DIR="${LFS}"
     fi
 
     echo ""

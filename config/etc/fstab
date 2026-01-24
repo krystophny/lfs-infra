@@ -1,11 +1,11 @@
 # /etc/fstab - LFS filesystem table
 # <device>  <mount>  <type>  <options>  <dump>  <pass>
 
-# Root filesystem (adjust device as needed)
-/dev/sda2       /               ext4    defaults,noatime        1 1
+# Root filesystem (install.sh replaces ROOTUUID/EFIUUID with actual UUIDs)
+UUID=ROOTUUID   /               ext4    defaults,noatime        1 1
 
-# EFI System Partition (if using UEFI)
-/dev/sda1       /boot/efi       vfat    defaults,noatime        0 2
+# EFI System Partition
+UUID=EFIUUID    /boot/efi       vfat    defaults,noatime        0 2
 
 # Tmpfs for /tmp (90% of RAM - with 96GB, no swap needed)
 tmpfs           /tmp            tmpfs   defaults,nosuid,nodev,size=90%  0 0

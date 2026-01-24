@@ -341,7 +341,7 @@ set timeout=0
 set timeout_style=hidden
 
 menuentry "LFS" {
-    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet loglevel=3 amd_pstate=active
+    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet loglevel=3 amd_pstate=active nowatchdog nmi_watchdog=0 libahci.ignore_sss=1
 }
 
 menuentry "LFS (recovery)" {
