@@ -1,12 +1,13 @@
 #!/bin/bash
-# Test LFS boot in QEMU with graphical window
+# Test LFS boot in QEMU with both graphical and serial output
 
 OVMF_CODE="/usr/share/edk2/ovmf/OVMF_CODE.fd"
 OVMF_VARS="/usr/share/edk2/ovmf/OVMF_VARS.fd"
 
 cp "${OVMF_VARS}" /tmp/OVMF_VARS_temp.fd 2>/dev/null
 
-echo "Starting QEMU with graphical window..."
+echo "Starting QEMU... (serial output will appear here too)"
+echo "Close window or Ctrl-C to exit"
 
 sudo qemu-system-x86_64 \
     -enable-kvm \
@@ -19,6 +20,7 @@ sudo qemu-system-x86_64 \
     -device ahci,id=ahci \
     -device ide-hd,drive=disk0,bus=ahci.0 \
     -net nic -net user \
-    -vga virtio
+    -vga std \
+    -serial stdio
 
 rm -f /tmp/OVMF_VARS_temp.fd
