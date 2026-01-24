@@ -133,15 +133,32 @@ echo "Hostname:    ${LFS_HOSTNAME}"
 echo "CPU cores:   ${NPROC}"
 echo ""
 
-# Show current partition table
-log "Current partition table:"
-parted -s "${DEVICE}" print 2>/dev/null || true
-echo ""
+# Determine partition naming (needed for mount check)
+if [[ "${DEVICE}" == *nvme* ]] || [[ "${DEVICE}" == *loop* ]]; then
+    PART_PREFIX="${DEVICE}p"
+else
+    PART_PREFIX="${DEVICE}"
+fi
 
-if [[ ${SKIP_CONFIRM} -eq 0 ]]; then
-    warn "ALL DATA ON ${DEVICE} WILL BE ERASED!"
-    read -p "Type 'ERASE' to continue: " confirm
-    [[ "${confirm}" == "ERASE" ]] || die "Aborted"
+EFI_PART="${PART_PREFIX}1"
+ROOT_PART="${PART_PREFIX}2"
+
+# Check if already mounted - reuse existing filesystem
+REUSE_FILESYSTEM=0
+if mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
+    REUSE_FILESYSTEM=1
+    log "Target already mounted at ${MOUNT_POINT} - will reuse existing filesystem"
+else
+    # Show current partition table
+    log "Current partition table:"
+    parted -s "${DEVICE}" print 2>/dev/null || true
+    echo ""
+
+    if [[ ${SKIP_CONFIRM} -eq 0 ]]; then
+        warn "ALL DATA ON ${DEVICE} WILL BE ERASED!"
+        read -p "Type 'ERASE' to continue: " confirm
+        [[ "${confirm}" == "ERASE" ]] || die "Aborted"
+    fi
 fi
 
 # ============================================================================
@@ -172,18 +189,8 @@ ok "User: ${LFS_USERNAME}"
 # Step 2: Partition and Format (ext4)
 # ============================================================================
 
-# Determine partition naming
-if [[ "${DEVICE}" == *nvme* ]] || [[ "${DEVICE}" == *loop* ]]; then
-    PART_PREFIX="${DEVICE}p"
-else
-    PART_PREFIX="${DEVICE}"
-fi
-
-EFI_PART="${PART_PREFIX}1"
-ROOT_PART="${PART_PREFIX}2"
-
 # Check if already mounted - reuse existing filesystem
-if mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
+if [[ ${REUSE_FILESYSTEM} -eq 1 ]]; then
     header "Using Existing Filesystem"
     log "Target already mounted at ${MOUNT_POINT}"
 
