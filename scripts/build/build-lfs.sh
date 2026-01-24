@@ -268,6 +268,14 @@ build_and_install() {
     local pkg="$1"
     local version=$(get_pkg_version "${pkg}")
     local desc=$(get_pkg_description "${pkg}")
+    local stage=$(get_pkg_stage "${pkg}")
+
+    # Use safe flags (no LTO) for cross-compiled stages 1-2
+    if [[ "${stage}" -le 2 ]]; then
+        export CFLAGS="${CFLAGS_SAFE}"
+        export CXXFLAGS="${CXXFLAGS_SAFE}"
+        export LDFLAGS="${LDFLAGS_SAFE}"
+    fi
 
     echo ""
     log ">>> Package: ${pkg}-${version}"

@@ -224,7 +224,8 @@ build_commands = [
     "tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp",
     "tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
-    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${TARGET} --target=${TARGET} LDFLAGS_FOR_TARGET=-L${PWD}/${TARGET}/libgcc --prefix=/usr --with-build-sysroot=${SYSROOT} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
+    "sed -i -e 's/^s-selftest-c++: .*/s-selftest-c++:/' -e '/GCC_FOR_SELFTESTS.*CPP_SELFTEST_FLAGS/d' gcc/cp/Make-lang.in",
+    "mkdir -p build && cd build && ../configure --build=$(../config.guess) --host=${TARGET} --target=${TARGET} LDFLAGS_FOR_TARGET=-L${PWD}/${TARGET}/libgcc --prefix=/usr --with-build-sysroot=${SYSROOT} --enable-default-pie --enable-default-ssp --disable-nls --disable-multilib --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libsanitizer --disable-libssp --disable-libvtv --enable-checking=release --enable-languages=c,c++ && make -j${NPROC} all-gcc all-target-libgcc && make DESTDIR=${PKG} install-gcc install-target-libgcc",
     "ln -sv gcc ${PKG}/usr/bin/cc"
 ]
 
@@ -290,7 +291,7 @@ build_commands = [
     "./configure --prefix=/usr --host=${TARGET} --build=$(build-aux/config.guess) --enable-install-program=hostname",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install",
-    "mv -v ${PKG}/usr/bin/chroot ${PKG}/usr/sbin"
+    "mkdir -p ${PKG}/usr/sbin && mv -v ${PKG}/usr/bin/chroot ${PKG}/usr/sbin/"
 ]
 
 [packages.diffutils]
