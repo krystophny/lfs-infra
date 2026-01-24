@@ -28,7 +28,8 @@ SOURCES=$LFS/usr/src
 NPROC=$(nproc)
 
 # Cross-toolchain is IN $LFS, not on host!
-export PATH=$LFS/var/tmp/lfs-bootstrap/bin:$PATH
+# Preserve host tools (make, etc.) by ensuring standard paths are included
+export PATH=$LFS/var/tmp/lfs-bootstrap/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
 
 # pk installs to PK_ROOT - MUST be set for pk safety check
 export PK_ROOT=$LFS
@@ -98,24 +99,25 @@ ls -la $LFS/lib64/
 echo ""
 echo "=== Step 3: Building libstdc++-pass1 ==="
 
-GCCVER=$(ls $SOURCES | grep -E '^gcc-[0-9]' | head -1 | sed 's/gcc-//')
+# Find GCC 16 snapshot (the one we use for bootstrap)
+GCCVER="16-20260118"
+GCCSRC="$SOURCES/gcc-$GCCVER"
 
-# Check if GCC source exists
-if [ ! -d "$SOURCES/gcc-$GCCVER" ]; then
+# Check if GCC source exists, extract if needed
+if [ ! -d "$GCCSRC" ]; then
     echo "Looking for GCC source..."
-    for f in $SOURCES/gcc-*.tar.*; do
-        if [ -f "$f" ]; then
-            echo "Extracting $f..."
-            cd $SOURCES
-            tar xf "$f"
-            break
-        fi
-    done
-    GCCVER=$(ls $SOURCES | grep -E '^gcc-[0-9]' | head -1 | sed 's/gcc-//')
+    if [ -f "$SOURCES/gcc-$GCCVER.tar.xz" ]; then
+        echo "Extracting gcc-$GCCVER.tar.xz..."
+        cd $SOURCES
+        tar xf "gcc-$GCCVER.tar.xz"
+    else
+        echo "ERROR: GCC source not found: $SOURCES/gcc-$GCCVER.tar.xz"
+        exit 1
+    fi
 fi
 
-if [ -z "$GCCVER" ]; then
-    echo "ERROR: GCC source not found in $SOURCES"
+if [ ! -d "$GCCSRC" ]; then
+    echo "ERROR: GCC source directory not found: $GCCSRC"
     exit 1
 fi
 
@@ -129,9 +131,7 @@ safe_rm_rf "$LIBSTDCXX_DIR/build"
 safe_rm_rf "$LIBSTDCXX_DIR/pkg"
 mkdir -p "$LIBSTDCXX_DIR/build" "$LIBSTDCXX_DIR/pkg"
 
-GCCSRC="$SOURCES/gcc-$GCCVER"
-
-# Get GCC C++ version for include path
+# GCC version for include path (major.minor.patch from version.c)
 GCCPPVER=$(grep 'version_string' $GCCSRC/gcc/version.c 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "16.0.1")
 echo "GCC C++ version: $GCCPPVER"
 
@@ -142,10 +142,14 @@ PKG="$LIBSTDCXX_DIR/pkg"
 # Configure libstdc++
 # --prefix=/usr because files go to $LFS/usr via DESTDIR or pk
 # --with-gxx-include-dir puts headers where cross-compiler can find them
-# Note: This path is INSIDE $LFS since cross-compiler sysroot is $LFS
-$GCCSRC/libstdc++-v3/configure \
+# Build libstdc++ from INSIDE the GCC source tree (required for proper build)
+cd $GCCSRC
+mkdir -p build-libstdcxx
+cd build-libstdcxx
+
+../libstdc++-v3/configure \
     --host=$TARGET \
-    --build=$($GCCSRC/config.guess) \
+    --build=$(../config.guess) \
     --prefix=/usr \
     --disable-multilib \
     --disable-nls \
