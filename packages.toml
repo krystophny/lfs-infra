@@ -687,7 +687,7 @@ use_git = false
 stage = 3
 
 [packages.iana-etc]
-version = "20241106"
+version = "20251215"
 version_check = "url:https://github.com/Mic92/iana-etc/releases|/releases/tag/([0-9]+)"
 description = "IANA /etc files (protocols, services)"
 url = "https://github.com/Mic92/iana-etc/releases/download/${version}/iana-etc-${version}.tar.gz"
@@ -1712,7 +1712,7 @@ stage = 9
 # =============================================================================
 
 [packages.exo]
-version = "4.20.1"
+version = "4.20.0"
 version_check = "xfce:xfce/exo"
 description = "Xfce extension library"
 url = "https://archive.xfce.org/src/xfce/exo/4.20/exo-${version}.tar.bz2"
@@ -1721,7 +1721,7 @@ use_git = false
 stage = 10
 
 [packages.garcon]
-version = "4.20.1"
+version = "4.20.0"
 version_check = "xfce:xfce/garcon"
 description = "Xfce menu library"
 url = "https://archive.xfce.org/src/xfce/garcon/4.20/garcon-${version}.tar.bz2"
@@ -1784,7 +1784,7 @@ use_git = false
 stage = 10
 
 [packages.xfce4-appfinder]
-version = "4.20.1"
+version = "4.20.0"
 version_check = "xfce:xfce/xfce4-appfinder"
 description = "Xfce application finder"
 url = "https://archive.xfce.org/src/xfce/xfce4-appfinder/4.20/xfce4-appfinder-${version}.tar.bz2"
@@ -1892,7 +1892,7 @@ stage = 11
 repology = "claws-mail"
 
 [packages.chicago95]
-version = "3.0.2"
+version = "3.0.1"
 version_check = "github:grassmunk/Chicago95"
 description = "Chicago95 XFCE theme (Windows 95 style)"
 url = "https://github.com/grassmunk/Chicago95/archive/refs/tags/v${version}.tar.gz"
@@ -1905,7 +1905,7 @@ stage = 11
 version = "2.37"
 version_check = "github:dejavu-fonts/dejavu-fonts"
 description = "DejaVu TrueType fonts"
-url = "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_${version}/dejavu-fonts-ttf-${version}.tar.bz2"
+url = "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-${version}.tar.bz2"
 git_url = "https://github.com/dejavu-fonts/dejavu-fonts.git"
 use_git = false
 stage = 11
@@ -1945,7 +1945,7 @@ depends = ["vte"]
 version = "4.0.6"
 version_check = "github:nextcloud/desktop"
 description = "Nextcloud desktop sync client"
-url = "https://github.com/nextcloud/desktop/releases/download/v${version}/Nextcloud-${version}.tar.xz"
+url = "https://github.com/nextcloud/desktop/archive/refs/tags/v${version}.tar.gz"
 git_url = "https://github.com/nextcloud/desktop.git"
 use_git = false
 stage = 11
@@ -2090,10 +2090,10 @@ use_git = false
 stage = 13
 
 [packages.gamescope]
-version = "3.18.0"
+version = "3.16.19"
 version_check = "github:ValveSoftware/gamescope"
 description = "SteamOS session compositing window manager"
-url = "https://github.com/ValveSoftware/gamescope/releases/download/${version}/gamescope-${version}.tar.gz"
+url = "https://github.com/ValveSoftware/gamescope/archive/refs/tags/${version}.tar.gz"
 git_url = "https://github.com/ValveSoftware/gamescope.git"
 use_git = false
 stage = 13
@@ -2126,10 +2126,10 @@ use_git = false
 stage = 13
 
 [packages.spirv-tools]
-version = "1.4.312.0"
+version = "vulkan-sdk-1.4.335.0"
 version_check = "github:KhronosGroup/SPIRV-Tools"
 description = "SPIR-V tools"
-url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/v${version}.tar.gz"
+url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/${version}.tar.gz"
 git_url = "https://github.com/KhronosGroup/SPIRV-Tools.git"
 use_git = false
 stage = 13
@@ -2158,7 +2158,7 @@ stage = 13
 # Note: Build with --host=i686-pc-linux-gnu
 
 [packages.lib32-mesa]
-version = "26.0.0"
+version = "24.3.4"
 version_check = "freedesktop:mesa/mesa"
 description = "OpenGL implementation (32-bit)"
 url = "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
@@ -2286,7 +2286,7 @@ stage = 15
 version = "2026.122.133140"
 version_check = "github:LizardByte/Sunshine"
 description = "Self-hosted game streaming host"
-url = "https://github.com/LizardByte/Sunshine/releases/download/v${version}/sunshine-linux-x86_64-${version}.tar.gz"
+url = "https://github.com/LizardByte/Sunshine/archive/refs/tags/v${version}.tar.gz"
 git_url = "https://github.com/LizardByte/Sunshine.git"
 use_git = false
 stage = 16
@@ -2296,7 +2296,7 @@ stage = 16
 version = "6.1.0"
 version_check = "github:moonlight-stream/moonlight-qt"
 description = "Open source game streaming client"
-url = "https://github.com/moonlight-stream/moonlight-qt/releases/download/v${version}/Moonlight-${version}.tar.gz"
+url = "https://github.com/moonlight-stream/moonlight-qt/releases/download/v${version}/MoonlightSrc-${version}.tar.gz"
 git_url = "https://github.com/moonlight-stream/moonlight-qt.git"
 use_git = false
 stage = 16
@@ -2306,7 +2306,7 @@ stage = 16
 version = "2.7.1"
 version_check = "github:moonlight-stream/moonlight-embedded"
 description = "Moonlight for embedded/ARM devices"
-url = "https://github.com/moonlight-stream/moonlight-embedded/releases/download/v${version}/moonlight-embedded-${version}.tar.gz"
+url = "https://github.com/moonlight-stream/moonlight-embedded/releases/download/v${version}/moonlight-embedded-${version}.tar.xz"
 git_url = "https://github.com/moonlight-stream/moonlight-embedded.git"
 use_git = false
 stage = 16
@@ -2417,7 +2417,7 @@ stage = 17
 version = "9.10.1"
 version_check = "github:ghc/ghc"
 description = "Glasgow Haskell Compiler"
-url = "https://downloads.haskell.org/~ghc/${version}/ghc-${version}-x86_64-unknown-linux.tar.xz"
+url = "https://downloads.haskell.org/~ghc/${version}/ghc-${version}-x86_64-deb11-linux.tar.xz"
 git_url = ""
 use_git = false
 stage = 17
@@ -2487,7 +2487,7 @@ stage = 18
 # =============================================================================
 
 [packages.linux-firmware]
-version = "20241210"
+version = "20260110"
 version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
 description = "Linux kernel firmware files"
 url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
@@ -2497,17 +2497,17 @@ stage = 19
 # Includes: Intel Wi-Fi (iwlwifi), AMD GPU, NVIDIA, i915, etc.
 
 [packages.amd-ucode]
-version = "20250106"
-version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/amd-ucode|([0-9]{8})"
+version = "20260110"
+version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
 description = "AMD CPU microcode (extracted from linux-firmware)"
-url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
 git_url = ""
 use_git = false
 stage = 19
 # Extract amd-ucode/ directory and create initrd for early loading
 
 [packages.intel-ucode]
-version = "20250108"
+version = "20251111"
 version_check = "github:intel/Intel-Linux-Processor-Microcode-Data-Files"
 description = "Intel CPU microcode"
 url = "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/archive/microcode-${version}.tar.gz"
@@ -2530,20 +2530,20 @@ stage = 19
 # =============================================================================
 
 [packages.amdgpu-firmware]
-version = "20250106"
-version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/amdgpu|([0-9]{8})"
+version = "20260110"
+version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
 description = "AMD GPU firmware (part of linux-firmware)"
-url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
 git_url = ""
 use_git = false
 stage = 19
 # For AMD integrated graphics if present
 
 [packages.iwlwifi-firmware]
-version = "20250106"
-version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/|([0-9]{8})"
+version = "20260110"
+version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
 description = "Intel Wi-Fi 6 AX200/AX201 firmware"
-url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/snapshot/linux-firmware-${version}.tar.gz"
+url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
 git_url = ""
 use_git = false
 stage = 19
@@ -2560,10 +2560,10 @@ use_git = false
 stage = 19
 
 [packages.bluez-firmware]
-version = "1.2"
-version_check = "url:https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/log/|([0-9]{8})"
-description = "Bluetooth firmware files"
-url = "https://www.kernel.org/pub/linux/bluetooth/bluez-firmware-${version}.tar.gz"
+version = "20260110"
+version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
+description = "Bluetooth firmware files (part of linux-firmware)"
+url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
 git_url = ""
 use_git = false
 stage = 19
@@ -2581,7 +2581,7 @@ stage = 19
 
 # Software RAID
 [packages.mdadm]
-version = "4.5"
+version = "4.4"
 version_check = "kernelorg:linux/utils/raid/mdadm|mdadm"
 description = "Linux Software RAID management"
 url = "https://www.kernel.org/pub/linux/utils/raid/mdadm/mdadm-${version}.tar.xz"
@@ -2596,7 +2596,7 @@ provides = ["/usr/sbin/mdadm", "/usr/sbin/mdmon"]
 
 # Sensors and monitoring
 [packages.lm-sensors]
-version = "3-6-2"
+version = "3-6-0"
 version_check = "url:https://github.com/lm-sensors/lm-sensors/tags|V([0-9]+-[0-9]+-[0-9]+)"
 description = "Hardware monitoring tools"
 url = "https://github.com/lm-sensors/lm-sensors/archive/refs/tags/V${version}.tar.gz"
@@ -2605,11 +2605,11 @@ use_git = false
 stage = 19
 
 [packages.zenpower3]
-version = "0.2.0"
+version = "master"
 version_check = "github:ocerman/zenpower"
 description = "AMD Ryzen CPU power monitoring"
-url = "https://github.com/Ta180m/zenpower3/archive/v${version}/zenpower3-${version}.tar.gz"
-git_url = "https://github.com/Ta180m/zenpower3.git"
+url = "https://github.com/ocerman/zenpower/archive/refs/heads/master.tar.gz"
+git_url = "https://github.com/ocerman/zenpower.git"
 use_git = false
 stage = 19
 # Better sensor support for AMD Ryzen 5000 series
