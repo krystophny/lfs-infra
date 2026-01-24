@@ -687,7 +687,7 @@ use_git = false
 stage = 3
 
 [packages.iana-etc]
-version = "20250117"
+version = "20241106"
 version_check = "url:https://github.com/Mic92/iana-etc/releases|/releases/tag/([0-9]+)"
 description = "IANA /etc files (protocols, services)"
 url = "https://github.com/Mic92/iana-etc/releases/download/${version}/iana-etc-${version}.tar.gz"
@@ -1348,7 +1348,7 @@ use_git = false
 stage = 8
 
 [packages.xf86-video-fbdev]
-version = "0.5.1"
+version = "0.5.0"
 version_check = "xorg:driver/xf86-video-fbdev"
 description = "Xorg framebuffer video driver"
 url = "https://www.x.org/releases/individual/driver/xf86-video-fbdev-${version}.tar.bz2"
@@ -1852,7 +1852,7 @@ use_git = false
 stage = 11
 
 [packages.xfce4-pulseaudio-plugin]
-version = "0.5.1"
+version = "0.4.8"
 version_check = "xfce:apps/xfce4-pulseaudio-plugin"
 description = "XFCE panel plugin for PulseAudio"
 url = "https://archive.xfce.org/src/panel-plugins/xfce4-pulseaudio-plugin/0.4/xfce4-pulseaudio-plugin-${version}.tar.bz2"
@@ -2414,7 +2414,7 @@ stage = 17
 # Requires: ghc, cabal-install
 
 [packages.ghc]
-version = "9.14.1-release"
+version = "9.10.1"
 version_check = "github:ghc/ghc"
 description = "Glasgow Haskell Compiler"
 url = "https://downloads.haskell.org/~ghc/${version}/ghc-${version}-x86_64-unknown-linux.tar.xz"
