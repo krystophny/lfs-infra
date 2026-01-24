@@ -320,10 +320,16 @@ This would write to your HOST system! Aborting immediately."
 
 # Validate ALL critical build paths are inside LFS
 # Call this BEFORE any file operations
+# ONLY validates when running on HOST (not in chroot)
 validate_all_build_paths() {
+    # In chroot, paths like /usr/src ARE correct (they're inside the target)
+    if is_in_chroot; then
+        return 0
+    fi
+
     validate_lfs_variable
 
-    # Check all the paths that could cause damage
+    # Check all the paths that could cause damage to HOST
     [[ -n "${LFS_SOURCES:-}" ]] && validate_critical_path "LFS_SOURCES" "${LFS_SOURCES}"
     [[ -n "${LFS_BOOTSTRAP:-}" ]] && validate_critical_path "LFS_BOOTSTRAP" "${LFS_BOOTSTRAP}"
     [[ -n "${LFS_PKGCACHE:-}" ]] && validate_critical_path "LFS_PKGCACHE" "${LFS_PKGCACHE}"
