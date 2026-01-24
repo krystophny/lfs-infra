@@ -1,5 +1,0 @@
-#!/bin/sh
-# runit service: iwd wireless daemon
-
-sv check dbus >/dev/null || exit 1
-exec iwd

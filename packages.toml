@@ -1271,38 +1271,6 @@ git_url = "https://github.com/thom311/libnl.git"
 use_git = false
 stage = 7
 
-[packages.ell]
-version = "0.73"
-version_check = "kernelorg:linux/libs/ell|ell"
-description = "Embedded Linux Library"
-url = "https://www.kernel.org/pub/linux/libs/ell/ell-${version}.tar.xz"
-git_url = "https://git.kernel.org/pub/scm/libs/ell/ell.git"
-use_git = false
-stage = 7
-build_order = 40
-build_commands = [
-    "./configure --prefix=/usr",
-    "make -j${NPROC}",
-    "make DESTDIR=${PKG} install"
-]
-
-[packages.iwd]
-version = "3.10"
-version_check = "kernelorg:linux/network/wireless|iwd"
-description = "Intel wireless daemon"
-url = "https://www.kernel.org/pub/linux/network/wireless/iwd-${version}.tar.xz"
-git_url = "https://git.kernel.org/pub/scm/network/wireless/iwd.git"
-use_git = false
-stage = 7
-build_order = 50
-depends = ["dbus", "readline", "ell"]
-# LTO causes linker issues with ell symbols
-build_commands = [
-    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libexecdir=/usr/lib --disable-systemd-service",
-    "make -j${NPROC}",
-    "make DESTDIR=${PKG} install"
-]
-
 [packages.wpa_supplicant]
 version = "2.11"
 version_check = "url:https://w1.fi/releases/|wpa_supplicant-[0-9]+\.[0-9]+(\.[0-9]+)?\.tar"
