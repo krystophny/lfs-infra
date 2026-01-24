@@ -328,24 +328,33 @@ ok "LFS build complete"
 # ============================================================================
 header "Installing Bootloader (GRUB)"
 
+# Get PARTUUID for more reliable boot (works without initramfs)
+ROOT_PARTUUID=$(blkid -s PARTUUID -o value "${ROOT_PART}")
+
 grub-install --target=x86_64-efi \
     --efi-directory="${MOUNT_POINT}/boot/efi" \
     --boot-directory="${MOUNT_POINT}/boot" \
     --bootloader-id=LFS \
     --removable
 
+# Also install to UEFI fallback path for maximum compatibility
+mkdir -p "${MOUNT_POINT}/boot/efi/EFI/BOOT"
+cp "${MOUNT_POINT}/boot/efi/EFI/LFS/grubx64.efi" "${MOUNT_POINT}/boot/efi/EFI/BOOT/BOOTX64.EFI"
+
+# Get kernel version
+KERNEL_VERSION=$(ls "${MOUNT_POINT}/boot/" | grep -oP 'vmlinuz-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
 cat > "${MOUNT_POINT}/boot/grub/grub.cfg" << EOF
-# GRUB config for LFS - instant boot (hold SHIFT for menu)
-set default=0
+# Minimal GRUB config - instant boot, serial console
 set timeout=0
-set timeout_style=hidden
+set default=0
+
+serial --speed=115200
+terminal_input serial console
+terminal_output serial console
 
 menuentry "LFS" {
-    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro quiet loglevel=3 amd_pstate=active nowatchdog nmi_watchdog=0 libahci.ignore_sss=1
-}
-
-menuentry "LFS (recovery)" {
-    linux /boot/vmlinuz root=UUID=${ROOT_UUID} ro single
+    linux /boot/vmlinuz-${KERNEL_VERSION} root=PARTUUID=${ROOT_PARTUUID} ro console=ttyS0,115200n8 console=tty0 quiet
 }
 EOF
 
