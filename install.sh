@@ -436,23 +436,33 @@ chmod 755 "${MOUNT_POINT}/home/${LFS_USERNAME}"
 ok "User ${LFS_USERNAME} created (sudo via wheel, root locked)"
 
 # Network configuration
-mkdir -p "${MOUNT_POINT}/etc/iwd" "${MOUNT_POINT}/var/lib/iwd"
 
-# Copy iwd config
-if [[ -d "${SCRIPT_DIR}/config/iwd" ]]; then
-    cp -r "${SCRIPT_DIR}/config/iwd/"* "${MOUNT_POINT}/etc/iwd/"
-fi
-
-# WiFi configuration
+# WiFi configuration using wpa_supplicant
 if [[ -n "${WIFI_SSID:-}" && -n "${WIFI_PASSWORD:-}" ]]; then
-    log "Configuring WiFi: ${WIFI_SSID}"
-    # Create iwd network file (PSK format)
-    WIFI_PSK=$(wpa_passphrase "${WIFI_SSID}" "${WIFI_PASSWORD}" 2>/dev/null | grep -E "^\s*psk=" | cut -d= -f2)
-    cat > "${MOUNT_POINT}/var/lib/iwd/${WIFI_SSID}.psk" << EOF
-[Security]
-PreSharedKey=${WIFI_PSK}
+    log "Configuring WiFi with wpa_supplicant: ${WIFI_SSID}"
+
+    # Create wpa_supplicant config directory
+    mkdir -p "${MOUNT_POINT}/etc/wpa_supplicant"
+
+    # Generate wpa_supplicant.conf with PSK
+    cat > "${MOUNT_POINT}/etc/wpa_supplicant/wpa_supplicant.conf" << EOF
+ctrl_interface=/run/wpa_supplicant
+update_config=1
+
+network={
+    ssid="${WIFI_SSID}"
+    psk="${WIFI_PASSWORD}"
+    key_mgmt=WPA-PSK
+}
 EOF
-    chmod 600 "${MOUNT_POINT}/var/lib/iwd/${WIFI_SSID}.psk"
+    chmod 600 "${MOUNT_POINT}/etc/wpa_supplicant/wpa_supplicant.conf"
+
+    # Enable wpa_supplicant service
+    ln -sf /etc/sv/wpa_supplicant "${MOUNT_POINT}/var/service/wpa_supplicant" 2>/dev/null || true
+
+    # Also enable dhcpcd for DHCP
+    ln -sf /etc/sv/dhcpcd "${MOUNT_POINT}/var/service/dhcpcd" 2>/dev/null || true
+
     ok "WiFi configured: ${WIFI_SSID}"
 fi
 
@@ -522,12 +532,15 @@ mkdir -p "${MOUNT_POINT}/etc/runit/runsvdir/default"
 mkdir -p "${MOUNT_POINT}/etc/sv"
 ln -sf /etc/runit/runsvdir/default "${MOUNT_POINT}/etc/runit/runsvdir/current"
 
-# Copy service definitions
-for svc in dbus iwd sshd cronie; do
+# Copy service definitions (wpa_supplicant/dhcpcd enabled via WiFi config)
+for svc in dbus sshd cronie wpa_supplicant dhcpcd; do
     if [[ -d "${SCRIPT_DIR}/config/runit/sv/${svc}" ]]; then
         cp -r "${SCRIPT_DIR}/config/runit/sv/${svc}" "${MOUNT_POINT}/etc/sv/"
         chmod +x "${MOUNT_POINT}/etc/sv/${svc}/run"
-        ln -sf "/etc/sv/${svc}" "${MOUNT_POINT}/etc/runit/runsvdir/default/"
+        # Only auto-enable core services, WiFi services enabled by WiFi config
+        if [[ "$svc" == "dbus" || "$svc" == "sshd" || "$svc" == "cronie" ]]; then
+            ln -sf "/etc/sv/${svc}" "${MOUNT_POINT}/etc/runit/runsvdir/default/"
+        fi
     fi
 done
 

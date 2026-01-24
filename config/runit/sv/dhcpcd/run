@@ -1,0 +1,4 @@
+#!/bin/sh
+# runit service: dhcpcd DHCP client
+
+exec dhcpcd -B -M

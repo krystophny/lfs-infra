@@ -931,6 +931,22 @@ url = "https://github.com/libffi/libffi/releases/download/v${version}/libffi-${v
 git_url = "https://github.com/libffi/libffi.git"
 use_git = false
 stage = 4
+build_order = 5
+
+[packages.pcre2]
+version = "10.45"
+version_check = "github:PCRE2Project/pcre2"
+description = "Perl Compatible Regular Expressions"
+url = "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${version}/pcre2-${version}.tar.bz2"
+git_url = "https://github.com/PCRE2Project/pcre2.git"
+use_git = false
+stage = 4
+build_order = 6
+build_commands = [
+    "./configure --prefix=/usr --enable-unicode --enable-jit --enable-pcre2-16 --enable-pcre2-32 --disable-static",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.expat]
 version = "2.7.3"
@@ -940,6 +956,7 @@ url = "https://github.com/libexpat/libexpat/releases/download/R_2_7_3/expat-${ve
 git_url = "https://github.com/libexpat/libexpat.git"
 use_git = false
 stage = 4
+build_order = 7
 
 [packages.autoconf]
 version = "2.72"
@@ -1254,6 +1271,21 @@ git_url = "https://github.com/thom311/libnl.git"
 use_git = false
 stage = 7
 
+[packages.ell]
+version = "0.73"
+version_check = "kernelorg:linux/libs/ell|ell"
+description = "Embedded Linux Library"
+url = "https://www.kernel.org/pub/linux/libs/ell/ell-${version}.tar.xz"
+git_url = "https://git.kernel.org/pub/scm/libs/ell/ell.git"
+use_git = false
+stage = 7
+build_order = 40
+build_commands = [
+    "./configure --prefix=/usr",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
 [packages.iwd]
 version = "3.10"
 version_check = "kernelorg:linux/network/wireless|iwd"
@@ -1261,8 +1293,15 @@ description = "Intel wireless daemon"
 url = "https://www.kernel.org/pub/linux/network/wireless/iwd-${version}.tar.xz"
 git_url = "https://git.kernel.org/pub/scm/network/wireless/iwd.git"
 use_git = false
-# TODO: requires dbus, defer for now
-stage = 99
+stage = 7
+build_order = 50
+depends = ["dbus", "readline", "ell"]
+# LTO causes linker issues with ell symbols
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libexecdir=/usr/lib --disable-systemd-service",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
 
 [packages.wpa_supplicant]
 version = "2.11"
@@ -1874,9 +1913,14 @@ description = "GLib core library"
 url = "https://download.gnome.org/sources/glib/2.84/glib-${version}.tar.xz"
 git_url = "https://gitlab.gnome.org/GNOME/glib.git"
 use_git = false
-stage = 9
-build_system = "meson"
-meson_flags = "-Dman-pages=disabled -Ddtrace=disabled -Dsystemtap=disabled -Dgtk_doc=false"
+stage = 4
+build_order = 40
+depends = ["meson", "pcre2", "libffi", "zlib"]
+build_commands = [
+    "meson setup build --prefix=/usr --buildtype=release -Dman-pages=disabled -Ddtrace=disabled -Dsystemtap=disabled -Dgtk_doc=false -Dintrospection=disabled -Dtests=false",
+    "meson compile -C build",
+    "DESTDIR=${PKG} meson install -C build"
+]
 provides = ["/usr/lib/libglib-2.0.so"]
 
 [packages.atk]
@@ -1954,13 +1998,20 @@ meson_flags = "-Dman=false -Dgtk_doc=false -Dintrospection=false -Ddemos=false -
 provides = ["/usr/lib/libgtk-3.so"]
 
 [packages.dbus]
-version = "1.14.10"
+version = "1.16.0"
 version_check = "freedesktop:dbus/dbus"
 description = "Message bus system"
 url = "https://dbus.freedesktop.org/releases/dbus/dbus-${version}.tar.xz"
 git_url = "https://gitlab.freedesktop.org/dbus/dbus.git"
 use_git = false
-stage = 9
+stage = 4
+build_order = 50
+depends = ["expat", "meson", "glib"]
+build_commands = [
+    "meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var --buildtype=release -Druntime_dir=/run -Dsystem_socket=/run/dbus/system_bus_socket -Ddoxygen_docs=disabled -Dxml_docs=disabled -Dsystemd=disabled -Dapparmor=disabled -Dselinux=disabled",
+    "meson compile -C build",
+    "DESTDIR=${PKG} meson install -C build"
+]
 
 [packages.polkit]
 version = "127"
