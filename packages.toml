@@ -813,6 +813,18 @@ stage = 3
 build_order = 31
 depends = ["pkgconf", "ncurses-stage3"]
 
+[packages.iproute2]
+version = "6.18.0"
+description = "IP routing utilities"
+url = "https://www.kernel.org/pub/linux/utils/net/iproute2/iproute2-${version}.tar.xz"
+stage = 3
+build_order = 32
+# Uses make directly, no configure. Needs elfutils for BPF support
+build_commands = [
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} SBINDIR=/usr/sbin install"
+]
+
 [packages.libtirpc]
 version = "1.3.6"
 version_check = "sourceforge:libtirpc"
