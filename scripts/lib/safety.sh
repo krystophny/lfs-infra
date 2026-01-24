@@ -289,12 +289,58 @@ require_not_chroot() {
     fi
 }
 
+# Validate that a critical path variable is INSIDE LFS
+# Dies immediately if path would affect host system
+# Usage: validate_critical_path "LFS_SOURCES" "${LFS_SOURCES}"
+validate_critical_path() {
+    local varname="$1"
+    local path="$2"
+
+    validate_lfs_variable
+
+    # Path must be set
+    if [[ -z "${path}" ]]; then
+        _safety_die "${varname} is empty!"
+    fi
+
+    # Path must be absolute
+    if [[ "${path}" != /* ]]; then
+        _safety_die "${varname}='${path}' is not absolute!"
+    fi
+
+    # Normalize LFS path
+    local lfs_normalized="${LFS%/}"
+
+    # Path MUST start with LFS
+    if [[ "${path}" != "${lfs_normalized}"/* ]] && [[ "${path}" != "${lfs_normalized}" ]]; then
+        _safety_die "CRITICAL: ${varname}='${path}' is OUTSIDE LFS='${LFS}'!
+This would write to your HOST system! Aborting immediately."
+    fi
+}
+
+# Validate ALL critical build paths are inside LFS
+# Call this BEFORE any file operations
+validate_all_build_paths() {
+    validate_lfs_variable
+
+    # Check all the paths that could cause damage
+    [[ -n "${LFS_SOURCES:-}" ]] && validate_critical_path "LFS_SOURCES" "${LFS_SOURCES}"
+    [[ -n "${LFS_BOOTSTRAP:-}" ]] && validate_critical_path "LFS_BOOTSTRAP" "${LFS_BOOTSTRAP}"
+    [[ -n "${LFS_PKGCACHE:-}" ]] && validate_critical_path "LFS_PKGCACHE" "${LFS_PKGCACHE}"
+    [[ -n "${LFS_LOGS:-}" ]] && validate_critical_path "LFS_LOGS" "${LFS_LOGS}"
+    [[ -n "${PK_DB:-}" ]] && validate_critical_path "PK_DB" "${PK_DB}"
+    [[ -n "${SOURCES_DIR:-}" ]] && validate_critical_path "SOURCES_DIR" "${SOURCES_DIR}"
+    [[ -n "${BUILD_DIR:-}" ]] && validate_critical_path "BUILD_DIR" "${BUILD_DIR}"
+    [[ -n "${PKG_CACHE:-}" ]] && validate_critical_path "PKG_CACHE" "${PKG_CACHE}"
+}
+
 # Comprehensive safety check for build scripts
 # Call this at the start of all build scripts
 safety_check() {
     require_linux
     require_not_chroot
     validate_lfs_variable
+    validate_all_build_paths
 }
 
 # Safety check for chroot scripts
