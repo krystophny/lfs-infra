@@ -121,7 +121,7 @@ build_commands = [
     "tar -xf ${SOURCES}/mpfr-*.tar.xz && mv mpfr-* mpfr && tar -xf ${SOURCES}/gmp-*.tar.xz && mv gmp-* gmp && tar -xf ${SOURCES}/mpc-*.tar.* && mv mpc-* mpc",
     "case $(uname -m) in x86_64) sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64 ;; esac",
     "mkdir -p build && cd build && ../configure --target=${TARGET} --prefix=/var/tmp/lfs-bootstrap --with-glibc-version=2.42 --with-sysroot=${SYSROOT} --with-newlib --without-headers --enable-default-pie --enable-default-ssp --disable-nls --disable-shared --disable-multilib --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libstdcxx --enable-languages=c,c++ && make -j${NPROC} && make DESTDIR=${PKG} install",
-    "cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PKG}/var/tmp/lfs-bootstrap/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h"
+    "cd build && cat gcc/limitx.h gcc/glimits.h gcc/limity.h > $(dirname $(${PKG}/var/tmp/lfs-bootstrap/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h"
 ]
 
 # Linux headers - can build in parallel with gcc-pass1
