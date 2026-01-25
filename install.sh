@@ -497,13 +497,20 @@ EOF
     ok "Static LAN configured: ${LAN_INTERFACE} = ${LAN_IP}"
 fi
 
+# Generate locale data (required for tmux and other UTF-8 tools)
+log "Generating UTF-8 locale..."
+mkdir -p "${MOUNT_POINT}/usr/lib/locale"
+localedef --prefix="${MOUNT_POINT}" -i en_US -f UTF-8 en_US.UTF-8
+echo "LANG=en_US.UTF-8" > "${MOUNT_POINT}/etc/locale.conf"
+ok "Locale configured (en_US.UTF-8)"
+
 # Shell profile and optimization flags
 log "Setting up shell profile with optimization flags..."
 cp "${SCRIPT_DIR}/config/etc/profile" "${MOUNT_POINT}/etc/profile"
 mkdir -p "${MOUNT_POINT}/etc/profile.d"
 cp "${SCRIPT_DIR}/config/etc/profile.d/"*.sh "${MOUNT_POINT}/etc/profile.d/"
 chmod 644 "${MOUNT_POINT}/etc/profile" "${MOUNT_POINT}/etc/profile.d/"*.sh
-ok "Shell profile configured (Zen 3 optimizations enabled system-wide)"
+ok "Shell profile configured (Zen 3 optimizations, UTF-8 locale)"
 
 ok "System configured"
 
