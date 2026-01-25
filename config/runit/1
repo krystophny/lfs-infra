@@ -31,11 +31,12 @@ cat /var/lib/random-seed > /dev/urandom 2>/dev/null
 mkdir -p /run/lock /run/user
 chmod 1777 /run/lock
 
-# Start udevd for device management (minimal)
+# Start udevd for device management (minimal, targeted)
 udevd --daemon 2>/dev/null
-udevadm trigger --action=add --type=subsystems
-udevadm trigger --action=add --type=devices
-udevadm settle --timeout=3
+# Only trigger block devices and tty (what we need to boot)
+udevadm trigger --action=add --subsystem-match=block
+udevadm trigger --action=add --subsystem-match=tty
+# No settle - devices we need are instant, rest can load async
 
 # Network interfaces up
 ip link set lo up
