@@ -1,0 +1,31 @@
+From: LFS Builder <lfs@localhost>
+Date: Sat, 25 Jan 2026 00:00:00 +0000
+Subject: [PATCH] x86/stackprotector: Export __stack_chk_guard for SMP builds
+
+NVIDIA's kernel modules (and potentially other out-of-tree modules)
+expect __stack_chk_guard to be exported as a symbol. Currently, the
+kernel only exports this symbol for non-SMP builds.
+
+This patch exports __stack_chk_guard unconditionally to maintain
+compatibility with out-of-tree modules that were compiled with
+older toolchains expecting this symbol.
+
+Signed-off-by: LFS Builder <lfs@localhost>
+---
+ arch/x86/kernel/cpu/common.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 1234567..abcdefg 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -2222,9 +2222,7 @@ EXPORT_PER_CPU_SYMBOL(this_cpu_off);
+
+ #ifdef CONFIG_STACKPROTECTOR
+ DEFINE_PER_CPU_CACHE_HOT(unsigned long, __stack_chk_guard);
+-#ifndef CONFIG_SMP
+ EXPORT_PER_CPU_SYMBOL(__stack_chk_guard);
+-#endif
+ #endif
+
+ static void initialize_debug_regs(void)
