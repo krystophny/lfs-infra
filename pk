@@ -5,7 +5,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PK_LIBEXEC="${SCRIPT_DIR}/pk.d"
+# Check pk.d in script dir first, then /usr/lib/pk
+if [ -d "$SCRIPT_DIR/pk.d" ]; then
+    PK_LIBEXEC="$SCRIPT_DIR/pk.d"
+else
+    PK_LIBEXEC="/usr/lib/pk"
+fi
 
 usage() {
     cat <<EOF
@@ -23,6 +28,7 @@ Package commands:
 Build commands:
   b, build <pkgname>       Build package from packages.toml
   d, download <pkgname>    Download package source
+  bs, build-stage <N>      Build all packages in stage N
 
 System commands:
   c, check [dirs...]       Check for untracked files
@@ -48,6 +54,7 @@ case "$cmd" in
     f) cmd="files" ;;
     b) cmd="build" ;;
     d) cmd="download" ;;
+    bs) cmd="build-stage" ;;
     c) cmd="check" ;;
     v) cmd="version" ;;
     -h|--help|help) usage; exit 0 ;;

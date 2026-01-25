@@ -2,13 +2,33 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
+## CRITICAL: Package Installation Rules
+
+**ALWAYS use pk for ALL package installations. NEVER install anything ad-hoc.**
+
+1. If a package exists in `packages.toml`, use `pk build <pkgname>` and `pk i <pkg.pk.tar.xz>`
+2. If a package does NOT exist in `packages.toml`, ADD IT FIRST, then build/install via pk
+3. NEVER run `make install`, `pip install`, `cargo install` or any other installer directly
+4. NEVER copy binaries or libraries manually to system directories
+5. All installed files MUST be tracked by pk - verify with `pk check`
+6. Package archives use `.pk.tar.xz` extension
+
+```bash
+# Correct workflow for new packages:
+# 1. Add to packages.toml
+# 2. Download: pk d <pkgname>
+# 3. Build:    pk b <pkgname>
+# 4. Install:  pk i /var/cache/pk/<pkgname>-<version>.pk.tar.xz
+# 5. Verify:   pk check
+```
+
 ## Project Overview
 
 LFS-infra is an automated Linux From Scratch build system with bleeding-edge packages (GCC 16, Linux 6.18.7, glibc 2.40), ext4 filesystem, and aggressive Zen 3 performance optimizations.
 
 **Primary workflow**: Boot from Fedora Rawhide live USB, run `./install.sh /dev/nvme0n1` to install LFS on target device.
 
-Uses **pk** - a minimal POSIX shell package manager (~200 lines, zero dependencies).
+Uses **pk** - a minimal POSIX shell package manager (modular git-like architecture).
 
 **Current status**: 249 packages defined across 20 build stages, desktop-ready with XFCE4.
 
@@ -67,17 +87,29 @@ sudo ./install.sh --yes /dev/nvme0n1
 ## pk - Package Manager
 
 ```bash
-pk i <pkg.tar.xz>    # Install package
-pk r <pkgname>       # Remove package
-pk l                 # List installed
-pk q <pkgname>       # Query package info
-pk f <pkgname>       # List package files
-pk v                 # Show version
+# Package commands
+pk i <pkg.pk.tar.xz>   # Install package
+pk r <pkgname>         # Remove package
+pk l                   # List installed
+pk q <pkgname>         # Query package info
+pk f <pkgname>         # List package files
+
+# Build commands
+pk b <pkgname>         # Build package from packages.toml
+pk d <pkgname>         # Download package source
+pk bs <stage>          # Build all packages in a stage
+
+# System commands
+pk c [dirs...]         # Check for untracked files
+pk v                   # Show version
 ```
 
 Database: `/var/lib/pk/<pkgname>/` with `info` (name\nversion) and `files` (file list)
 
-Safety: Blocks installation to host root unless `PK_ROOT` set or in chroot.
+Environment:
+- `PK_ROOT=/` - system install (absolute paths)
+- `PK_ROOT=/mnt/lfs/` - chroot install
+- `PK_ROOT=""` - local/safe mode (relative paths, harmless)
 
 ## Environment Variables
 
