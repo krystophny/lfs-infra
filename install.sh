@@ -417,6 +417,13 @@ nobody:!:19000:0:99999:7:::
 EOF
 chmod 600 "${MOUNT_POINT}/etc/shadow"
 
+# Create /etc/shells (required for login)
+cat > "${MOUNT_POINT}/etc/shells" << 'EOF'
+/bin/sh
+/bin/bash
+/usr/bin/bash
+EOF
+
 # Configure sudo for wheel group (passwordless)
 mkdir -p "${MOUNT_POINT}/etc/sudoers.d"
 cat > "${MOUNT_POINT}/etc/sudoers.d/wheel" << 'EOF'
