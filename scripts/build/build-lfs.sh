@@ -61,8 +61,19 @@ export PATH="${BOOTSTRAP}/bin:${PATH}"
 SOURCES_DIR="${SOURCES}"
 PKG_CACHE="${LFS}/var/cache/pk"
 BUILD_DIR="${LFS}/usr/src"
-PACKAGES_DIR="${PK_PACKAGES_DIR:-/home/ert/code/pk/packages}"
-PK_SCRIPT="${ROOT_DIR}/pk"
+# Find packages directory dynamically
+if [ -n "${PK_PACKAGES_DIR:-}" ]; then
+    PACKAGES_DIR="$PK_PACKAGES_DIR"
+else
+    PACKAGES_DIR=""
+    for d in "${ROOT_DIR}/../pk/packages" "/etc/pk/packages" "/usr/share/pk/packages"; do
+        [ -d "$d" ] && PACKAGES_DIR="$(cd "$d" && pwd)" && break
+    done
+fi
+[ -n "$PACKAGES_DIR" ] || { echo "Cannot find packages directory"; exit 1; }
+
+# Find pk script dynamically
+PK_SCRIPT="${PK_SCRIPT:-$(command -v pk 2>/dev/null || echo "${ROOT_DIR}/../pk/pk")}"
 
 # Helper to cat all package definition files
 cat_packages() {

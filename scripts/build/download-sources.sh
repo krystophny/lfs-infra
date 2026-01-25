@@ -20,7 +20,17 @@ LFS="${LFS:-/mnt/lfs}"
 # Run safety checks (require Linux, validate LFS)
 safety_check
 LFS_SOURCES="${LFS_SOURCES:-${LFS}/sources}"
-PACKAGES_DIR="${PK_PACKAGES_DIR:-/home/ert/code/pk/packages}"
+
+# Find packages directory dynamically
+if [ -n "${PK_PACKAGES_DIR:-}" ]; then
+    PACKAGES_DIR="$PK_PACKAGES_DIR"
+else
+    PACKAGES_DIR=""
+    for d in "${ROOT_DIR}/../pk/packages" "/etc/pk/packages" "/usr/share/pk/packages"; do
+        [ -d "$d" ] && PACKAGES_DIR="$(cd "$d" && pwd)" && break
+    done
+fi
+[ -n "$PACKAGES_DIR" ] || { echo "Cannot find packages directory"; exit 1; }
 
 # Helper to cat all package definition files
 cat_packages() {

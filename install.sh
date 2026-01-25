@@ -299,10 +299,23 @@ ok "fstab generated"
 # ============================================================================
 header "Installing pk Package Manager"
 
-cp "${SCRIPT_DIR}/pk" "${MOUNT_POINT}/usr/bin/pk"
-chmod +x "${MOUNT_POINT}/usr/bin/pk"
+# Find pk repo (adjacent to lfs-infra)
+PK_REPO="${SCRIPT_DIR}/../pk"
+[ -d "$PK_REPO" ] || die "pk repo not found at $PK_REPO"
 
-ok "pk installed"
+# Install pk binary and subcommands
+cp "${PK_REPO}/pk" "${MOUNT_POINT}/usr/bin/pk"
+chmod +x "${MOUNT_POINT}/usr/bin/pk"
+mkdir -p "${MOUNT_POINT}/usr/lib/pk"
+cp "${PK_REPO}/pk.d/"* "${MOUNT_POINT}/usr/lib/pk/"
+chmod +x "${MOUNT_POINT}/usr/lib/pk/"*
+
+# Install package definitions and build config
+mkdir -p "${MOUNT_POINT}/etc/pk/packages"
+cp "${PK_REPO}/packages/"*.toml "${MOUNT_POINT}/etc/pk/packages/"
+cp "${PK_REPO}/config/build.conf" "${MOUNT_POINT}/etc/pk/build.conf"
+
+ok "pk installed (binary, subcommands, package definitions, build config)"
 
 # ============================================================================
 # Step 6: Download Sources

@@ -1,9 +1,0 @@
-#!/bin/sh
-# pk-list - list installed packages
-# Usage: pk list
-
-SCRIPT_DIR="$(dirname "$0")"
-. "$SCRIPT_DIR/pk-common"
-
-[ -d "$DB_DIR" ] || exit 0
-ls -1 "$DB_DIR" 2>/dev/null || true
