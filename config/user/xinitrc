@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Log all output to ~/.xsession-errors
+# Log errors to file
 exec > ~/.xsession-errors 2>&1
 
 # Source system xinitrc scripts
@@ -10,10 +10,9 @@ if [ -d /etc/X11/xinit/xinitrc.d ]; then
     done
 fi
 
-# Start D-Bus if not running
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval $(dbus-launch --sh-syntax --exit-with-session)
-fi
+# Start D-Bus session daemon
+eval $(dbus-launch --sh-syntax)
+export DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID
 
-# Start XFCE
-exec startxfce4
+# Start XFCE session directly
+exec xfce4-session
