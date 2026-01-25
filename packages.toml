@@ -1060,6 +1060,112 @@ build_commands = [
     "chmod 755 ${PKG}/usr/bin/meson"
 ]
 
+[packages.ca-certificates]
+version = "2025-01-19"
+version_check = "url:https://curl.se/docs/caextract.html|CA-bundle \\(([0-9-]+)\\)"
+description = "Mozilla CA certificate bundle"
+url = "https://curl.se/ca/cacert.pem"
+stage = 4
+build_order = 8
+depends = ["openssl"]
+build_commands = [
+    "mkdir -p ${PKG}/etc/ssl/certs",
+    "cp cacert.pem ${PKG}/etc/ssl/certs/ca-certificates.crt",
+    "ln -sfv certs/ca-certificates.crt ${PKG}/etc/ssl/cert.pem",
+    "mkdir -p ${PKG}/usr/share/ca-certificates",
+    "cp cacert.pem ${PKG}/usr/share/ca-certificates/ca-bundle.crt",
+    "mkdir -p ${PKG}/etc/profile.d",
+    "echo 'export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt' > ${PKG}/etc/profile.d/curl-ca.sh",
+    "echo 'export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt' >> ${PKG}/etc/profile.d/curl-ca.sh"
+]
+provides = ["/etc/ssl/certs/ca-certificates.crt"]
+
+[packages.curl]
+version = "8.18.0"
+version_check = "github:curl/curl"
+description = "URL transfer library and tool"
+url = "https://curl.se/download/curl-${version}.tar.xz"
+git_url = "https://github.com/curl/curl.git"
+use_git = false
+stage = 4
+build_order = 9
+depends = ["openssl", "ca-certificates"]
+# disable LTO - libtool has issues with nm output parsing
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --with-openssl --with-ca-bundle=/etc/ssl/certs/ca-certificates.crt --enable-threaded-resolver --without-libpsl",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
+[packages.wget]
+version = "1.24.5"
+version_check = "gnu:wget"
+description = "Network downloader"
+url = "https://ftpmirror.gnu.org/gnu/wget/wget-${version}.tar.gz"
+git_url = "https://git.savannah.gnu.org/git/wget.git"
+use_git = false
+stage = 4
+build_order = 10
+depends = ["openssl", "ca-certificates"]
+# disable LTO - causes undefined references to gnulib internal functions
+build_commands = [
+    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --with-ssl=openssl",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install"
+]
+
+[packages.openssh]
+version = "9.9p2"
+version_check = "url:https://www.openssh.com/releasenotes.html|OpenSSH ([0-9]+\\.[0-9]+p[0-9]+)"
+description = "OpenSSH client and server"
+url = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-${version}.tar.gz"
+git_url = "https://github.com/openssh/openssh-portable.git"
+use_git = false
+stage = 4
+build_order = 11
+depends = ["openssl", "zlib"]
+build_commands = [
+    "./configure --prefix=/usr --sysconfdir=/etc/ssh --with-privsep-path=/var/lib/sshd --with-default-path=/usr/bin:/usr/sbin --with-superuser-path=/usr/bin:/usr/sbin --with-pid-dir=/run",
+    "make -j${NPROC}",
+    "make DESTDIR=${PKG} install",
+    "mkdir -p ${PKG}/var/lib/sshd",
+    "chmod 755 ${PKG}/var/lib/sshd"
+]
+provides = ["/usr/bin/ssh", "/usr/sbin/sshd"]
+
+[packages.git]
+version = "2.48.1"
+version_check = "github:git/git"
+description = "Distributed version control system"
+url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz"
+git_url = "https://github.com/git/git.git"
+use_git = false
+stage = 4
+build_order = 12
+depends = ["curl", "openssl", "zlib", "expat"]
+build_commands = [
+    "make -j${NPROC} prefix=/usr gitexecdir=/usr/lib/git-core all",
+    "make prefix=/usr gitexecdir=/usr/lib/git-core DESTDIR=${PKG} install"
+]
+provides = ["/usr/bin/git"]
+
+[packages.pciutils]
+version = "3.13.0"
+version_check = "url:https://mj.ucw.cz/download/linux/pci/|pciutils-([0-9.]+)\\.tar"
+description = "PCI utilities (lspci, setpci)"
+url = "https://mj.ucw.cz/download/linux/pci/pciutils-${version}.tar.gz"
+git_url = "https://github.com/pciutils/pciutils.git"
+use_git = false
+stage = 4
+build_order = 13
+depends = ["kmod"]
+build_commands = [
+    "make PREFIX=/usr SHAREDIR=/usr/share/hwdata SHARED=yes -j${NPROC}",
+    "make PREFIX=/usr SHAREDIR=/usr/share/hwdata SHARED=yes DESTDIR=${PKG} install install-lib",
+    "chmod 755 ${PKG}/usr/lib/libpci.so.*"
+]
+provides = ["/usr/bin/lspci"]
+
 # =============================================================================
 # STAGE 5: Kernel and Bootloader
 # =============================================================================
@@ -1091,10 +1197,12 @@ build_commands = [
 provides = ["/boot/vmlinuz-${version}"]
 
 [packages.linux-firmware]
-version = "20250109"
+version = "20260110"
 version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
-description = "Linux firmware files"
+description = "Linux kernel firmware files (Intel Wi-Fi, AMD GPU, NVIDIA, i915, etc.)"
 url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
+git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git"
+use_git = false
 stage = 5
 build_order = 5
 build_commands = [
@@ -1398,37 +1506,6 @@ build_order = 10
 depends = ["rsync", "perl"]
 build_commands = [
     "./configure --prefix=/usr --sysconfdir=/etc",
-    "make -j${NPROC}",
-    "make DESTDIR=${PKG} install"
-]
-
-[packages.curl]
-version = "8.18.0"
-version_check = "github:curl/curl"
-description = "URL transfer library and tool"
-url = "https://curl.se/download/curl-${version}.tar.xz"
-git_url = "https://github.com/curl/curl.git"
-use_git = false
-stage = 7
-depends = ["openssl"]
-# disable LTO - libtool has issues with nm output parsing
-build_commands = [
-    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --with-openssl --enable-threaded-resolver --without-libpsl",
-    "make -j${NPROC}",
-    "make DESTDIR=${PKG} install"
-]
-
-[packages.wget]
-version = "1.24.5"
-version_check = "gnu:wget"
-description = "Network downloader"
-url = "https://ftpmirror.gnu.org/gnu/wget/wget-${version}.tar.gz"
-git_url = "https://git.savannah.gnu.org/git/wget.git"
-use_git = false
-stage = 7
-# disable LTO - causes undefined references to gnulib internal functions
-build_commands = [
-    "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --with-ssl=openssl",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
@@ -1752,13 +1829,27 @@ git_url = "https://github.com/eudev-project/eudev.git"
 use_git = false
 stage = 3
 build_order = 90
-depends = ["gperf"]
+depends = ["gperf", "kmod"]
 # disable LTO - causes undefined references to libudev symbols
 build_commands = [
     "CFLAGS='-O2 -pipe' LDFLAGS='' ./configure --prefix=/usr --sysconfdir=/etc --enable-manpages=no --disable-selinux",
     "make -j${NPROC}",
     "make DESTDIR=${PKG} install"
 ]
+
+[packages.kmod]
+version = "34"
+version_check = "github:kmod-project/kmod"
+description = "Linux kernel module tools (modprobe, insmod, lsmod, etc.)"
+url = "https://github.com/kmod-project/kmod/archive/refs/tags/v${version}.tar.gz"
+git_url = "https://github.com/kmod-project/kmod.git"
+use_git = false
+stage = 3
+build_order = 89
+depends = ["zlib", "xz", "zstd", "openssl"]
+build_system = "meson"
+meson_flags = "-Dmanpages=false"
+provides = ["/usr/bin/kmod", "/usr/sbin/modprobe"]
 
 [packages.libICE]
 version = "1.1.2"
@@ -2577,17 +2668,8 @@ use_git = false
 stage = 13
 
 # =============================================================================
-# STAGE 14: Development Tools
+# STAGE 14: Development Tools (heavy builds)
 # =============================================================================
-
-[packages.git]
-version = "2.48.1"
-version_check = "github:git/git"
-description = "Distributed version control system"
-url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz"
-git_url = "https://github.com/git/git.git"
-use_git = false
-stage = 14
 
 [packages.llvm]
 version = "19.1.7"
@@ -2888,18 +2970,9 @@ use_git = false
 stage = 18
 
 # =============================================================================
-# STAGE 19: Firmware and Hardware Support
+# STAGE 19: Firmware and Hardware Support (microcode and specialized firmware)
 # =============================================================================
-
-[packages.linux-firmware]
-version = "20260110"
-version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
-description = "Linux kernel firmware files"
-url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
-git_url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git"
-use_git = false
-stage = 19
-# Includes: Intel Wi-Fi (iwlwifi), AMD GPU, NVIDIA, i915, etc.
+# Note: Main linux-firmware is in Stage 5 (early for WiFi/hardware at boot)
 
 [packages.amd-ucode]
 version = "20260110"
