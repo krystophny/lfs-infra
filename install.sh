@@ -592,9 +592,15 @@ USER_HOME="${MOUNT_POINT}/home/${LFS_USERNAME}"
 cat > "${USER_HOME}/.bash_profile" << 'EOF'
 # Auto-start X on tty1
 if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    exec startxfce4
+    exec startx
 fi
 EOF
+
+# Copy xinitrc (handles D-Bus session setup)
+if [[ -f "${SCRIPT_DIR}/config/user/xinitrc" ]]; then
+    cp "${SCRIPT_DIR}/config/user/xinitrc" "${USER_HOME}/.xinitrc"
+    chmod +x "${USER_HOME}/.xinitrc"
+fi
 
 # Copy XFCE4 configuration
 mkdir -p "${USER_HOME}/.config/xfce4/xfconf/xfce-perchannel-xml"
