@@ -1,27 +1,43 @@
 #!/bin/sh
 # shutdown - runit compatible shutdown command
+
+do_halt() {
+    echo "System is going down for halt..."
+    touch /etc/runit/stopit
+    chmod 0 /etc/runit/stopit
+    kill -CONT 1
+    # Fallback if runit doesn't respond
+    sleep 2
+    sync
+    /sbin/poweroff -f 2>/dev/null || kill -TERM 1
+}
+
+do_reboot() {
+    echo "System is going down for reboot..."
+    touch /etc/runit/stopit
+    chmod 100 /etc/runit/stopit
+    touch /etc/runit/reboot
+    kill -CONT 1
+    # Fallback if runit doesn't respond
+    sleep 2
+    sync
+    /sbin/reboot -f 2>/dev/null || kill -TERM 1
+}
+
 case "$1" in
     -h|--halt|-P|--poweroff)
-        touch /etc/runit/stopit
-        chmod 0 /etc/runit/stopit
-        kill -CONT 1
+        do_halt
         ;;
     -r|--reboot)
-        touch /etc/runit/stopit
-        chmod 100 /etc/runit/stopit
-        touch /etc/runit/reboot
-        kill -CONT 1
+        do_reboot
         ;;
     now)
-        touch /etc/runit/stopit
-        chmod 0 /etc/runit/stopit
-        kill -CONT 1
+        do_halt
         ;;
     *)
-        echo "Usage: shutdown [-h|-r|now]"
+        echo "Usage: shutdown [-h|-r] [now]"
         echo "  -h, --halt, -P  Halt the system"
         echo "  -r, --reboot    Reboot the system"
-        echo "  now             Halt immediately"
         exit 1
         ;;
 esac

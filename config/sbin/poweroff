@@ -1,5 +1,11 @@
 #!/bin/sh
 # poweroff - runit compatible poweroff command
-touch /etc/runit/stopit
-chmod 0 /etc/runit/stopit
-kill -CONT 1
+if [ "$1" = "-f" ]; then
+    # Force immediate poweroff via kernel sysrq
+    sync
+    echo o > /proc/sysrq-trigger
+else
+    touch /etc/runit/stopit
+    chmod 0 /etc/runit/stopit
+    kill -CONT 1
+fi

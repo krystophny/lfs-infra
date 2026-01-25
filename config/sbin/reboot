@@ -1,6 +1,12 @@
 #!/bin/sh
 # reboot - runit compatible reboot command
-touch /etc/runit/stopit
-chmod 100 /etc/runit/stopit
-touch /etc/runit/reboot
-kill -CONT 1
+if [ "$1" = "-f" ]; then
+    # Force immediate reboot via kernel sysrq
+    sync
+    echo b > /proc/sysrq-trigger
+else
+    touch /etc/runit/stopit
+    chmod 100 /etc/runit/stopit
+    touch /etc/runit/reboot
+    kill -CONT 1
+fi
