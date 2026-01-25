@@ -61,8 +61,13 @@ export PATH="${BOOTSTRAP}/bin:${PATH}"
 SOURCES_DIR="${SOURCES}"
 PKG_CACHE="${LFS}/var/cache/pk"
 BUILD_DIR="${LFS}/usr/src"
-PACKAGES_FILE="${ROOT_DIR}/packages.toml"
+PACKAGES_DIR="${PK_PACKAGES_DIR:-/home/ert/code/pk/packages}"
 PK_SCRIPT="${ROOT_DIR}/pk"
+
+# Helper to cat all package definition files
+cat_packages() {
+    cat "${PACKAGES_DIR}"/*.toml
+}
 
 # Chroot state
 CHROOT_PREPARED=0
@@ -87,22 +92,22 @@ stage_start() { echo -e "\n${CYAN}========== $* ==========${NC}\n"; }
 
 get_pkg_field() {
     local pkg="$1" field="$2"
-    awk -v pkg="${pkg}" -v field="${field}" '
+    cat_packages | awk -v pkg="${pkg}" -v field="${field}" '
         BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
         $0 ~ pattern { found=1; next }
         /^\[/ && found { exit }
         found && $0 ~ "^"field" *= *\"" { gsub(/.*= *"|".*/, ""); print; exit }
-    ' "${PACKAGES_FILE}"
+    '
 }
 
 get_pkg_num_field() {
     local pkg="$1" field="$2"
-    awk -v pkg="${pkg}" -v field="${field}" '
+    cat_packages | awk -v pkg="${pkg}" -v field="${field}" '
         BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
         $0 ~ pattern { found=1; next }
         /^\[/ && found { exit }
         found && $0 ~ "^"field" *= *[0-9]" { gsub(/.*= */, ""); print; exit }
-    ' "${PACKAGES_FILE}"
+    '
 }
 
 get_pkg_version() { get_pkg_field "$1" "version"; }
@@ -114,7 +119,7 @@ get_pkg_build_order() { get_pkg_num_field "$1" "build_order"; }
 # Get package dependencies (comma-separated list)
 get_pkg_depends() {
     local pkg="$1"
-    awk -v pkg="${pkg}" '
+    cat_packages | awk -v pkg="${pkg}" '
         BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
         $0 ~ pattern { found=1; next }
         /^\[/ && found { exit }
@@ -124,7 +129,7 @@ get_pkg_depends() {
             print
             exit
         }
-    ' "${PACKAGES_FILE}"
+    '
 }
 
 get_pkg_url() {
@@ -140,20 +145,20 @@ get_pkg_url() {
 
 get_pkg_build_commands() {
     local pkg="$1"
-    awk -v pkg="${pkg}" '
+    cat_packages | awk -v pkg="${pkg}" '
         BEGIN { pattern = "^\\[packages\\." pkg "\\]$" }
         $0 ~ pattern { found=1; next }
         /^\[packages\./ && found { exit }
         found && /^build_commands/ { in_array=1; next }
         in_array && /^\]/ { exit }
         in_array { gsub(/^[[:space:]]*"|"[[:space:]]*,?$/, ""); if (length($0) > 0) print }
-    ' "${PACKAGES_FILE}"
+    '
 }
 
 # List packages by stage, sorted by build_order (packages without build_order come last)
 list_packages_by_stage() {
     local stage="$1"
-    awk -v target_stage="${stage}" -f <(cat <<'AWKSCRIPT'
+    cat_packages | awk -v target_stage="${stage}" '
 /^\[packages\./ {
     if (stage_match) print order, pkg
     pkg = $0
@@ -171,8 +176,7 @@ list_packages_by_stage() {
 END {
     if (pkg && stage_match) print order, pkg
 }
-AWKSCRIPT
-) "${PACKAGES_FILE}" | sort -n | cut -d' ' -f2
+' | sort -n | cut -d' ' -f2
 }
 
 # Check if all dependencies are installed
@@ -655,7 +659,7 @@ download_sources() {
 
     mkdir -p "${SOURCES_DIR}"
 
-    for pkg in $(awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}' "${PACKAGES_FILE}"); do
+    for pkg in $(cat_packages | awk '/^\[packages\./ {gsub(/^\[packages\.|]$/, ""); print}'); do
         local stage=$(get_pkg_stage "${pkg}")
         [[ -z "${stage}" ]] && continue
         [[ "${stage}" -gt "${max_stage}" ]] && continue

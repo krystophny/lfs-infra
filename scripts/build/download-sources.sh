@@ -20,7 +20,12 @@ LFS="${LFS:-/mnt/lfs}"
 # Run safety checks (require Linux, validate LFS)
 safety_check
 LFS_SOURCES="${LFS_SOURCES:-${LFS}/sources}"
-PACKAGES_FILE="${ROOT_DIR}/packages.toml"
+PACKAGES_DIR="${PK_PACKAGES_DIR:-/home/ert/code/pk/packages}"
+
+# Helper to cat all package definition files
+cat_packages() {
+    cat "${PACKAGES_DIR}"/*.toml
+}
 
 # Colors
 RED='\033[0;31m'
@@ -37,7 +42,7 @@ log_ok() { echo -e "${GREEN}[OK]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-# Parse packages.toml and extract download info
+# Parse package files and extract download info
 parse_packages() {
     local current_pkg=""
 
@@ -65,7 +70,7 @@ parse_packages() {
         elif [[ "${line}" =~ ^use_git[[:space:]]*=[[:space:]]*(true|false) ]]; then
             PKG_USE_GIT["${current_pkg}"]="${BASH_REMATCH[1]}"
         fi
-    done < "${PACKAGES_FILE}"
+    done < <(cat_packages)
 }
 
 # Expand version variable in URL

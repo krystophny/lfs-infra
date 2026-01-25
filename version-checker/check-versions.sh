@@ -29,8 +29,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "${SCRIPT_DIR}")"
-PACKAGES_FILE="${ROOT_DIR}/packages.toml"
+PACKAGES_DIR="${PK_PACKAGES_DIR:-/home/ert/code/pk/packages}"
 CACHE_DIR="${TMPDIR:-/tmp}/lfs-version-cache"
+
+# Helper to cat all package definition files
+cat_packages() {
+    cat "${PACKAGES_DIR}"/*.toml
+}
+
+# Find which file contains a package
+find_pkg_file() {
+    local pkg="$1"
+    grep -l "^\[packages\.${pkg}\]" "${PACKAGES_DIR}"/*.toml 2>/dev/null | head -1
+}
 CACHE_TTL=3600  # 1 hour cache
 
 # Colors
@@ -568,11 +579,11 @@ check_fedora_rawhide() {
 # Get fedora_name from packages.toml if specified
 get_fedora_name() {
     local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
+    cat_packages | awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
         found && /^fedora_name *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
-    ' "${PACKAGES_FILE}"
+    '
 }
 
 # ============================================================
@@ -687,7 +698,7 @@ parse_packages() {
                 version_check="${BASH_REMATCH[1]}"
             fi
         fi
-    done < "${PACKAGES_FILE}"
+    done < <(cat_packages)
 
     if [[ -n "${current_pkg}" && -n "${current_version}" ]]; then
         echo "${current_pkg}=${current_version}|${version_check:-repology:${current_pkg}}"
@@ -702,11 +713,11 @@ version_ge() {
 # Get URL template for a package
 get_pkg_url() {
     local pkg="$1"
-    awk -v pkg="[packages.${pkg}]" '
+    cat_packages | awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
         found && /^url *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
-    ' "${PACKAGES_FILE}"
+    '
 }
 
 # Verify URL exists
@@ -732,8 +743,14 @@ update_toml_version() {
         fi
     fi
 
-    sed -i "/^\[packages\.${pkg}\]/,/^\[/{s/^version = \"[^\"]*\"/version = \"${new_version}\"/}" "${PACKAGES_FILE}"
-    log "Updated ${pkg} to ${new_version}"
+    local pkg_file
+    pkg_file=$(find_pkg_file "${pkg}")
+    if [[ -z "${pkg_file}" ]]; then
+        warn "Cannot find file for package ${pkg}"
+        return 1
+    fi
+    sed -i "/^\[packages\.${pkg}\]/,/^\[/{s/^version = \"[^\"]*\"/version = \"${new_version}\"/}" "${pkg_file}"
+    log "Updated ${pkg} to ${new_version} in ${pkg_file}"
 }
 
 # Main
