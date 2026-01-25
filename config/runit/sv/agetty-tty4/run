@@ -1,0 +1,2 @@
+#!/bin/sh
+exec agetty -L tty4 linux
