@@ -12,7 +12,7 @@ pkgname="$1"
 # Find packages.toml
 TOML_FILE=""
 for f in "./packages.toml" "$SCRIPT_DIR/../packages.toml" "/etc/pk/packages.toml"; do
-    [ -f "$f" ] && TOML_FILE="$f" && break
+    [ -f "$f" ] && TOML_FILE="$(cd "$(dirname "$f")" && pwd)/$(basename "$f")" && break
 done
 [ -n "$TOML_FILE" ] || die "packages.toml not found"
 
@@ -33,12 +33,12 @@ extract_array() {
             in_array = 1
             gsub(/^[^=]+=[ \t]*\[[ \t]*/, "")
             if (/\]/) { gsub(/[ \t]*\].*/, ""); in_array = 0 }
-            gsub(/"/, ""); gsub(/,/, "\n"); print
+            gsub(/"/, ""); gsub(/,[ \t]*$/, ""); if (/./) print
             next
         }
         in_array {
             if (/\]/) { gsub(/[ \t]*\].*/, ""); in_array = 0 }
-            gsub(/^[ \t]*"|"[ \t]*$/, ""); gsub(/,/, "\n"); print
+            gsub(/^[ \t]*"/, ""); gsub(/"[ \t]*,?[ \t]*$/, ""); if (/./) print
         }
     ' "$TOML_FILE"
 }
@@ -62,6 +62,8 @@ version_mm=$(echo "$version" | sed 's/\.[^.]*$//')
 # Find source directory
 source_dir=$(extract_field "$pkgname" "source_dir")
 if [ -n "$source_dir" ]; then
+    # Expand ${version} in source_dir
+    source_dir=$(echo "$source_dir" | sed "s|\${version}|$version|g")
     srcdir="$SOURCES_DIR/$source_dir"
 elif [ -n "$source_pkg" ]; then
     src_version=$(extract_field "$source_pkg" "version")

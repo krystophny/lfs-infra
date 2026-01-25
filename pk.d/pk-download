@@ -12,7 +12,7 @@ pkgname="$1"
 # Find packages.toml
 TOML_FILE=""
 for f in "./packages.toml" "$SCRIPT_DIR/../packages.toml" "/etc/pk/packages.toml"; do
-    [ -f "$f" ] && TOML_FILE="$f" && break
+    [ -f "$f" ] && TOML_FILE="$(cd "$(dirname "$f")" && pwd)/$(basename "$f")" && break
 done
 [ -n "$TOML_FILE" ] || die "packages.toml not found"
 

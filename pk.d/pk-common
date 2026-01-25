@@ -4,31 +4,28 @@
 
 VERSION="0.0.2"
 
-# Paths
-DB_DIR="${PK_ROOT:-}/var/lib/pk"
-CACHE_DIR="${PK_ROOT:-}/var/cache/pk"
-SOURCES_DIR="${PK_ROOT:-}/usr/src"
+# Paths - PK_ROOT must end with / (or be empty for local/safe mode)
+# If PK_ROOT is unset/empty, paths are relative (safe, installs locally)
+# If PK_ROOT="/", paths are absolute (system install)
+# If PK_ROOT="/mnt/lfs/", paths go to chroot
+case "$PK_ROOT" in
+    "") ;; # empty is fine (relative paths)
+    */) ;; # ends with slash is fine
+    *)  PK_ROOT="${PK_ROOT}/" ;; # add trailing slash
+esac
+DB_DIR="${PK_ROOT}var/lib/pk"
+CACHE_DIR="${PK_ROOT}var/cache/pk"
+SOURCES_DIR="${PK_ROOT}usr/src"
 
 die() { echo "pk: $*" >&2; exit 1; }
 warn() { echo "pk: warning: $*" >&2; }
 info() { echo "pk: $*"; }
 
-# Check if running in chroot
-is_in_chroot() {
-    [ "$(stat -c %i / 2>/dev/null)" != "2" ] && return 0
-    [ -r /proc/1/root ] && [ "$(readlink -f /proc/1/root 2>/dev/null)" != "/" ] && return 0
-    return 1
-}
-
-# Safety check - prevent accidental installation to host
+# Safety check - warn if PK_ROOT is empty (relative/local mode)
 safety_check() {
-    if [ -z "${PK_ROOT:-}" ]; then
-        if ! is_in_chroot; then
-            if [ "${PK_FORCE_ROOT:-0}" != "1" ]; then
-                die "SAFETY ERROR - PK_ROOT is not set and you're on the HOST system!
-Set PK_ROOT=/mnt/lfs or PK_FORCE_ROOT=1 to override."
-            fi
-        fi
+    if [ -z "$PK_ROOT" ]; then
+        warn "PK_ROOT is empty - using relative paths (local mode)"
+        warn "Set PK_ROOT=/ for system install or PK_ROOT=/mnt/lfs/ for chroot"
     fi
 }
 

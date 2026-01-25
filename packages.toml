@@ -2297,10 +2297,11 @@ description = "Go programming language"
 url = "https://go.dev/dl/go${version}.linux-amd64.tar.gz"
 stage = 4
 build_order = 50
-# Go is distributed as precompiled binaries - just extract to /usr/local
+source_dir = "go"
+# Go is distributed as precompiled binaries - copy contents to /usr/local/go
 build_commands = [
-    "mkdir -p ${PKG}/usr/local",
-    "cp -a ../go ${PKG}/usr/local/",
+    "mkdir -p ${PKG}/usr/local/go",
+    "cp -a bin pkg src lib misc api doc ${PKG}/usr/local/go/",
     "mkdir -p ${PKG}/usr/bin",
     "ln -sf ../local/go/bin/go ${PKG}/usr/bin/go",
     "ln -sf ../local/go/bin/gofmt ${PKG}/usr/bin/gofmt"
@@ -2310,7 +2311,8 @@ build_commands = [
 version = "2.86.0"
 version_check = "github:cli/cli"
 description = "GitHub CLI"
-url = "https://github.com/cli/cli/archive/v${version}/gh-${version}.tar.gz"
+url = "https://github.com/cli/cli/archive/v${version}/cli-${version}.tar.gz"
+source_dir = "cli-${version}"
 stage = 4
 build_order = 51
 depends = ["go"]
