@@ -612,10 +612,10 @@ chown -R 1000:1000 "${USER_HOME}"
 
 ok "Desktop configured (XFCE4 + Chicago95, auto-login on tty1)"
 
-# Copy Xorg config
-if [[ -d "${SCRIPT_DIR}/config/xorg" ]]; then
+# Copy Xorg config (keyboard and input driver configs)
+if [[ -d "${SCRIPT_DIR}/config/X11/xorg.conf.d" ]]; then
     mkdir -p "${MOUNT_POINT}/etc/X11/xorg.conf.d"
-    cp "${SCRIPT_DIR}/config/xorg/"* "${MOUNT_POINT}/etc/X11/xorg.conf.d/"
+    cp "${SCRIPT_DIR}/config/X11/xorg.conf.d/"* "${MOUNT_POINT}/etc/X11/xorg.conf.d/"
 fi
 
 ok "Xorg configured"
