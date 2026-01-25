@@ -1,2 +1,2 @@
 #!/bin/sh
-exec agetty -a ert -L tty1 linux
+exec setsid agetty -a ert -L tty1 linux

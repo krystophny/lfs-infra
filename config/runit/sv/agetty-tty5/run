@@ -1,2 +1,2 @@
 #!/bin/sh
-exec agetty -L tty5 linux
+exec setsid agetty -L tty5 linux
