@@ -35,7 +35,7 @@ chmod 1777 /run/lock
 udevd --daemon 2>/dev/null
 udevadm trigger --action=add --type=subsystems
 udevadm trigger --action=add --type=devices
-udevadm settle
+udevadm settle --timeout=3
 
 # Network interfaces up
 ip link set lo up
