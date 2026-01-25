@@ -1079,7 +1079,7 @@ build_system = "custom"
 build_commands = [
     "make mrproper",
     "make defconfig",
-    "scripts/config --enable CONFIG_VGA_CONSOLE --enable CONFIG_FRAMEBUFFER_CONSOLE --enable CONFIG_FB --enable CONFIG_FB_EFI --enable CONFIG_FB_VESA --enable CONFIG_DRM --enable CONFIG_DRM_VIRTIO_GPU --enable CONFIG_VIRTIO_PCI --enable CONFIG_VIRTIO_MMIO --enable CONFIG_EXT4_FS --enable CONFIG_EFIVAR_FS --enable CONFIG_EFI_PARTITION --enable CONFIG_BLK_DEV_NVME --enable CONFIG_NVME_CORE --enable CONFIG_SATA_AHCI --enable CONFIG_ATA_PIIX --enable CONFIG_DEVTMPFS --enable CONFIG_DEVTMPFS_MOUNT --enable CONFIG_TMPFS --enable CONFIG_NET --enable CONFIG_INET --enable CONFIG_NETDEVICES --enable CONFIG_VIRTIO_NET --enable CONFIG_E1000 --enable CONFIG_E1000E --enable CONFIG_R8169 --enable CONFIG_REALTEK_PHY --enable CONFIG_WIRELESS --enable CONFIG_CFG80211 --enable CONFIG_MAC80211 --enable CONFIG_IWLWIFI --enable CONFIG_USB --enable CONFIG_USB_XHCI_HCD --enable CONFIG_USB_EHCI_HCD --enable CONFIG_INPUT_EVDEV --enable CONFIG_HID --enable CONFIG_USB_HID",
+    "scripts/config --enable CONFIG_VGA_CONSOLE --enable CONFIG_FRAMEBUFFER_CONSOLE --enable CONFIG_FB --enable CONFIG_FB_EFI --enable CONFIG_FB_VESA --enable CONFIG_DRM --enable CONFIG_DRM_VIRTIO_GPU --enable CONFIG_VIRTIO_PCI --enable CONFIG_VIRTIO_MMIO --enable CONFIG_EXT4_FS --enable CONFIG_EFIVAR_FS --enable CONFIG_EFI_PARTITION --enable CONFIG_BLK_DEV_NVME --enable CONFIG_NVME_CORE --enable CONFIG_SATA_AHCI --enable CONFIG_ATA_PIIX --enable CONFIG_DEVTMPFS --enable CONFIG_DEVTMPFS_MOUNT --enable CONFIG_TMPFS --enable CONFIG_NET --enable CONFIG_INET --enable CONFIG_NETDEVICES --enable CONFIG_VIRTIO_NET --enable CONFIG_E1000 --enable CONFIG_E1000E --enable CONFIG_IGC --enable CONFIG_R8169 --enable CONFIG_REALTEK_PHY --enable CONFIG_WIRELESS --enable CONFIG_CFG80211 --enable CONFIG_MAC80211 --enable CONFIG_IWLWIFI --enable CONFIG_IWLMVM --enable CONFIG_USB --enable CONFIG_USB_XHCI_HCD --enable CONFIG_USB_EHCI_HCD --enable CONFIG_INPUT_EVDEV --enable CONFIG_HID --enable CONFIG_USB_HID --enable CONFIG_FW_LOADER --enable CONFIG_EXTRA_FIRMWARE_DIR=/lib/firmware",
     "make olddefconfig",
     "make -j${NPROC}",
     "make INSTALL_MOD_PATH=${PKG} modules_install",
@@ -1089,6 +1089,20 @@ build_commands = [
     "cp .config ${PKG}/boot/config-${version}"
 ]
 provides = ["/boot/vmlinuz-${version}"]
+
+[packages.linux-firmware]
+version = "20250109"
+version_check = "url:https://www.kernel.org/pub/linux/kernel/firmware/|linux-firmware-([0-9]+)\.tar"
+description = "Linux firmware files"
+url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-${version}.tar.xz"
+stage = 5
+build_order = 5
+build_commands = [
+    "mkdir -p ${PKG}/lib/firmware",
+    "cp -a * ${PKG}/lib/firmware/",
+    "rm -rf ${PKG}/lib/firmware/.git"
+]
+provides = ["/lib/firmware/regulatory.db"]
 
 [packages.elfutils]
 version = "0.193"
