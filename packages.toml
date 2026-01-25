@@ -2183,7 +2183,7 @@ use_git = false
 stage = 9
 build_system = "meson"
 depends = ["duktape"]
-meson_flags = "-Dintrospection=false -Dman=false -Dgtk_doc=false -Dtests=false -Djs_engine=duktape"
+meson_flags = "-Dintrospection=false -Dman=false -Dgtk_doc=false -Dtests=false -Dsession_tracking=ConsoleKit -Dlibs-only=true"
 
 [packages.libxfce4util]
 version = "4.20.1"
