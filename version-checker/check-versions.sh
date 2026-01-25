@@ -146,6 +146,15 @@ latest_version() {
     sort -V | tail -1
 }
 
+# Extract version after package name (replaces grep -oP with \K)
+# Usage: extract_version "prefix-"
+# Input: lines containing "prefix-1.2.3.tar.gz"
+# Output: 1.2.3
+extract_version() {
+    local prefix="$1"
+    sed -n "s/.*${prefix}\([0-9][0-9.]*[0-9]\).*/\1/p" | grep -E '^[0-9]+(\.[0-9]+)*$'
+}
+
 # Cache functions
 get_cached() {
     local key="$1"
@@ -179,7 +188,7 @@ check_gnu() {
     html=$(fetch_url "${url}") || return 1
 
     # Extract version from tarball names
-    echo "${html}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${html}" | extract_version "${project}-" | filter_stable | latest_version
 }
 
 check_kernel() {
@@ -199,7 +208,7 @@ check_gcc_snapshot() {
     html=$(fetch_url "https://gcc.gnu.org/pub/gcc/snapshots/LATEST-16/") || return 1
 
     # Extract snapshot version like 16-20260118
-    echo "${html}" | grep -oP 'gcc-\K16-[0-9]+' | latest_version
+    echo "${html}" | extract_version "gcc-" | latest_version
 }
 
 check_github() {
@@ -227,10 +236,10 @@ check_url_regex() {
     local html
     html=$(fetch_url "${url}") || return 1
 
-    # Handle different regex formats
+    # Handle different regex formats - use extended regex (not Perl)
     if [[ "${regex}" =~ \([0-9] ]]; then
         # Regex with capture groups - extract version parts
-        echo "${html}" | grep -oP "${regex}" | \
+        echo "${html}" | grep -oE "${regex}" | \
             sed -E 's/.*\(([0-9]+)\).*\(([0-9]+)\).*/\1.\2/' | \
             filter_stable | latest_version
     else
@@ -251,7 +260,7 @@ check_xorg() {
 
     local name
     name=$(basename "${path}")
-    echo "${html}" | grep -oP "${name}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${html}" | extract_version "${name}-" | filter_stable | latest_version
 }
 
 check_gnome() {
@@ -277,13 +286,13 @@ check_xfce() {
 
     # Get version dirs, then latest tarball
     local latest_dir
-    latest_dir=$(echo "${html}" | grep -oP 'href="\K[0-9]+\.[0-9]+' | latest_version)
+    latest_dir=$(echo "${html}" | sed -n 's/.*href="\([0-9]\+\.[0-9]\+\)".*/\1/p' | latest_version)
 
     if [[ -n "${latest_dir}" ]]; then
         html=$(fetch_url "${url}${latest_dir}/") || return 1
         local name
         name=$(basename "${path}")
-        echo "${html}" | grep -oP "${name}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+        echo "${html}" | extract_version "${name}-" | filter_stable | latest_version
     fi
 }
 
@@ -305,7 +314,7 @@ check_savannah() {
     local html
     html=$(fetch_url "${url}") || return 1
 
-    echo "${html}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${html}" | extract_version "${project}-" | filter_stable | latest_version
 }
 
 check_cpan() {
@@ -324,7 +333,7 @@ check_python() {
     local html
     html=$(fetch_url "https://www.python.org/downloads/") || return 1
 
-    echo "${html}" | grep -oP 'Python \K[0-9]+\.[0-9]+\.[0-9]+' | filter_stable | latest_version
+    echo "${html}" | sed -n 's/.*Python \([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | filter_stable | latest_version
 }
 
 check_tukaani() {
@@ -341,7 +350,7 @@ check_zlib() {
     local html
     html=$(fetch_url "https://zlib.net/") || return 1
 
-    echo "${html}" | grep -oP 'zlib-\K[0-9]+(\.[0-9]+)+' | filter_stable | latest_version
+    echo "${html}" | extract_version "zlib-" | filter_stable | latest_version
 }
 
 check_sourceware() {
@@ -352,7 +361,7 @@ check_sourceware() {
     local html
     html=$(fetch_url "${url}") || return 1
 
-    echo "${html}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${html}" | extract_version "${project}-" | filter_stable | latest_version
 }
 
 check_alsa() {
@@ -363,7 +372,7 @@ check_alsa() {
     local html
     html=$(fetch_url "${url}") || return 1
 
-    echo "${html}" | grep -oP "alsa-${component}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${html}" | extract_version "alsa-${component}-" | filter_stable | latest_version
 }
 
 check_kernelorg() {
@@ -375,7 +384,7 @@ check_kernelorg() {
     local html
     html=$(fetch_url "${url}") || return 1
 
-    echo "${html}" | grep -oP "${name}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${html}" | extract_version "${name}-" | filter_stable | latest_version
 }
 
 check_sourceforge() {
@@ -386,7 +395,7 @@ check_sourceforge() {
     local xml
     xml=$(fetch_url "${url}") || return 1
 
-    echo "${xml}" | grep -oP "${project}-\K[0-9]+(\.[0-9]+)+" | filter_stable | latest_version
+    echo "${xml}" | extract_version "${project}-" | filter_stable | latest_version
 }
 
 check_repology() {
