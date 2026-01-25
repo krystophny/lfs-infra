@@ -6,16 +6,17 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **ALWAYS use pk for ALL package installations. NEVER install anything ad-hoc.**
 
-1. If a package exists in `packages.toml`, use `pk build <pkgname>` and `pk i <pkg.pk.tar.xz>`
-2. If a package does NOT exist in `packages.toml`, ADD IT FIRST, then build/install via pk
-3. NEVER run `make install`, `pip install`, `cargo install` or any other installer directly
-4. NEVER copy binaries or libraries manually to system directories
-5. All installed files MUST be tracked by pk - verify with `pk check`
-6. Package archives use `.pk.tar.xz` extension
+1. Package definitions are in **pk repo**: `/home/ert/code/pk/packages/*.toml` (split alphabetically: a.toml, b.toml, etc.)
+2. If a package exists, use `pk b <pkgname>` (build) and `pk i <pkg.pk.tar.xz>` (install)
+3. If a package does NOT exist, ADD IT FIRST to the appropriate `<letter>.toml` file, then build/install via pk
+4. NEVER run `make install`, `pip install`, `cargo install` or any other installer directly
+5. NEVER copy binaries or libraries manually to system directories
+6. All installed files MUST be tracked by pk - verify with `pk check`
+7. Package archives use `.pk.tar.xz` extension
 
 ```bash
 # Correct workflow for new packages:
-# 1. Add to packages.toml
+# 1. Add to pk/packages/<letter>.toml (e.g., tmux goes in t.toml)
 # 2. Download: pk d <pkgname>
 # 3. Build:    pk b <pkgname>
 # 4. Install:  pk i /var/cache/pk/<pkgname>-<version>.pk.tar.xz
@@ -28,45 +29,27 @@ LFS-infra is an automated Linux From Scratch build system with bleeding-edge pac
 
 **Primary workflow**: Boot from Fedora Rawhide live USB, run `./install.sh /dev/nvme0n1` to install LFS on target device.
 
-Uses **pk** - a minimal POSIX shell package manager (modular git-like architecture).
+Uses **pk** - a minimal POSIX shell package manager (modular git-like architecture) from `/home/ert/code/pk/`.
 
-**Current status**: 249 packages defined across 20 build stages, desktop-ready with XFCE4.
+**Current status**: 260 packages defined across 20 build stages, desktop-ready with XFCE4.
 
 ## Architecture
 
 ```
-lfs-infra/
-├── install.sh              # Main installation script (run this!)
-├── pk                      # Package manager (shell script)
-├── packages.toml           # Package definitions (249 packages)
-├── continue-lfs-build.sh   # Manual build continuation
-├── test-qemu.sh            # QEMU boot testing
-├── .env.example            # Configuration template
-├── config/
-│   ├── lfs.conf            # Build configuration (paths, mirrors)
-│   ├── build.conf          # Optimization flags (Zen 3 tuned)
-│   ├── network.conf        # Network configuration template
-│   ├── etc/                # System config templates
-│   │   ├── profile.d/optimization-flags.sh  # System-wide Zen 3 flags
-│   │   ├── passwd, group, hosts, fstab
-│   ├── grub/grub.cfg       # GRUB bootloader config
-│   ├── kernel/             # Kernel configs
-│   │   ├── vm-fast-boot.config
-│   │   ├── zen3-gaming-lowlatency.config
-│   │   └── nvidia-hardware.config
-│   ├── runit/              # Init system (sv/ services)
-│   ├── sbin/               # shutdown, reboot, poweroff
-│   ├── user/               # User configs (XFCE4, Chicago95 theme)
-│   └── xorg/               # X11 configuration
-├── scripts/
-│   ├── build/
-│   │   ├── build-lfs.sh    # Build orchestrator
-│   │   └── download-sources.sh
-│   └── lib/
-│       └── safety.sh       # Safety library (prevents host damage)
-├── patches/                # Package patches (README only)
+lfs-infra/                          pk/ (separate repo)
+├── install.sh                      ├── pk                    # Package manager
+├── continue-lfs-build.sh           ├── pk.d/                 # Subcommands
+├── test-qemu.sh                    │   ├── pk-build
+├── .env.example                    │   ├── pk-download
+├── config/                         │   ├── pk-install
+│   ├── lfs.conf                    │   └── ...
+│   ├── build.conf                  └── packages/             # Package definitions
+│   └── ...                             ├── a.toml            # 260 packages split
+├── scripts/                            ├── b.toml            # alphabetically
+│   ├── build/                          ├── ...
+│   └── lib/                            └── z.toml
 └── version-checker/
-    └── check-versions.sh   # Version checker (Fedora Rawhide comparison)
+
 ```
 
 ## Quick Start
@@ -86,6 +69,8 @@ sudo ./install.sh --yes /dev/nvme0n1
 
 ## pk - Package Manager
 
+Located at `/home/ert/code/pk/`. Package definitions in `pk/packages/*.toml`.
+
 ```bash
 # Package commands
 pk i <pkg.pk.tar.xz>   # Install package
@@ -95,9 +80,8 @@ pk q <pkgname>         # Query package info
 pk f <pkgname>         # List package files
 
 # Build commands
-pk b <pkgname>         # Build package from packages.toml
+pk b <pkgname>         # Build package from packages/*.toml
 pk d <pkgname>         # Download package source
-pk bs <stage>          # Build all packages in a stage
 
 # System commands
 pk c [dirs...]         # Check for untracked files
@@ -131,7 +115,12 @@ From `.env` or command line:
 | LAN_GATEWAY | - | Gateway for static IP |
 | LAN_DNS | - | DNS for static IP |
 
-## Package Definition (packages.toml)
+## Package Definition (pk/packages/*.toml)
+
+Package definitions are split alphabetically in `/home/ert/code/pk/packages/`:
+- `a.toml` - packages starting with 'a' (acl, attr, autoconf, etc.)
+- `b.toml` - packages starting with 'b' (bash, binutils, bison, etc.)
+- ... through `z.toml`
 
 ```toml
 [packages.example]
