@@ -572,14 +572,14 @@ for svc in dbus sshd cronie wpa_supplicant dhcpcd; do
 done
 
 # Create agetty-tty1 service with auto-login for user
-mkdir -p "${MOUNT_POINT}/etc/runit/sv/agetty-tty1"
-cat > "${MOUNT_POINT}/etc/runit/sv/agetty-tty1/run" << EOF
+mkdir -p "${MOUNT_POINT}/etc/sv/agetty-tty1"
+cat > "${MOUNT_POINT}/etc/sv/agetty-tty1/run" << EOF
 #!/bin/sh
 # Auto-login ${LFS_USERNAME} on tty1 with proper terminal setup
 exec setsid agetty -a ${LFS_USERNAME} -L tty1 linux
 EOF
-chmod +x "${MOUNT_POINT}/etc/runit/sv/agetty-tty1/run"
-ln -sf /etc/runit/sv/agetty-tty1 "${MOUNT_POINT}/etc/runit/runsvdir/default/"
+chmod +x "${MOUNT_POINT}/etc/sv/agetty-tty1/run"
+ln -sf /etc/sv/agetty-tty1 "${MOUNT_POINT}/etc/runit/runsvdir/default/"
 
 ok "Runit init configured"
 

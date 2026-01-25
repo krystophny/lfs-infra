@@ -1,4 +1,5 @@
 #!/bin/sh
 # runit service: D-Bus message bus
 
+mkdir -p /run/dbus
 exec dbus-daemon --system --nofork --nopidfile
