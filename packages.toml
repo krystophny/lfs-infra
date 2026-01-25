@@ -2015,6 +2015,31 @@ use_git = false
 stage = 8
 build_system = "meson"
 
+[packages.shared-mime-info]
+version = "2.4"
+version_check = "freedesktop:xdg/shared-mime-info"
+description = "Shared MIME database"
+url = "https://gitlab.freedesktop.org/xdg/shared-mime-info/-/archive/${version}/shared-mime-info-${version}.tar.gz"
+git_url = "https://gitlab.freedesktop.org/xdg/shared-mime-info.git"
+use_git = false
+stage = 8
+build_system = "meson"
+meson_flags = "-Dupdate-mimedb=false"
+
+[packages.duktape]
+version = "2.7.0"
+version_check = "github:nicholasdechiara/duktape"
+description = "Embeddable JavaScript engine"
+url = "https://duktape.org/duktape-${version}.tar.xz"
+use_git = false
+stage = 8
+build_commands = [
+    "make -f Makefile.sharedlibrary INSTALL_PREFIX=/usr",
+    "make -f Makefile.sharedlibrary INSTALL_PREFIX=/usr DESTDIR=${PKG} install",
+    "install -Dm644 src/duktape.h ${PKG}/usr/include/duktape.h",
+    "install -Dm644 src/duk_config.h ${PKG}/usr/include/duk_config.h"
+]
+
 # =============================================================================
 # STAGE 9: GTK and Desktop Libraries
 # =============================================================================
@@ -2045,6 +2070,7 @@ git_url = "https://gitlab.gnome.org/GNOME/atk.git"
 use_git = false
 stage = 9
 build_system = "meson"
+meson_flags = "-Dintrospection=false"
 
 [packages.pango]
 version = "1.56.0"
@@ -2055,6 +2081,7 @@ git_url = "https://gitlab.gnome.org/GNOME/pango.git"
 use_git = false
 stage = 9
 build_system = "meson"
+meson_flags = "-Dintrospection=disabled -Ddocumentation=false --wrap-mode=nodownload"
 provides = ["/usr/lib/libpango-1.0.so"]
 
 [packages.cairo]
@@ -2066,7 +2093,7 @@ git_url = "https://gitlab.freedesktop.org/cairo/cairo.git"
 use_git = false
 stage = 9
 build_system = "meson"
-meson_flags = "-Dgtk_doc=false -Dtests=disabled"
+meson_flags = "-Dgtk_doc=false -Dtests=disabled -Dspectre=disabled -Dsymbol-lookup=disabled"
 provides = ["/usr/lib/libcairo.so"]
 
 [packages.gdk-pixbuf]
@@ -2078,7 +2105,8 @@ git_url = "https://gitlab.gnome.org/GNOME/gdk-pixbuf.git"
 use_git = false
 stage = 9
 build_system = "meson"
-meson_flags = "-Dman=false -Dgtk_doc=false"
+depends = ["shared-mime-info"]
+meson_flags = "-Dman=false -Dgtk_doc=false -Dintrospection=disabled -Dinstalled_tests=false --wrap-mode=nodownload"
 provides = ["/usr/lib/libgdk_pixbuf-2.0.so"]
 
 [packages.harfbuzz]
@@ -2090,6 +2118,7 @@ git_url = "https://github.com/harfbuzz/harfbuzz.git"
 use_git = false
 stage = 9
 build_system = "meson"
+meson_flags = "-Ddocs=disabled -Dintrospection=disabled -Dtests=disabled -Dcairo=enabled -Dfreetype=enabled -Dglib=enabled"
 
 [packages.fribidi]
 version = "1.0.16"
@@ -2111,7 +2140,7 @@ use_git = false
 stage = 9
 build_system = "meson"
 source_dir = "gtk+-${version}"
-meson_flags = "-Dman=false -Dgtk_doc=false -Dintrospection=false -Ddemos=false -Dexamples=false -Dtests=false"
+meson_flags = "-Dman=false -Dgtk_doc=false -Dintrospection=false -Ddemos=false -Dexamples=false -Dtests=false --wrap-mode=nodownload"
 provides = ["/usr/lib/libgtk-3.so"]
 
 [packages.dbus]
@@ -2139,6 +2168,8 @@ git_url = "https://github.com/polkit-org/polkit.git"
 use_git = false
 stage = 9
 build_system = "meson"
+depends = ["duktape"]
+meson_flags = "-Dintrospection=false -Dman=false -Dgtk_doc=false -Dtests=false -Djs_engine=duktape"
 
 [packages.libxfce4util]
 version = "4.20.1"
