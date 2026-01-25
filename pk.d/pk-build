@@ -1,0 +1,150 @@
+#!/bin/sh
+# pk-build - build a package from packages.toml
+# Usage: pk build <pkgname>
+
+SCRIPT_DIR="$(dirname "$0")"
+. "$SCRIPT_DIR/pk-common"
+
+[ $# -ge 1 ] || die "usage: pk build <pkgname>"
+
+pkgname="$1"
+
+# Find packages.toml
+TOML_FILE=""
+for f in "./packages.toml" "$SCRIPT_DIR/../packages.toml" "/etc/pk/packages.toml"; do
+    [ -f "$f" ] && TOML_FILE="$f" && break
+done
+[ -n "$TOML_FILE" ] || die "packages.toml not found"
+
+# Extract package info from TOML using awk
+extract_field() {
+    local pkg="$1" field="$2"
+    awk -v pkg="$pkg" -v field="$field" '
+        /^\[packages\./ { in_pkg = ($0 ~ "\\[packages\\." pkg "\\]") }
+        in_pkg && $1 == field { gsub(/^[^=]+=[ \t]*"?|"[ \t]*$/, ""); print; exit }
+    ' "$TOML_FILE"
+}
+
+extract_array() {
+    local pkg="$1" field="$2"
+    awk -v pkg="$pkg" -v field="$field" '
+        /^\[packages\./ { in_pkg = ($0 ~ "\\[packages\\." pkg "\\]") }
+        in_pkg && $1 == field {
+            in_array = 1
+            gsub(/^[^=]+=[ \t]*\[[ \t]*/, "")
+            if (/\]/) { gsub(/[ \t]*\].*/, ""); in_array = 0 }
+            gsub(/"/, ""); gsub(/,/, "\n"); print
+            next
+        }
+        in_array {
+            if (/\]/) { gsub(/[ \t]*\].*/, ""); in_array = 0 }
+            gsub(/^[ \t]*"|"[ \t]*$/, ""); gsub(/,/, "\n"); print
+        }
+    ' "$TOML_FILE"
+}
+
+# Get package metadata
+version=$(extract_field "$pkgname" "version")
+[ -n "$version" ] || die "package '$pkgname' not found in $TOML_FILE"
+
+url=$(extract_field "$pkgname" "url")
+build_system=$(extract_field "$pkgname" "build_system")
+configure_flags=$(extract_field "$pkgname" "configure_flags")
+meson_flags=$(extract_field "$pkgname" "meson_flags")
+cmake_flags=$(extract_field "$pkgname" "cmake_flags")
+source_pkg=$(extract_field "$pkgname" "source_pkg")
+
+info "building $pkgname $version"
+
+# Expand variables in version
+version_mm=$(echo "$version" | sed 's/\.[^.]*$//')
+
+# Find source directory
+source_dir=$(extract_field "$pkgname" "source_dir")
+if [ -n "$source_dir" ]; then
+    srcdir="$SOURCES_DIR/$source_dir"
+elif [ -n "$source_pkg" ]; then
+    src_version=$(extract_field "$source_pkg" "version")
+    srcdir="$SOURCES_DIR/${source_pkg}-${src_version}"
+else
+    srcdir="$SOURCES_DIR/${pkgname}-${version}"
+fi
+
+[ -d "$srcdir" ] || die "source directory not found: $srcdir"
+
+# Build directory
+builddir="$srcdir/build-pk"
+pkgdir="$builddir/pkg"
+
+rm -rf "$builddir"
+mkdir -p "$pkgdir"
+cd "$srcdir"
+
+export NPROC=$(nproc)
+export PKG="$pkgdir"
+export version version_mm srcdir pkgdir
+
+# Load optimization flags
+BUILD_CONF=""
+for f in "./config/build.conf" "$SCRIPT_DIR/../config/build.conf" "/etc/pk/build.conf"; do
+    [ -f "$f" ] && BUILD_CONF="$f" && break
+done
+if [ -n "$BUILD_CONF" ]; then
+    . "$BUILD_CONF"
+    # Use LTO flags for native builds
+    export CFLAGS="${CFLAGS_LTO:-$CFLAGS_PERF}"
+    export CXXFLAGS="${CXXFLAGS_LTO:-$CFLAGS_PERF}"
+    export LDFLAGS="${LDFLAGS_LTO:-$LDFLAGS}"
+    export FFLAGS="$CFLAGS"
+    export FCFLAGS="$CFLAGS"
+    info "using optimization flags from $BUILD_CONF"
+else
+    # Fallback Zen 3 flags
+    export CFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe -flto=$NPROC"
+    export CXXFLAGS="$CFLAGS"
+    export LDFLAGS="-Wl,-O2 -Wl,--as-needed -flto=$NPROC"
+    export FFLAGS="$CFLAGS"
+    export FCFLAGS="$CFLAGS"
+fi
+export MAKEFLAGS="-j$NPROC"
+
+# Get build commands
+build_commands=$(extract_array "$pkgname" "build_commands")
+
+if [ -n "$build_commands" ]; then
+    # Custom build commands
+    echo "$build_commands" | while IFS= read -r cmd; do
+        [ -n "$cmd" ] || continue
+        cmd=$(echo "$cmd" | sed "s|\${version}|$version|g; s|\${version_mm}|$version_mm|g; s|\${srcdir}|$srcdir|g; s|\${pkgdir}|$pkgdir|g; s|\${PKG}|$pkgdir|g; s|\${NPROC}|$NPROC|g")
+        info "running: $cmd"
+        eval "$cmd" || die "build command failed: $cmd"
+    done
+elif [ "$build_system" = "meson" ]; then
+    meson setup "$builddir/meson" --prefix=/usr $meson_flags
+    ninja -C "$builddir/meson"
+    DESTDIR="$pkgdir" ninja -C "$builddir/meson" install
+elif [ "$build_system" = "cmake" ]; then
+    mkdir -p "$builddir/cmake"
+    cd "$builddir/cmake"
+    cmake "$srcdir" -DCMAKE_INSTALL_PREFIX=/usr $cmake_flags
+    make -j$NPROC
+    make DESTDIR="$pkgdir" install
+elif [ "$build_system" = "autotools" ] || [ -x "$srcdir/configure" ]; then
+    ./configure --prefix=/usr $configure_flags
+    make -j$NPROC
+    make DESTDIR="$pkgdir" install
+elif [ -f "$srcdir/Makefile" ]; then
+    make -j$NPROC prefix=/usr
+    make DESTDIR="$pkgdir" prefix=/usr install
+else
+    die "unknown build system for $pkgname"
+fi
+
+# Create package
+mkdir -p "$CACHE_DIR"
+pkg_archive="$CACHE_DIR/${pkgname}-${version}.pk.tar.xz"
+cd "$pkgdir"
+tar cJf "$pkg_archive" .
+
+info "created $pkg_archive"
+echo "$pkg_archive"

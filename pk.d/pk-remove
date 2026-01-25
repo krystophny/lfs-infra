@@ -1,0 +1,35 @@
+#!/bin/sh
+# pk-remove - remove an installed package
+# Usage: pk remove <pkgname>
+
+SCRIPT_DIR="$(dirname "$0")"
+. "$SCRIPT_DIR/pk-common"
+
+safety_check
+
+[ $# -ge 1 ] || die "usage: pk remove <pkgname>"
+
+pkgname="$1"
+dbdir="$DB_DIR/$pkgname"
+fileslist="$dbdir/files"
+
+[ -f "$fileslist" ] || die "package not installed: $pkgname"
+
+root="${PK_ROOT:-/}"
+
+# Remove files (reverse order, files before directories)
+while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    target="$root/$file"
+    [ -f "$target" ] && rm -f "$target"
+done < "$fileslist"
+
+# Remove empty directories
+sort -r < "$fileslist" | while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    target="$root/$file"
+    [ -d "$target" ] && rmdir "$target" 2>/dev/null || true
+done
+
+rm -rf "$dbdir"
+info "removed $pkgname"

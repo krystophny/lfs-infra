@@ -1,0 +1,1 @@
+Defaults env_keep += "CURL_CA_BUNDLE SSL_CERT_FILE"

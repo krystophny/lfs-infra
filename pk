@@ -1,207 +1,68 @@
 #!/bin/sh
 # pk - minimal package manager for LFS
-# Installs .pkg.tar.xz archives and tracks installed files
+# Git-like architecture: dispatches to pk-<command> scripts
 
 set -e
 
-VERSION="1.0.0"
-
-# CRITICAL SAFETY: Prevent accidental installation to host system
-#
-# When to use PK_ROOT:
-#   - HOST building LFS: export PK_ROOT=/mnt/lfs
-#   - Inside LFS chroot: PK_ROOT unset (installs to / which is correct)
-#   - Running natively on LFS: PK_ROOT unset (installs to /)
-#
-# Safety detection: If we're NOT in a chroot and PK_ROOT is unset,
-# we're likely on the host - refuse to install to host root.
-
-is_in_chroot() {
-    # Check if root inode is 2 (standard for non-chroot)
-    # In a chroot, the root inode is different
-    [ "$(stat -c %i / 2>/dev/null)" != "2" ] && return 0
-    # Alternative: check /proc/1/root
-    [ -r /proc/1/root ] && [ "$(readlink -f /proc/1/root 2>/dev/null)" != "/" ] && return 0
-    return 1
-}
-
-# If PK_ROOT is not set and we're NOT in a chroot, block installation
-if [ -z "${PK_ROOT:-}" ]; then
-    if ! is_in_chroot; then
-        if [ "${PK_FORCE_ROOT:-0}" != "1" ]; then
-            echo "pk: SAFETY ERROR - PK_ROOT is not set and you're on the HOST system!" >&2
-            echo "pk: This would install packages to your HOST root filesystem!" >&2
-            echo "pk: Set PK_ROOT=/mnt/lfs (or your LFS mount point) before running pk." >&2
-            echo "pk: (If you're inside an LFS chroot, this check should not trigger)" >&2
-            echo "pk: (Set PK_FORCE_ROOT=1 to override - DANGEROUS)" >&2
-            exit 1
-        fi
-    fi
-fi
-
-DB_DIR="${PK_ROOT:-}/var/lib/pk"
-
-die() { echo "pk: $*" >&2; exit 1; }
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PK_LIBEXEC="${SCRIPT_DIR}/pk.d"
 
 usage() {
     cat <<EOF
-pk - minimal package manager
+pk - minimal package manager (v0.0.2)
 
 Usage: pk <command> [args]
 
-Commands:
-  i, install <pkg.tar.xz>  Install package
-  r, remove <pkgname>      Remove package
+Package commands:
+  i, install <pkg.tar.xz>  Install package archive
+  r, remove <pkgname>      Remove installed package
   l, list                  List installed packages
   q, query <pkgname>       Query package info
   f, files <pkgname>       List package files
+
+Build commands:
+  b, build <pkgname>       Build package from packages.toml
+  d, download <pkgname>    Download package source
+
+System commands:
+  c, check [dirs...]       Check for untracked files
   v, version               Show version
+
+Environment:
+  PK_ROOT         Target root (default: / or chroot)
+  PK_FORCE_ROOT   Set to 1 to allow installing to host root
 EOF
 }
 
-# Parse package name and version from filename
-# foo-1.2.3.pkg.tar.xz -> name=foo version=1.2.3
-parse_pkgname() {
-    local basename="${1##*/}"
-    basename="${basename%.pkg.tar*}"
-    basename="${basename%.tar*}"
-
-    # Find first dash followed by digit (start of version)
-    local name="" version="" i=0 char="" rest=""
-    rest="$basename"
-    while [ -n "$rest" ]; do
-        char="${rest%"${rest#?}"}"
-        rest="${rest#?}"
-        if [ "$char" = "-" ]; then
-            next="${rest%"${rest#?}"}"
-            case "$next" in
-                [0-9])
-                    version="$rest"
-                    break
-                    ;;
-            esac
-        fi
-        name="${name}${char}"
-    done
-
-    [ -z "$name" ] && name="$basename"
-    [ -z "$version" ] && version="unknown"
-
-    echo "$name" "$version"
-}
-
-pkg_install() {
-    local archive="$1"
-    [ -f "$archive" ] || die "file not found: $archive"
-
-    set -- $(parse_pkgname "$archive")
-    local pkgname="$1" version="$2"
-    [ -n "$pkgname" ] || die "cannot parse package name"
-
-    local dbdir="$DB_DIR/$pkgname"
-    mkdir -p "$dbdir"
-
-    # Extract and record files (defaults to / for chroot/native use)
-    local root="${PK_ROOT:-/}"
-
-    # List files in archive
-    tar -tf "$archive" > "$dbdir/files"
-
-    # Extract archive
-    tar -xf "$archive" -C "$root"
-
-    # Record package info
-    printf '%s\n%s\n' "$pkgname" "$version" > "$dbdir/info"
-
-    echo "installed $pkgname $version"
-}
-
-pkg_remove() {
-    local pkgname="$1"
-    local dbdir="$DB_DIR/$pkgname"
-    local fileslist="$dbdir/files"
-
-    [ -f "$fileslist" ] || die "package not installed: $pkgname"
-
-    local root="${PK_ROOT:-/}"
-
-    # Remove files (reverse order, files before directories)
-    # First pass: remove files
-    while IFS= read -r file; do
-        [ -n "$file" ] || continue
-        local target="$root/$file"
-        [ -f "$target" ] && rm -f "$target"
-    done < "$fileslist"
-
-    # Second pass: remove empty directories
-    sort -r < "$fileslist" | while IFS= read -r file; do
-        [ -n "$file" ] || continue
-        local target="$root/$file"
-        [ -d "$target" ] && rmdir "$target" 2>/dev/null || true
-    done
-
-    rm -rf "$dbdir"
-    echo "removed $pkgname"
-}
-
-pkg_list() {
-    [ -d "$DB_DIR" ] || exit 0
-    ls -1 "$DB_DIR" 2>/dev/null || true
-}
-
-pkg_query() {
-    local pkgname="$1"
-    local infofile="$DB_DIR/$pkgname/info"
-
-    if [ ! -f "$infofile" ]; then
-        echo "$pkgname is not installed"
-        return 1
-    fi
-
-    local name="" version=""
-    { read -r name; read -r version; } < "$infofile"
-    echo "$name $version [installed]"
-}
-
-pkg_files() {
-    local pkgname="$1"
-    local fileslist="$DB_DIR/$pkgname/files"
-
-    [ -f "$fileslist" ] || die "package not installed: $pkgname"
-    cat "$fileslist"
-}
-
-# Main
 [ $# -ge 1 ] || { usage; exit 1; }
 
 cmd="$1"
 shift
 
+# Map short commands to full names
 case "$cmd" in
-    i|install)
-        [ $# -ge 1 ] || die "usage: pk install <pkg.tar.xz>"
-        pkg_install "$1"
-        ;;
-    r|remove)
-        [ $# -ge 1 ] || die "usage: pk remove <pkgname>"
-        pkg_remove "$1"
-        ;;
-    l|list)
-        pkg_list
-        ;;
-    q|query)
-        [ $# -ge 1 ] || die "usage: pk query <pkgname>"
-        pkg_query "$1"
-        ;;
-    f|files)
-        [ $# -ge 1 ] || die "usage: pk files <pkgname>"
-        pkg_files "$1"
-        ;;
-    v|version)
-        echo "pk $VERSION"
-        ;;
-    *)
-        usage
-        exit 1
-        ;;
+    i) cmd="install" ;;
+    r) cmd="remove" ;;
+    l) cmd="list" ;;
+    q) cmd="query" ;;
+    f) cmd="files" ;;
+    b) cmd="build" ;;
+    d) cmd="download" ;;
+    c) cmd="check" ;;
+    v) cmd="version" ;;
+    -h|--help|help) usage; exit 0 ;;
 esac
+
+# Find and execute subcommand
+subcmd="$PK_LIBEXEC/pk-$cmd"
+
+if [ -x "$subcmd" ]; then
+    exec "$subcmd" "$@"
+elif [ "$cmd" = "version" ]; then
+    . "$PK_LIBEXEC/pk-common"
+    echo "pk $VERSION"
+else
+    echo "pk: unknown command '$cmd'" >&2
+    echo "Run 'pk help' for usage." >&2
+    exit 1
+fi
