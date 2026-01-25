@@ -1,0 +1,6 @@
+#!/bin/sh
+# reboot - runit compatible reboot command
+touch /etc/runit/stopit
+chmod 100 /etc/runit/stopit
+touch /etc/runit/reboot
+kill -CONT 1

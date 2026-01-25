@@ -530,6 +530,10 @@ cp "${SCRIPT_DIR}/config/runit/2" "${MOUNT_POINT}/etc/runit/"
 cp "${SCRIPT_DIR}/config/runit/3" "${MOUNT_POINT}/etc/runit/"
 chmod +x "${MOUNT_POINT}/etc/runit/"[123]
 
+# Copy shutdown/reboot/poweroff scripts for runit
+cp "${SCRIPT_DIR}/config/sbin/"* "${MOUNT_POINT}/sbin/"
+chmod +x "${MOUNT_POINT}/sbin/shutdown" "${MOUNT_POINT}/sbin/reboot" "${MOUNT_POINT}/sbin/poweroff"
+
 # Create runsvdir structure
 mkdir -p "${MOUNT_POINT}/etc/runit/runsvdir/default"
 mkdir -p "${MOUNT_POINT}/etc/sv"
