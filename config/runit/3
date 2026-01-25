@@ -14,12 +14,16 @@ dd if=/dev/urandom of=/var/lib/random-seed count=1 bs=512 2>/dev/null
 # Save hardware clock
 hwclock -w 2>/dev/null
 
-# Send TERM signal to all processes
-killall5 -15
-sleep 2
-
-# Send KILL signal to stragglers
-killall5 -9
+# Send TERM signal to all processes (use pkill -9 as fallback if killall5 unavailable)
+if command -v killall5 >/dev/null 2>&1; then
+    killall5 -15
+    sleep 2
+    killall5 -9
+else
+    pkill -15 -v -P 1 2>/dev/null || true
+    sleep 2
+    pkill -9 -v -P 1 2>/dev/null || true
+fi
 sleep 1
 
 # Unmount filesystems
