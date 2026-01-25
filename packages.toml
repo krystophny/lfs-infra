@@ -825,6 +825,18 @@ build_commands = [
     "make DESTDIR=${PKG} SBINDIR=/usr/sbin install"
 ]
 
+[packages.iputils]
+version = "20250613"
+version_check = "github:iputils/iputils"
+description = "Network monitoring tools including ping"
+url = "https://github.com/iputils/iputils/archive/${version}/iputils-${version}.tar.gz"
+git_url = "https://github.com/iputils/iputils.git"
+use_git = false
+stage = 3
+build_order = 33
+build_system = "meson"
+meson_flags = "-Duse_gettext=false -DBUILD_MANS=false"
+
 [packages.libtirpc]
 version = "1.3.6"
 version_check = "sourceforge:libtirpc"
@@ -2144,6 +2156,35 @@ url = "https://github.com/vim/vim/archive/v${version}/vim-${version}.tar.gz"
 git_url = "https://github.com/vim/vim.git"
 use_git = false
 stage = 11
+
+[packages.rust]
+version = "1.87.0"
+version_check = "github:rust-lang/rust"
+description = "Rust programming language"
+url = "https://static.rust-lang.org/dist/rustc-${version}-src.tar.xz"
+stage = 11
+# Install via rustup for simplicity (downloads prebuilt binaries)
+build_commands = [
+    "curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${version} --profile minimal",
+    "mkdir -p ${PKG}/usr/bin ${PKG}/usr/lib",
+    "cp -a ~/.cargo/bin/* ${PKG}/usr/bin/",
+    "cp -a ~/.rustup/toolchains/*/lib/* ${PKG}/usr/lib/ 2>/dev/null || true"
+]
+
+[packages.ripgrep]
+version = "14.1.1"
+version_check = "github:BurntSushi/ripgrep"
+description = "Fast regex-based search tool"
+url = "https://github.com/BurntSushi/ripgrep/archive/${version}/ripgrep-${version}.tar.gz"
+git_url = "https://github.com/BurntSushi/ripgrep.git"
+use_git = false
+stage = 11
+depends = ["rust"]
+build_commands = [
+    "cargo build --release",
+    "mkdir -p ${PKG}/usr/bin",
+    "cp target/release/rg ${PKG}/usr/bin/"
+]
 
 [packages.firefox]
 version = "147.0.1"

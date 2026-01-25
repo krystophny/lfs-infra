@@ -21,8 +21,8 @@ cat /etc/hostname > /proc/sys/kernel/hostname 2>/dev/null
 # Load kernel modules (minimal set for fast boot)
 modprobe -a loop 2>/dev/null
 
-# Set system clock from hardware clock
-hwclock -s 2>/dev/null
+# Set system clock from hardware clock (background - can be slow/absent in VMs)
+(hwclock -s 2>/dev/null &)
 
 # Seed random number generator
 cat /var/lib/random-seed > /dev/urandom 2>/dev/null
@@ -57,3 +57,5 @@ fi
 
 touch /etc/runit/stopit
 chmod 0 /etc/runit/stopit
+
+exit 0
