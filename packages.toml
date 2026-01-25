@@ -984,6 +984,18 @@ use_git = false
 stage = 4
 build_order = 7
 
+[packages.libxml2]
+version = "2.13.6"
+version_check = "gnome:libxml2"
+description = "XML parsing library"
+url = "https://download.gnome.org/sources/libxml2/2.13/libxml2-${version}.tar.xz"
+git_url = "https://gitlab.gnome.org/GNOME/libxml2.git"
+use_git = false
+stage = 4
+build_order = 8
+configure_flags = "--without-python --with-history"
+provides = ["/usr/lib/libxml2.so", "/usr/bin/xmllint"]
+
 [packages.autoconf]
 version = "2.72"
 version_check = "gnu:autoconf"
@@ -2024,6 +2036,7 @@ git_url = "https://gitlab.freedesktop.org/xdg/shared-mime-info.git"
 use_git = false
 stage = 8
 build_system = "meson"
+depends = ["libxml2"]
 meson_flags = "-Dupdate-mimedb=false"
 
 [packages.duktape]
@@ -2033,8 +2046,9 @@ description = "Embeddable JavaScript engine"
 url = "https://duktape.org/duktape-${version}.tar.xz"
 use_git = false
 stage = 8
+# Duktape refuses -ffast-math, use safe flags
 build_commands = [
-    "make -f Makefile.sharedlibrary INSTALL_PREFIX=/usr",
+    "make -f Makefile.sharedlibrary INSTALL_PREFIX=/usr CFLAGS='-O3 -march=znver3 -mtune=znver3 -fPIC'",
     "make -f Makefile.sharedlibrary INSTALL_PREFIX=/usr DESTDIR=${PKG} install",
     "install -Dm644 src/duktape.h ${PKG}/usr/include/duktape.h",
     "install -Dm644 src/duk_config.h ${PKG}/usr/include/duk_config.h"
