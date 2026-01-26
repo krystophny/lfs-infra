@@ -231,23 +231,36 @@ check_url_regex() {
     local regex="$2"
     log "Checking URL: ${url} with pattern: ${regex}"
 
-    [[ "${regex}" == "skip" ]] && return 1
+    [[ "${regex}" == "skip" || "${regex}" == "stable" ]] && return 1
 
     local html
     html=$(fetch_url "${url}") || return 1
 
-    # Handle different regex formats - use extended regex (not Perl)
-    if [[ "${regex}" =~ \([0-9] ]]; then
-        # Regex with capture groups - extract version parts
-        echo "${html}" | grep -oE "${regex}" | \
-            sed -E 's/.*\(([0-9]+)\).*\(([0-9]+)\).*/\1.\2/' | \
-            filter_stable | latest_version
-    else
-        # Simple pattern - extract directly
-        echo "${html}" | grep -oE "${regex}" | \
-            grep -oE '[0-9]+(\.[0-9]+)+' | \
-            filter_stable | latest_version
-    fi
+    # Convert TOML escaped backslashes (\\) to single backslashes (\) for grep
+    regex="${regex//\\\\/\\}"
+
+    # Match the pattern
+    local matches
+    matches=$(echo "${html}" | grep -oE "${regex}" | head -50)
+
+    [[ -z "${matches}" ]] && return 1
+
+    # Extract version from each match
+    # Handles various formats:
+    # - go1.23.4.linux -> 1.23.4
+    # - FILE5_46 -> 5.46
+    # - libnl3_10_0 -> 3.10.0
+    # - llvmorg-18.1.8 -> 18.1.8
+    # - OpenSSH 9.9p1 -> 9.9p1
+    # - V3-6-0 -> 3.6.0
+    echo "${matches}" | while read -r match; do
+        # Remove leading non-digits (prefixes like "go", "FILE", "llvmorg-", etc.)
+        match="${match#"${match%%[0-9]*}"}"
+        # Replace underscores and hyphens with dots
+        match="${match//[_-]/.}"
+        # Extract version-like pattern (numbers with dots, optionally ending with pN for patches)
+        echo "$match" | grep -oE '^[0-9]+(\.[0-9]+)*([p][0-9]+)?' | head -1
+    done | filter_stable | latest_version
 }
 
 check_xorg() {
@@ -768,7 +781,8 @@ update_toml_version() {
         warn "Cannot find file for package ${pkg}"
         return 1
     fi
-    sed -i "/^\[packages\.${pkg}\]/,/^\[/{s/^version = \"[^\"]*\"/version = \"${new_version}\"/}" "${pkg_file}"
+    # Use | as sed delimiter to avoid issues with special characters in versions
+    sed -i "/^\[packages\.${pkg}\]/,/^\[/{s|^version = \"[^\"]*\"|version = \"${new_version}\"|}" "${pkg_file}"
     log "Updated ${pkg} to ${new_version} in ${pkg_file}"
 }
 
@@ -819,7 +833,7 @@ main() {
     for entry in "${packages[@]}"; do
         local pkg="${entry%%=*}"
         local info="${entry#*=}"
-        local version="${info%|*}"
+        local version="${info%%|*}"
         local version_check="${info#*|}"
 
         # Skip -pass1, -pass2 variants (they use same source as base package)
