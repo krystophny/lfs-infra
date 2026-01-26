@@ -614,7 +614,7 @@ declare -A FEDORA_NAME_MAP=(
     ["util-linux"]="util-linux"
     ["sysklogd"]="rsyslog"
     ["sysvinit"]="sysvinit"
-    ["eudev"]="systemd"
+    # Note: eudev is NOT mapped to systemd - they are different packages
     ["shadow"]="shadow-utils"
     ["acl"]="acl"
     ["attr"]="attr"
@@ -706,20 +706,30 @@ check_fedora_rawhide() {
         fedora_name="${FEDORA_NAME_MAP[${pkg}]:-${pkg}}"
     fi
 
-    log "Checking Fedora Rawhide: ${fedora_name}"
+    log "Checking Fedora Rawhide (Bodhi): ${fedora_name}"
 
-    local json
-    json=$(fetch_url "https://mdapi.fedoraproject.org/rawhide/pkg/${fedora_name}") || return 1
+    # Use Bodhi API - the official Fedora updates system
+    local json nvr version pkg_name
+    json=$(curl -fsSL --connect-timeout 15 --max-time 30 \
+        "https://bodhi.fedoraproject.org/updates/?releases=F44&packages=${fedora_name}&rows_per_page=1" 2>/dev/null) || return 1
 
-    # Extract version, handling epoch:version-release format
-    local version
-    version=$(echo "${json}" | jq -r '.version // empty' 2>/dev/null)
+    # Extract NVR (Name-Version-Release) from latest update
+    nvr=$(echo "${json}" | jq -r '.updates[0].builds[0].nvr // empty' 2>/dev/null)
+    [[ -z "${nvr}" ]] && return 1
 
-    if [[ -z "${version}" ]]; then
-        # Try srcpkg endpoint
-        json=$(fetch_url "https://mdapi.fedoraproject.org/rawhide/srcpkg/${fedora_name}") || return 1
-        version=$(echo "${json}" | jq -r '.version // empty' 2>/dev/null)
+    # Validate that the returned package matches what we requested
+    # (Bodhi sometimes returns different packages if exact match not found)
+    pkg_name=$(echo "${json}" | jq -r '.updates[0].builds[0].nvr // empty' 2>/dev/null | sed 's/-[0-9].*//')
+    if [[ "${pkg_name}" != "${fedora_name}" ]]; then
+        log "Bodhi returned different package: ${pkg_name} (expected ${fedora_name})"
+        return 1
     fi
+
+    # Parse version from NVR: "gcc-16.0.1-0.3.fc44" -> "16.0.1"
+    # NVR format: <name>-<version>-<release>
+    # Remove package name prefix and release suffix
+    version="${nvr#${fedora_name}-}"      # Remove "gcc-" prefix
+    version="${version%-*}"                # Remove "-0.3.fc44" suffix
 
     [[ -n "${version}" ]] && echo "${version}"
 }
@@ -727,11 +737,12 @@ check_fedora_rawhide() {
 # Get fedora_name from packages.toml if specified
 get_fedora_name() {
     local pkg="$1"
-    cat_packages | awk -v pkg="[packages.${pkg}]" '
+    # Use subshell to isolate pipefail issues when awk exits early
+    (cat_packages 2>/dev/null | awk -v pkg="[packages.${pkg}]" '
         $0 == pkg { found=1; next }
         /^\[/ && found { exit }
         found && /^fedora_name *= *"/ { gsub(/.*= *"|".*/, ""); print; exit }
-    '
+    ') || true
 }
 
 # ============================================================
