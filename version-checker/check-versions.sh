@@ -869,14 +869,13 @@ parse_packages() {
 }
 
 # Version comparison (normalizes various formats for comparison)
+# Returns true if v1 >= v2
 version_ge() {
     local v1="${1//-/.}"  # Hyphens to dots
     local v2="${2//-/.}"
     v1="${v1//_/}"        # Remove underscores (1.9.17_p2 -> 1.9.17p2)
     v2="${v2//_/}"
-    # Normalize trailing zeros (6.0 vs 6.00)
-    v1=$(echo "$v1" | sed -E 's/\.0+$//' | sed -E 's/\.([0-9]+)0+$/.\1/')
-    v2=$(echo "$v2" | sed -E 's/\.0+$//' | sed -E 's/\.([0-9]+)0+$/.\1/')
+    # Use sort -V for comparison: if v2 sorts first (or equal), then v1 >= v2
     [[ "$(printf '%s\n%s' "$v1" "$v2" | sort -V | head -1)" == "$v2" ]]
 }
 
