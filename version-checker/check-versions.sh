@@ -253,13 +253,35 @@ check_url_regex() {
     # - llvmorg-18.1.8 -> 18.1.8
     # - OpenSSH 9.9p1 -> 9.9p1
     # - V3-6-0 -> 3.6.0
+    # - cacert-2025-12-02.pem -> 2025-12-02 (dates preserved)
     echo "${matches}" | while read -r match; do
         # Remove leading non-digits (prefixes like "go", "FILE", "llvmorg-", etc.)
         match="${match#"${match%%[0-9]*}"}"
-        # Replace underscores and hyphens with dots
-        match="${match//[_-]/.}"
-        # Extract version-like pattern (numbers with dots, optionally ending with pN for patches)
-        echo "$match" | grep -oE '^[0-9]+(\.[0-9]+)*([p][0-9]+)?' | head -1
+        # Remove common file extensions
+        match="${match%.pem}"
+        match="${match%.tar*}"
+        match="${match%.linux*}"
+        match="${match%.src*}"
+        match="${match%.gz}"
+        match="${match%.xz}"
+        match="${match%.bz2}"
+
+        # Check if it's a date format (YYYY-MM-DD) - preserve hyphens
+        if [[ "$match" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "$match"
+        else
+            # Replace underscores with dots (version separators like FILE5_46 -> 5.46)
+            match="${match//_/.}"
+            # For non-date hyphens between single/double digits, convert to dots (e.g., V3-6-0 -> 3.6.0)
+            # But preserve hyphens in versions like 16-20260118 (GCC snapshots)
+            if [[ "$match" =~ ^[0-9]{1,2}-[0-9]{1,2}-[0-9]{1,2}$ ]]; then
+                match="${match//-/.}"
+            fi
+            match="${match%.}"  # Remove trailing dot if any
+            # Extract version-like pattern (numbers with dots, optionally ending with pN for patches)
+            # The grep handles trailing letter removal by only matching valid version patterns
+            echo "$match" | grep -oE '^[0-9]+(\.[0-9]+)*([p][0-9]+)?(-[0-9]+)?' | head -1
+        fi
     done | filter_stable | latest_version
 }
 
@@ -737,9 +759,11 @@ parse_packages() {
     fi
 }
 
-# Version comparison
+# Version comparison (normalizes hyphens to dots for comparison)
 version_ge() {
-    [[ "$(printf '%s\n%s' "$1" "$2" | sort -V | head -1)" == "$2" ]]
+    local v1="${1//-/.}"
+    local v2="${2//-/.}"
+    [[ "$(printf '%s\n%s' "$v1" "$v2" | sort -V | head -1)" == "$v2" ]]
 }
 
 # Get URL template for a package
