@@ -168,9 +168,17 @@ fetch_url_rated() {
     fetch_url "$url"
 }
 
-# Filter unstable versions
+# Filter unstable versions and clean up version strings
 filter_stable() {
-    grep -viE '(rc|alpha|beta|pre|dev|snapshot|git|svn|cvs|test|nightly|exp|trunk)' | \
+    # First filter out unstable versions BEFORE stripping suffixes
+    grep -viE '(rc|alpha|beta|pre|dev|snapshot|git|svn|cvs|test|nightly|exp|trunk|POST|PRE|WEBKIT|CLANG)' | \
+    # Strip common stable suffixes like -release, -stable, -kernel
+    sed -E 's/-(release|stable|kernel|final|ga)$//i' | \
+    # Remove unusual suffixes (non-version text after dash) that remain
+    sed -E 's/-[a-zA-Z][-a-zA-Z0-9_]*$//' | \
+    # Remove Repology revision suffixes like -1, -2 (but NOT dates like 2025-12-02)
+    sed -E '/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/!s/-[0-9]+$//' | \
+    # Final filter and validation
     grep -vE '^9999$|^0\.0\.' | \
     grep -E '^[0-9]' || true
 }
@@ -827,10 +835,15 @@ parse_packages() {
     fi
 }
 
-# Version comparison (normalizes hyphens to dots for comparison)
+# Version comparison (normalizes various formats for comparison)
 version_ge() {
-    local v1="${1//-/.}"
+    local v1="${1//-/.}"  # Hyphens to dots
     local v2="${2//-/.}"
+    v1="${v1//_/}"        # Remove underscores (1.9.17_p2 -> 1.9.17p2)
+    v2="${v2//_/}"
+    # Normalize trailing zeros (6.0 vs 6.00)
+    v1=$(echo "$v1" | sed -E 's/\.0+$//' | sed -E 's/\.([0-9]+)0+$/.\1/')
+    v2=$(echo "$v2" | sed -E 's/\.0+$//' | sed -E 's/\.([0-9]+)0+$/.\1/')
     [[ "$(printf '%s\n%s' "$v1" "$v2" | sort -V | head -1)" == "$v2" ]]
 }
 
