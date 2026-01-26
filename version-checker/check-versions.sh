@@ -68,6 +68,7 @@ PACKAGE_FILTER=""
 UPDATE_TOML=0
 RAWHIDE_CHECK=0
 RAWHIDE_ONLY=0
+PARALLEL_JOBS=8  # Default parallel jobs
 
 usage() {
     cat <<EOF
@@ -82,12 +83,14 @@ Options:
     -u, --update    Update packages.toml with new versions
     -r, --rawhide   Compare against Fedora Rawhide (must be >= Rawhide)
     -R, --rawhide-only  Only check against Rawhide (skip upstream)
+    -j, --jobs N    Parallel jobs (default: 8)
     -c, --clear     Clear version cache
     -h, --help      Show this help
 
 Examples:
     $(basename "$0")              # Check all, show outdated only
     $(basename "$0") -a           # Check all, show all results
+    $(basename "$0") -j 4         # Check with 4 parallel jobs
     $(basename "$0") -r           # Check against Rawhide baseline
     $(basename "$0") -R           # Only compare with Rawhide
     $(basename "$0") gcc binutils # Check specific packages
@@ -103,6 +106,7 @@ while [[ $# -gt 0 ]]; do
         -u|--update) UPDATE_TOML=1; shift ;;
         -r|--rawhide) RAWHIDE_CHECK=1; shift ;;
         -R|--rawhide-only) RAWHIDE_CHECK=1; RAWHIDE_ONLY=1; shift ;;
+        -j|--jobs) PARALLEL_JOBS="$2"; shift 2 ;;
         -c|--clear) rm -rf "${CACHE_DIR}"; echo "Cache cleared"; exit 0 ;;
         -h|--help) usage ;;
         -*) echo "Unknown option: $1"; usage ;;
@@ -116,22 +120,52 @@ log() { [[ ${VERBOSE} -eq 1 ]] && echo -e "${CYAN}[DEBUG]${NC} $*" >&2; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
-# Fetch with retries and timeout
+# Fetch with retries, timeout, and connection reuse
 fetch_url() {
     local url="$1"
-    local retries=3
-    local timeout=15
+    local retries=2
+    local timeout=10
 
+    # Use connection keep-alive and compression
     for ((i=1; i<=retries; i++)); do
         local result
-        if result=$(curl -fsSL --connect-timeout "${timeout}" -A "lfs-version-checker/2.0" "${url}" 2>/dev/null); then
+        if result=$(curl -fsSL --connect-timeout "${timeout}" --max-time 30 \
+            -H "Connection: keep-alive" --compressed \
+            -A "lfs-version-checker/2.0" "${url}" 2>/dev/null); then
             echo "${result}"
             return 0
         fi
         log "Retry ${i}/${retries} for ${url}"
-        sleep 1
+        sleep 0.5
     done
     return 1
+}
+
+# Rate limit tracking per domain
+declare -A DOMAIN_LAST_REQUEST
+RATE_LIMIT_MS=200  # 200ms between requests to same domain
+
+rate_limit_domain() {
+    local url="$1"
+    local domain
+    domain=$(echo "$url" | sed -E 's|https?://([^/]+).*|\1|')
+
+    local now last_req
+    now=$(date +%s%3N 2>/dev/null || date +%s)000
+    last_req="${DOMAIN_LAST_REQUEST[$domain]:-0}"
+
+    local diff=$((now - last_req))
+    if [[ $diff -lt $RATE_LIMIT_MS ]]; then
+        sleep "0.$((RATE_LIMIT_MS - diff))"
+    fi
+    DOMAIN_LAST_REQUEST[$domain]=$now
+}
+
+# Fetch with rate limiting
+fetch_url_rated() {
+    local url="$1"
+    rate_limit_domain "$url"
+    fetch_url "$url"
 }
 
 # Filter unstable versions
@@ -810,13 +844,60 @@ update_toml_version() {
     log "Updated ${pkg} to ${new_version} in ${pkg_file}"
 }
 
+# Check a single package and write result to temp file
+check_package_worker() {
+    local entry="$1"
+    local result_file="$2"
+
+    local pkg="${entry%%=*}"
+    local info="${entry#*=}"
+    local version="${info%%|*}"
+    local version_check="${info#*|}"
+
+    # Skip -pass1, -pass2 variants
+    [[ "${pkg}" =~ -pass[12]$ ]] && return
+
+    local upstream=""
+    upstream=$(check_version "${pkg}" "${version_check}" 2>/dev/null) || true
+
+    # Write result: pkg|version|upstream
+    echo "${pkg}|${version}|${upstream}" >> "${result_file}"
+}
+
+# Parallel version checking with semaphore
+parallel_check_versions() {
+    local -n pkgs=$1
+    local result_file="$2"
+    local max_jobs="${PARALLEL_JOBS}"
+
+    local running=0
+    local pids=()
+
+    for entry in "${pkgs[@]}"; do
+        # Start worker in background
+        check_package_worker "${entry}" "${result_file}" &
+        pids+=($!)
+        running=$((running + 1))
+
+        # Wait if we've hit max jobs
+        if [[ $running -ge $max_jobs ]]; then
+            wait "${pids[0]}"
+            pids=("${pids[@]:1}")
+            running=$((running - 1))
+        fi
+    done
+
+    # Wait for remaining jobs
+    wait
+}
+
 # Main
 main() {
     echo -e "${BLUE}LFS Package Version Checker${NC}"
     if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
         echo -e "Comparing against Fedora Rawhide baseline"
     else
-        echo -e "Direct source checks with Repology fallback"
+        echo -e "Direct source checks with Repology fallback (${PARALLEL_JOBS} parallel jobs)"
     fi
     echo "========================================"
     echo ""
@@ -854,101 +935,23 @@ main() {
         printf "%-25s %-15s %-15s %s\n" "-------" "-----" "--------" "------"
     fi
 
-    for entry in "${packages[@]}"; do
-        local pkg="${entry%%=*}"
-        local info="${entry#*=}"
-        local version="${info%%|*}"
-        local version_check="${info#*|}"
+    # Use parallel checking for standard upstream-only mode
+    if [[ ${RAWHIDE_CHECK} -eq 0 ]]; then
+        local result_file
+        result_file=$(mktemp)
+        trap "rm -f '${result_file}'" EXIT
 
-        # Skip -pass1, -pass2 variants (they use same source as base package)
-        [[ "${pkg}" =~ -pass[12]$ ]] && continue
+        # Run parallel version checks
+        echo -ne "Checking versions" >&2
+        parallel_check_versions packages "${result_file}"
+        echo -e "\r\033[K" >&2  # Clear the progress line
 
-        checked=$((checked + 1))
+        # Process results from temp file
+        while IFS='|' read -r pkg version upstream; do
+            [[ -z "${pkg}" ]] && continue
+            checked=$((checked + 1))
 
-        local upstream="" rawhide="" fedora_name=""
-
-        # Get Rawhide version if requested
-        if [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
-            fedora_name=$(get_fedora_name "${pkg}")
-            rawhide=$(check_fedora_rawhide "${pkg}" "${fedora_name}" 2>/dev/null) || true
-        fi
-
-        # Get upstream version (unless rawhide-only mode)
-        if [[ ${RAWHIDE_ONLY} -eq 0 ]]; then
-            upstream=$(check_version "${pkg}" "${version_check}" 2>/dev/null) || true
-        fi
-
-        # Determine status
-        local status="" show_line=0
-
-        if [[ ${RAWHIDE_ONLY} -eq 1 ]]; then
-            # Rawhide-only mode: compare against Rawhide
-            if [[ -z "${rawhide}" ]]; then
-                [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}not-in-rawhide${NC}"
-                errors=$((errors + 1))
-                continue
-            fi
-
-            if version_ge "${version}" "${rawhide}"; then
-                status="${GREEN}>=rawhide${NC}"
-                [[ ${CHECK_ALL} -eq 1 ]] && show_line=1
-            else
-                status="${RED}<rawhide${NC}"
-                behind_rawhide=$((behind_rawhide + 1))
-                show_line=1
-            fi
-
-            [[ ${show_line} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${rawhide}" "${status}"
-
-        elif [[ ${RAWHIDE_CHECK} -eq 1 ]]; then
-            # Both upstream and Rawhide comparison
-            if [[ -z "${upstream}" && -z "${rawhide}" ]]; then
-                [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "?" "?" "${YELLOW}unknown${NC}"
-                errors=$((errors + 1))
-                continue
-            fi
-
-            local up_status="" rh_status=""
-
-            # Check against upstream
-            if [[ -n "${upstream}" ]]; then
-                if version_ge "${version}" "${upstream}"; then
-                    up_status="ok"
-                else
-                    up_status="old"
-                    outdated=$((outdated + 1))
-                fi
-            fi
-
-            # Check against Rawhide
-            if [[ -n "${rawhide}" ]]; then
-                if version_ge "${version}" "${rawhide}"; then
-                    rh_status="ok"
-                else
-                    rh_status="old"
-                    behind_rawhide=$((behind_rawhide + 1))
-                fi
-            fi
-
-            # Determine combined status
-            if [[ "${up_status}" == "old" || "${rh_status}" == "old" ]]; then
-                if [[ "${rh_status}" == "old" ]]; then
-                    status="${RED}<rawhide${NC}"
-                else
-                    status="${YELLOW}outdated${NC}"
-                fi
-                show_line=1
-            else
-                status="${GREEN}up-to-date${NC}"
-                [[ ${CHECK_ALL} -eq 1 ]] && show_line=1
-            fi
-
-            if [[ ${show_line} -eq 1 ]]; then
-                printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "${upstream:-?}" "${rawhide:-?}" "${status}"
-            fi
-
-        else
-            # Standard upstream-only mode
+            local status=""
             if [[ -z "${upstream}" ]]; then
                 [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}unknown${NC}"
                 errors=$((errors + 1))
@@ -969,8 +972,96 @@ main() {
             fi
 
             printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${upstream}" "${status}"
-        fi
-    done
+        done < "${result_file}"
+    else
+        # Sequential mode for Rawhide checks
+        for entry in "${packages[@]}"; do
+            local pkg="${entry%%=*}"
+            local info="${entry#*=}"
+            local version="${info%%|*}"
+            local version_check="${info#*|}"
+
+            # Skip -pass1, -pass2 variants (they use same source as base package)
+            [[ "${pkg}" =~ -pass[12]$ ]] && continue
+
+            checked=$((checked + 1))
+
+            local upstream="" rawhide="" fedora_name=""
+
+            # Get Rawhide version if requested
+            fedora_name=$(get_fedora_name "${pkg}")
+            rawhide=$(check_fedora_rawhide "${pkg}" "${fedora_name}" 2>/dev/null) || true
+
+            # Get upstream version (unless rawhide-only mode)
+            if [[ ${RAWHIDE_ONLY} -eq 0 ]]; then
+                upstream=$(check_version "${pkg}" "${version_check}" 2>/dev/null) || true
+            fi
+
+            # Determine status
+            local status="" show_line=0
+
+            if [[ ${RAWHIDE_ONLY} -eq 1 ]]; then
+                # Rawhide-only mode
+                if [[ -z "${rawhide}" ]]; then
+                    [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "?" "${YELLOW}not-in-rawhide${NC}"
+                    errors=$((errors + 1))
+                    continue
+                fi
+
+                if version_ge "${version}" "${rawhide}"; then
+                    status="${GREEN}>=rawhide${NC}"
+                    [[ ${CHECK_ALL} -eq 1 ]] && show_line=1
+                else
+                    status="${RED}<rawhide${NC}"
+                    behind_rawhide=$((behind_rawhide + 1))
+                    show_line=1
+                fi
+
+                [[ ${show_line} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "${rawhide}" "${status}"
+            else
+                # Both upstream and Rawhide comparison
+                if [[ -z "${upstream}" && -z "${rawhide}" ]]; then
+                    [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "?" "?" "${YELLOW}unknown${NC}"
+                    errors=$((errors + 1))
+                    continue
+                fi
+
+                local up_status="" rh_status=""
+
+                if [[ -n "${upstream}" ]]; then
+                    if version_ge "${version}" "${upstream}"; then
+                        up_status="ok"
+                    else
+                        up_status="old"
+                        outdated=$((outdated + 1))
+                    fi
+                fi
+
+                if [[ -n "${rawhide}" ]]; then
+                    if version_ge "${version}" "${rawhide}"; then
+                        rh_status="ok"
+                    else
+                        rh_status="old"
+                        behind_rawhide=$((behind_rawhide + 1))
+                    fi
+                fi
+
+                if [[ "${up_status}" == "old" || "${rh_status}" == "old" ]]; then
+                    if [[ "${rh_status}" == "old" ]]; then
+                        status="${RED}<rawhide${NC}"
+                    else
+                        status="${YELLOW}outdated${NC}"
+                    fi
+                    show_line=1
+                else
+                    status="${GREEN}up-to-date${NC}"
+                    [[ ${CHECK_ALL} -eq 1 ]] && show_line=1
+                fi
+
+                [[ ${show_line} -eq 1 ]] && printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "${upstream:-?}" "${rawhide:-?}" "${status}"
+            fi
+        done
+    fi
 
     echo ""
     echo "========================================"
