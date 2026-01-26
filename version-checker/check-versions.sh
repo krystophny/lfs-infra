@@ -436,6 +436,17 @@ check_cpan() {
     echo "${json}" | jq -r '.version // empty' 2>/dev/null | filter_stable
 }
 
+check_perl() {
+    log "Checking Perl.org"
+
+    local html
+    html=$(fetch_url "https://www.perl.org/get.html") || return 1
+
+    # Extract version from download link like perl-5.42.0.tar.gz
+    echo "${html}" | grep -oE 'perl-[0-9]+\.[0-9]+\.[0-9]+' | \
+        sed 's/perl-//' | filter_stable | latest_version
+}
+
 check_python() {
     log "Checking Python.org"
 
@@ -759,6 +770,8 @@ check_version() {
             result=$(check_cpan "${version_check#cpan:}") ;;
         sqlite:*)
             result=$(check_sqlite) ;;
+        perl:*)
+            result=$(check_perl) ;;
         python:*)
             result=$(check_python) ;;
         tukaani:*)
