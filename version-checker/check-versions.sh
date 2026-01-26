@@ -286,7 +286,11 @@ check_url_regex() {
     local regex="$2"
     log "Checking URL: ${url} with pattern: ${regex}"
 
-    [[ "${regex}" == "skip" || "${regex}" == "stable" ]] && return 1
+    # Skip patterns output special marker instead of failing
+    if [[ "${regex}" == "skip" || "${regex}" == "stable" ]]; then
+        echo "SKIP"
+        return 0
+    fi
 
     local html
     html=$(fetch_url "${url}") || return 1
@@ -344,12 +348,14 @@ check_xorg() {
     local path="$1"
     log "Checking X.org: ${path}"
 
-    local url="https://xorg.freedesktop.org/releases/individual/${path}/"
+    # Split path into directory and package name
+    local dir=$(dirname "${path}")
+    local name=$(basename "${path}")
+
+    local url="https://xorg.freedesktop.org/releases/individual/${dir}/"
     local html
     html=$(fetch_url "${url}") || return 1
 
-    local name
-    name=$(basename "${path}")
     echo "${html}" | extract_version "${name}-" | filter_stable | latest_version
 }
 
@@ -357,8 +363,11 @@ check_gnome() {
     local project="$1"
     log "Checking GNOME: ${project}"
 
+    # URL encode special characters (+ -> %2B)
+    local encoded_project="${project//+/%2B}"
+
     local json
-    json=$(fetch_url "https://download.gnome.org/sources/${project}/cache.json") || return 1
+    json=$(fetch_url "https://download.gnome.org/sources/${encoded_project}/cache.json") || return 1
 
     # Get latest stable version (even minor = stable)
     echo "${json}" | jq -r '.[1] | keys[]' 2>/dev/null | \
@@ -1018,6 +1027,12 @@ main() {
                 continue
             fi
 
+            # Handle SKIP marker - intentionally skipped packages
+            if [[ "${upstream}" == "SKIP" ]]; then
+                [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-15s %-15s %b\n" "${pkg}" "${version}" "-" "${CYAN}skipped${NC}"
+                continue
+            fi
+
             if version_ge "${version}" "${upstream}"; then
                 status="${GREEN}up-to-date${NC}"
                 [[ ${CHECK_ALL} -eq 0 ]] && continue
@@ -1083,6 +1098,12 @@ main() {
                 if [[ -z "${upstream}" && -z "${rawhide}" ]]; then
                     [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "?" "?" "${YELLOW}unknown${NC}"
                     errors=$((errors + 1))
+                    continue
+                fi
+
+                # Handle SKIP marker - intentionally skipped packages
+                if [[ "${upstream}" == "SKIP" ]]; then
+                    [[ ${CHECK_ALL} -eq 1 ]] && printf "%-25s %-12s %-12s %-12s %b\n" "${pkg}" "${version}" "-" "${rawhide:-?}" "${CYAN}skipped${NC}"
                     continue
                 fi
 
