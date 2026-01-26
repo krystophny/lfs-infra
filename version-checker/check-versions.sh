@@ -171,7 +171,9 @@ fetch_url_rated() {
 # Filter unstable versions and clean up version strings
 filter_stable() {
     # First filter out unstable versions BEFORE stripping suffixes
-    grep -viE '(rc|alpha|beta|pre|dev|snapshot|git|svn|cvs|test|nightly|exp|trunk|POST|PRE|WEBKIT|CLANG)' | \
+    # Also filter ~rc (RPM/Fedora notation) and .rc versions
+    grep -viE '(rc[0-9]*|alpha|beta|pre|dev|snapshot|git|svn|cvs|test|nightly|exp|trunk|POST|PRE|WEBKIT|CLANG)' | \
+    grep -vE '~rc|\.rc[0-9]*' | \
     # Strip common stable suffixes like -release, -stable, -kernel
     sed -E 's/-(release|stable|kernel|final|ga)$//i' | \
     # Remove unusual suffixes (non-version text after dash) that remain
@@ -722,6 +724,14 @@ check_fedora_rawhide() {
     pkg_name=$(echo "${json}" | jq -r '.updates[0].builds[0].nvr // empty' 2>/dev/null | sed 's/-[0-9].*//')
     if [[ "${pkg_name}" != "${fedora_name}" ]]; then
         log "Bodhi returned different package: ${pkg_name} (expected ${fedora_name})"
+        return 1
+    fi
+
+    # Skip RC/pre-release versions - check full NVR (RC can be in release field)
+    # e.g., kernel-6.19.0-0.rc6.260123gc072629f05d7b.46.fc44
+    # e.g., mangohud-0.8.3~rc1-1.fc44
+    if [[ "${nvr}" =~ [\.\-~]rc[0-9]*[\.\-]|alpha|beta|\.pre ]]; then
+        log "Skipping RC version: ${nvr}"
         return 1
     fi
 
