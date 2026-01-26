@@ -249,15 +249,28 @@ check_github() {
     local repo="$1"
     log "Checking GitHub: ${repo}"
 
-    local json
-    json=$(fetch_url "https://api.github.com/repos/${repo}/releases/latest") || {
-        # Try tags if no releases
-        json=$(fetch_url "https://api.github.com/repos/${repo}/tags") || return 1
-        echo "${json}" | jq -r '.[0].name' 2>/dev/null | sed 's/^[vV]//' | filter_stable | head -1
-        return
-    }
+    local json result
+    # Try API first
+    json=$(fetch_url "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || json=""
 
-    echo "${json}" | jq -r '.tag_name // empty' 2>/dev/null | sed 's/^[vV]//' | filter_stable
+    if [[ -n "${json}" ]] && ! echo "${json}" | grep -q "rate limit"; then
+        result=$(echo "${json}" | jq -r '.tag_name // empty' 2>/dev/null | sed 's/^[vV]//' | filter_stable)
+        [[ -n "${result}" ]] && { echo "${result}"; return 0; }
+    fi
+
+    # Fallback: scrape tags page (works without API key)
+    log "GitHub API unavailable, scraping tags page for ${repo}"
+    local html
+    html=$(fetch_url "https://github.com/${repo}/tags") || return 1
+
+    # Extract version from tag links (handles v1.2.3, 1.2.3, release-1.2.3, curl-8_18_0, etc.)
+    local name
+    name=$(basename "${repo}")
+    echo "${html}" | grep -oE "/${repo}/releases/tag/[^\"']+" | \
+        sed "s|.*tag/||" | sed 's/^[vV]//' | \
+        sed "s/^${name}-//" | sed 's/^release-//' | \
+        sed 's/_/./g' | \
+        filter_stable | latest_version
 }
 
 check_url_regex() {
@@ -384,6 +397,25 @@ check_savannah() {
     html=$(fetch_url "${url}") || return 1
 
     echo "${html}" | extract_version "${project}-" | filter_stable | latest_version
+}
+
+check_sqlite() {
+    log "Checking SQLite"
+
+    local html
+    html=$(fetch_url "https://www.sqlite.org/download.html") || return 1
+
+    # Extract numeric version (e.g., 3510200) and convert to dotted format (3.51.2)
+    local num
+    num=$(echo "${html}" | grep -oE 'sqlite-autoconf-([0-9]+)' | head -1 | grep -oE '[0-9]+$')
+    [[ -z "${num}" ]] && return 1
+
+    # Convert XYYZZWW to X.YY.ZZ (drop WW subpatch)
+    local major minor patch
+    major=$((num / 1000000))
+    minor=$(((num / 10000) % 100))
+    patch=$(((num / 100) % 100))
+    echo "${major}.${minor}.${patch}"
 }
 
 check_cpan() {
@@ -717,6 +749,8 @@ check_version() {
             result=$(check_savannah "${version_check#savannah:}") ;;
         cpan:*)
             result=$(check_cpan "${version_check#cpan:}") ;;
+        sqlite:*)
+            result=$(check_sqlite) ;;
         python:*)
             result=$(check_python) ;;
         tukaani:*)
