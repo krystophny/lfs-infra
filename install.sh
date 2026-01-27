@@ -570,6 +570,7 @@ for svc in dbus sshd cronie wpa_supplicant dhcpcd; do
     if [[ -d "${SCRIPT_DIR}/config/runit/sv/${svc}" ]]; then
         cp -r "${SCRIPT_DIR}/config/runit/sv/${svc}" "${MOUNT_POINT}/etc/sv/"
         chmod +x "${MOUNT_POINT}/etc/sv/${svc}/run"
+        chown -R root:root "${MOUNT_POINT}/etc/sv/${svc}"
         # Only auto-enable core services, WiFi services enabled by WiFi config
         if [[ "$svc" == "dbus" || "$svc" == "sshd" || "$svc" == "cronie" ]]; then
             ln -sf "/etc/sv/${svc}" "${MOUNT_POINT}/etc/runit/runsvdir/default/"
@@ -585,7 +586,12 @@ cat > "${MOUNT_POINT}/etc/sv/agetty-tty1/run" << EOF
 exec setsid agetty -a ${LFS_USERNAME} -L tty1 linux
 EOF
 chmod +x "${MOUNT_POINT}/etc/sv/agetty-tty1/run"
+chown -R root:root "${MOUNT_POINT}/etc/sv/agetty-tty1"
 ln -sf /etc/sv/agetty-tty1 "${MOUNT_POINT}/etc/runit/runsvdir/default/"
+
+# Ensure all runit directories have proper ownership
+chown -R root:root "${MOUNT_POINT}/etc/runit"
+chown -R root:root "${MOUNT_POINT}/etc/sv"
 
 ok "Runit init configured"
 
