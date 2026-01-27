@@ -1,0 +1,15 @@
+# USB serial adapters - allow dialout group
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", KERNEL=="ttyACM*", GROUP="dialout", MODE="0660"
+
+# TinyFPGA BX bootloader
+SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6130", GROUP="plugdev", MODE="0660"
+
+# FTDI adapters
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", GROUP="plugdev", MODE="0660"
+
+# CH340/CH341 adapters
+SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", GROUP="plugdev", MODE="0660"
+
+# CP210x adapters
+SUBSYSTEM=="usb", ATTR{idVendor}=="10c4", GROUP="plugdev", MODE="0660"

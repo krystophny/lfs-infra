@@ -1,0 +1,20 @@
+# Audio devices - allow audio group
+SUBSYSTEM=="sound", GROUP="audio", MODE="0660"
+KERNEL=="snd/*", GROUP="audio", MODE="0660"
+KERNEL=="audio*", GROUP="audio", MODE="0660"
+KERNEL=="dsp*", GROUP="audio", MODE="0660"
+KERNEL=="mixer*", GROUP="audio", MODE="0660"
+
+# Video4Linux devices (webcams, capture cards)
+SUBSYSTEM=="video4linux", GROUP="video", MODE="0660"
+KERNEL=="video*", GROUP="video", MODE="0660"
+
+# DRI render nodes - allow video/render group for GPU access
+SUBSYSTEM=="drm", KERNEL=="card*", GROUP="video", MODE="0660"
+SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="render", MODE="0660"
+
+# Framebuffer devices
+SUBSYSTEM=="graphics", KERNEL=="fb*", GROUP="video", MODE="0660"
+
+# KVM for virtualization
+KERNEL=="kvm", GROUP="kvm", MODE="0660"
