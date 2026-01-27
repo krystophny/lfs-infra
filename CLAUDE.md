@@ -2,17 +2,31 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
-## CRITICAL: Package Installation Rules
+## CRITICAL: Package Installation Rules - MANDATORY, NO EXCEPTIONS
 
-**ALWAYS use pk for ALL package installations. NEVER install anything ad-hoc.**
+**ALWAYS use pk for ALL system changes. NEVER make ad-hoc fixes.**
 
+### ABSOLUTELY FORBIDDEN - NEVER DO THESE:
+- `make install`, `pip install`, `cargo install`, `npm install -g` - USE PK INSTEAD
+- `cp`/`install` binaries or libraries to system directories - USE PK INSTEAD
+- `glib-compile-schemas`, `gtk-update-icon-cache`, `ldconfig` directly - ADD TO PACKAGE BUILD
+- `ln -s` for system symlinks - ADD TO PACKAGE BUILD
+- ANY direct modification to /usr, /etc, /lib, /bin, /var - USE PK INSTEAD
+- "Quick fixes" that bypass pk - FIX THE PACKAGE DEFINITION INSTEAD
+
+### IF SOMETHING IS BROKEN:
+1. **STOP** - Do NOT run a quick command to fix it
+2. **FIND** the responsible package in pk/packages/*.toml
+3. **FIX** the package's build_commands to include the missing step
+4. **REBUILD** with `pk b <pkgname>`
+5. **REINSTALL** with `pk i /var/cache/pk/<pkg>.pk.tar.xz`
+
+### Package Workflow:
 1. Package definitions are in **pk repo**: `/home/ert/code/pk/packages/*.toml` (split alphabetically: a.toml, b.toml, etc.)
 2. If a package exists, use `pk b <pkgname>` (build) and `pk i <pkg.pk.tar.xz>` (install)
 3. If a package does NOT exist, ADD IT FIRST to the appropriate `<letter>.toml` file, then build/install via pk
-4. NEVER run `make install`, `pip install`, `cargo install` or any other installer directly
-5. NEVER copy binaries or libraries manually to system directories
-6. All installed files MUST be tracked by pk - verify with `pk check`
-7. Package archives use `.pk.tar.xz` extension
+4. All installed files MUST be tracked by pk - verify with `pk check`
+5. Package archives use `.pk.tar.xz` extension
 
 ```bash
 # Correct workflow for new packages:
