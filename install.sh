@@ -310,12 +310,17 @@ mkdir -p "${MOUNT_POINT}/usr/lib/pk"
 cp "${PK_REPO}/pk.d/"* "${MOUNT_POINT}/usr/lib/pk/"
 chmod +x "${MOUNT_POINT}/usr/lib/pk/"*
 
-# Install package definitions and build config
-mkdir -p "${MOUNT_POINT}/etc/pk/packages"
-cp "${PK_REPO}/packages/"*.toml "${MOUNT_POINT}/etc/pk/packages/"
-cp "${PK_REPO}/config/build.conf" "${MOUNT_POINT}/etc/pk/build.conf"
+# Clone pk repo for package definitions (enables pk sync/upgrade workflow)
+mkdir -p "${MOUNT_POINT}/var/lib/pk/repo"
+cp -r "${PK_REPO}/." "${MOUNT_POINT}/var/lib/pk/repo/"
 
-ok "pk installed (binary, subcommands, package definitions, build config)"
+# Symlink package definitions and build config from repo
+mkdir -p "${MOUNT_POINT}/etc/pk"
+ln -sf /var/lib/pk/repo/packages "${MOUNT_POINT}/etc/pk/packages"
+ln -sf /var/lib/pk/repo/config/build.conf "${MOUNT_POINT}/etc/pk/build.conf"
+
+ok "pk installed (binary, subcommands, repo clone with symlinked definitions)"
+log "  Use 'pk sync' to update package definitions from upstream"
 
 # ============================================================================
 # Step 6: Download Sources

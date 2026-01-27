@@ -38,18 +38,19 @@ Uses **pk** - a minimal POSIX shell package manager (modular git-like architectu
 ```
 lfs-infra/                          pk/ (separate repo)
 ├── install.sh                      ├── pk                    # Package manager
-├── continue-lfs-build.sh           ├── pk.d/                 # Subcommands
-├── test-qemu.sh                    │   ├── pk-build
-├── .env.example                    │   ├── pk-download
-├── config/                         │   ├── pk-install
-│   ├── lfs.conf                    │   └── ...
-│   ├── build.conf                  └── packages/             # Package definitions
-│   └── ...                             ├── a.toml            # 260 packages split
-├── scripts/                            ├── b.toml            # alphabetically
-│   ├── build/                          ├── ...
-│   └── lib/                            └── z.toml
-└── version-checker/
-
+├── test-qemu.sh                    ├── pk.d/                 # Subcommands
+├── .env.example                    │   ├── pk-build
+├── config/                         │   ├── pk-download
+│   ├── lfs.conf                    │   ├── pk-install
+│   └── ...                         │   ├── pk-sync           # Sync from git
+├── scripts/                        │   ├── pk-check-updates  # Version checker
+│   ├── build/                      │   ├── pk-upgrade        # Upgrade packages
+│   └── lib/                        │   └── pk-push-updates   # Push changes
+└── ...                             └── packages/             # Package definitions
+                                        ├── a.toml            # 260 packages split
+                                        ├── b.toml            # alphabetically
+                                        ├── ...
+                                        └── z.toml
 ```
 
 ## Quick Start
@@ -83,6 +84,14 @@ pk f <pkgname>         # List package files
 pk b <pkgname>         # Build package from packages/*.toml
 pk d <pkgname>         # Download package source
 
+# Update commands (apt-like workflow)
+pk sync                # Pull latest package definitions from git
+pk check-updates       # Check for outdated packages (like apt list --upgradable)
+pk check-updates -r    # Compare against Fedora Rawhide
+pk upgrade             # Build and install all outdated packages
+pk upgrade gcc         # Upgrade specific package
+pk push-updates        # Commit and push TOML changes (maintainers)
+
 # System commands
 pk c [dirs...]         # Check for untracked files
 pk v                   # Show version
@@ -90,10 +99,14 @@ pk v                   # Show version
 
 Database: `/var/lib/pk/<pkgname>/` with `info` (name\nversion) and `files` (file list)
 
+Repository: `/var/lib/pk/repo/` - git clone for package definitions (symlinked to /etc/pk/packages)
+
 Environment:
 - `PK_ROOT=/` - system install (absolute paths)
 - `PK_ROOT=/mnt/lfs/` - chroot install
 - `PK_ROOT=""` - local/safe mode (relative paths, harmless)
+- `PK_REPO_URL` - git repo for pk sync (default: github.com/krystophny/pk.git)
+- `PK_REPO_DIR` - local clone directory (default: /var/lib/pk/repo)
 
 ## Environment Variables
 
@@ -239,21 +252,23 @@ sudo ./install.sh /dev/nvme0n1
 # Test in QEMU
 ./test-qemu.sh
 
-# Check for package updates
-./version-checker/check-versions.sh -r    # Compare with Fedora Rawhide
-./version-checker/check-versions.sh -u gcc # Update package version
+# Check for package updates (now via pk)
+pk sync                      # Pull latest package definitions
+pk check-updates             # Show outdated packages
+pk check-updates -r          # Compare with Fedora Rawhide
+pk check-updates -u gcc      # Update gcc version in TOML
+pk upgrade                   # Build and install all outdated
 
 # Build specific package
 ./scripts/build/build-lfs.sh <package>
 
 # Build all
 ./scripts/build/build-lfs.sh all
-
-# Continue interrupted Stage 1 build
-./continue-lfs-build.sh
 ```
 
 ## Version Checking
+
+Version checking is now integrated into pk via `pk check-updates`.
 
 Supports multiple upstream formats in `version_check` field:
 
