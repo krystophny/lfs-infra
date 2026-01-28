@@ -363,12 +363,13 @@ cp "${MOUNT_POINT}/boot/efi/EFI/LFS/grubx64.efi" "${MOUNT_POINT}/boot/efi/EFI/BO
 KERNEL_VERSION=$(ls "${MOUNT_POINT}/boot/" | grep -oP 'vmlinuz-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
 cat > "${MOUNT_POINT}/boot/grub/grub.cfg" << EOF
-# Minimal GRUB config - instant boot
-set timeout=0
+# Minimal GRUB config
+set timeout=3
 set default=0
 
 menuentry "LFS" {
-    linux /boot/vmlinuz-${KERNEL_VERSION} root=PARTUUID=${ROOT_PARTUUID} ro console=tty0
+    search --no-floppy --fs-uuid --set=root ${ROOT_UUID}
+    linux /boot/vmlinuz-${KERNEL_VERSION} root=PARTUUID=${ROOT_PARTUUID} rw rootwait init=/sbin/init console=tty0
 }
 EOF
 
