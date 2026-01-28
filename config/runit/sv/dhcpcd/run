@@ -1,2 +1,6 @@
 #!/bin/sh
-exec dhcpcd -B -M
+# DHCP only for wireless interfaces, not ethernet
+WLAN=$(ip link | grep -oE "wl[a-z0-9]+" | head -1)
+[ -n "$WLAN" ] && exec dhcpcd -B -M "$WLAN"
+# If no wireless, just sleep (ethernet is static)
+exec sleep infinity
