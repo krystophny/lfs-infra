@@ -1,3 +1,18 @@
+# Environment files (contain secrets)
 .env
+.env.local
+.env.*
+
+# Build artifacts
 usr/src/
 var/
+
+# Editor/IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log
