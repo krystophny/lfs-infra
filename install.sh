@@ -418,6 +418,7 @@ dialout:x:10:
 audio:x:11:${LFS_USERNAME}
 video:x:12:${LFS_USERNAME}
 utmp:x:13:
+fuse:x:14:${LFS_USERNAME}
 input:x:24:${LFS_USERNAME}
 cdrom:x:15:
 adm:x:16:
