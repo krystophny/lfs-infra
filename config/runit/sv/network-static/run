@@ -1,5 +1,38 @@
 #!/bin/sh
-# Static IP for ethernet
-ip addr add 192.168.1.2/24 dev eth0 2>/dev/null || true
-ip link set eth0 up
+# Static IP configuration for ethernet (Intel I225-V)
+# This runs BEFORE dhcpcd so ethernet is up first
+
+# Load network modules if needed (cfg80211, mac80211 are built-in, iwlwifi is module)
+for mod in /etc/modules-load.d/*.conf; do
+    [ -f "$mod" ] && while read -r module; do
+        case "$module" in
+            \#*|"") continue ;;
+        esac
+        modprobe "$module" 2>/dev/null || true
+    done < "$mod"
+done
+
+# Wait for network interfaces to appear (udev needs time)
+sleep 2
+
+# Find the Intel I225-V ethernet interface (enp6s0 or similar)
+ETH=$(ip link | grep -oE 'enp[0-9]+s[0-9]+' | head -1)
+[ -z "$ETH" ] && ETH=$(ip link | grep -oE 'eth[0-9]+' | head -1)
+
+if [ -n "$ETH" ]; then
+    echo "Configuring static IP on $ETH"
+    # Bring up interface
+    ip link set "$ETH" up
+    # Remove any existing addresses
+    ip addr flush dev "$ETH" 2>/dev/null || true
+    # Add static IP (192.168.1.2/24)
+    ip addr add 192.168.1.2/24 dev "$ETH"
+    # Add default route
+    ip route add default via 192.168.1.1 dev "$ETH" 2>/dev/null || true
+    echo "Ethernet $ETH configured with 192.168.1.2/24"
+else
+    echo "No ethernet interface found"
+fi
+
+# Keep service running
 exec sleep infinity
