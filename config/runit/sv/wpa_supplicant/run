@@ -1,19 +1,4 @@
 #!/bin/sh
-# runit service: wpa_supplicant WiFi daemon
-
-# Find wireless interface
 IFACE=$(ip link | grep -E "wl[a-z0-9]+" -o | head -1)
-if [ -z "$IFACE" ]; then
-    echo "No wireless interface found"
-    sleep 5
-    exit 1
-fi
-
-# Ensure config file exists
-if [ ! -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
-    echo "No wpa_supplicant.conf found"
-    sleep 5
-    exit 1
-fi
-
+[ -z "$IFACE" ] && { sleep 5; exit 1; }
 exec wpa_supplicant -i "$IFACE" -c /etc/wpa_supplicant/wpa_supplicant.conf -s
