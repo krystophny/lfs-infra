@@ -1,44 +1,20 @@
 # /etc/profile.d/optimization-flags.sh
-# System-wide compiler optimization for AMD Ryzen 9 5950X (Zen 3)
-#
-# These flags are inherited by compilers and build systems that
-# respect standard environment variables.
+# System-wide compiler flags: only -O3 and LTO (what actually matters)
 
-# C/C++ compiler flags (safe defaults, no -ffast-math)
-export CFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe -flto=auto -fuse-linker-plugin"
+# C/C++ compiler flags
+export CFLAGS="-O3 -march=native -mtune=native -pipe -flto=auto -fuse-linker-plugin"
 export CXXFLAGS="${CFLAGS}"
 export LDFLAGS="-Wl,-O2 -Wl,--as-needed -flto=auto -fuse-linker-plugin"
 
-# Fortran (gfortran, flang)
-export FFLAGS="-O3 -march=znver3 -mtune=znver3 -pipe"
+# Fortran
+export FFLAGS="-O3 -march=native -mtune=native -pipe"
 export FCFLAGS="${FFLAGS}"
 
-# Rust
-export RUSTFLAGS="-C target-cpu=znver3 -C opt-level=3"
+# Rust (native CPU detection)
+export RUSTFLAGS="-C target-cpu=native -C opt-level=3"
 
-# Go
+# Go (auto-detects CPU features)
 export GOAMD64="v3"
-
-# Zig
-export ZIG_FLAGS="-O ReleaseFast -target x86_64-linux"
-
-# Nim
-export NIMFLAGS="--opt:speed --passC:-march=znver3"
-
-# Julia (JIT at runtime)
-export JULIA_CPU_TARGET="znver3"
-
-# .NET / C# (uses RyuJIT, auto-detects CPU)
-export DOTNET_EnableAVX2=1
-export DOTNET_TieredCompilation=1
-
-# Java/Scala (HotSpot/GraalVM auto-detect CPU)
-# Hint: can use -XX:+UseAVX2 if needed
-
-# Vala/GNOME (compiles to C, uses CFLAGS) - inherited ✓
-
-# Node.js/V8 (auto-detects AVX2)
-export NODE_OPTIONS="--max-old-space-size=8192"
 
 # Make: use all cores
 export MAKEFLAGS="-j$(nproc)"
